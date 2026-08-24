@@ -1,0 +1,45 @@
+@font-face {
+  font-family: 'Space Grotesk';
+  src: url('../assets/fonts/space-grotesk-var.woff2') format('woff2');
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('../assets/fonts/ibm-plex-mono-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('../assets/fonts/ibm-plex-mono-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --bg0: #151210;
+  --bg1: #1c1815;
+  --bg2: #272119;
+  --line: #37312a;
+  --line-soft: #282320;
+  --ink: #ece5d8;
+  --muted: #a29684;
+  --faint: #6e6355;
+
+  /* Tokens de Estado en inglés (backlog|playing|finished|abandoned); etiquetas españolas solo en UI */
+  --st-backlog: #e9b04d;
+  --st-playing: #5fc98f;
+  --st-finished: #9a90ec;
+  --st-abandoned: #cf6a52;
+
+  --acc: var(--st-backlog);
+
+  --sans: 'Space Grotesk', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
