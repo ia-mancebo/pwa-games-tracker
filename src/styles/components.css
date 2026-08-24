@@ -1364,3 +1364,85 @@ button.plate:hover {
     display: none;
   }
 }
+
+/* Enlace de archivo (ticket 18, spec §5.3–§5.5): columna de contenido con la
+   pastilla permanente encima de cualquier vista */
+.content {
+  min-width: 0;
+}
+
+.filebar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 2px 0 16px;
+}
+
+.file-name {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.file-dirty {
+  color: var(--st-backlog);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+/* Pastilla clicable de conexión/error (mismo patrón visual que .pill) */
+.pill-btn {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: var(--st-abandoned);
+  background: color-mix(in srgb, var(--st-abandoned) 13%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--st-abandoned) 45%, transparent);
+}
+
+button.pill-btn:hover {
+  filter: brightness(1.12);
+}
+
+/* Diálogo de conflicto real: dos versiones lado a lado + tres salidas */
+.conflict-sheet {
+  width: min(480px, 100%);
+}
+
+.conflict-intro {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.conflict-versions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.conflict-versions .lbl {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.conflict-actions,
+.conflict-confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.conflict-note {
+  color: var(--st-playing);
+  font-size: 0.85rem;
+  margin-top: 14px;
+}

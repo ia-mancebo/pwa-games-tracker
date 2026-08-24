@@ -6,6 +6,7 @@
 import { html, qs, raw } from '../lib/dom.js';
 import { store } from '../app.js';
 import { importDoc, newLibrary } from '../data/library.js';
+import { markConnected } from '../data/filelink.js';
 import { sha256Hex } from '../services/hash.js';
 import { hasFsa, pickJsonText } from '../services/fsa.js';
 
@@ -68,7 +69,9 @@ export async function handleImportPick() {
   try {
     const picked = await pickJsonText();
     if (!picked) return;
-    await handleImportText(picked.text, picked.name);
+    const imported = await handleImportText(picked.text, picked.name);
+    // Con handle real la sesión nace conectada (elección deliberada, §5.5).
+    if (imported) markConnected(picked.name);
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') return;
     importError = err instanceof Error ? err.message : 'No se pudo abrir el archivo.';

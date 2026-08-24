@@ -3,6 +3,7 @@ import { formatAvg } from './lib/format.js';
 import { avgRatingOfGames, gameStatus } from './domain/selectors.js';
 import { views } from './views/index.js';
 import * as welcome from './views/welcome.js';
+import { renderFilebar } from './ui/filebar.js';
 
 /**
  * Meta del espejo IndexedDB (spec §5.1).
@@ -12,6 +13,16 @@ import * as welcome from './views/welcome.js';
  *   lastSavedFileHash: string|null,
  *   connectedFileName: string|null,
  * }} Meta
+ */
+
+/**
+ * Estado de sesión del enlace al archivo .json (ticket 18). El nombre
+ * persistente vive en meta.connectedFileName; esto es solo sesión.
+ * @typedef {{
+ *   status: 'disconnected'|'connected'|'error',
+ *   name: string|null,
+ *   error: string|null,
+ * }} FileLinkState
  */
 
 /**
@@ -35,6 +46,7 @@ import * as welcome from './views/welcome.js';
  *   tab: string,
  *   doc: import('./domain/schema.js').Doc|null,
  *   meta: Meta,
+ *   file: FileLinkState,
  *   ready: boolean,
  *   library: LibraryState,
  * }} AppState
@@ -59,6 +71,7 @@ let state = {
   tab: 'biblioteca',
   doc: null,
   meta: { dirty: false, updatedAt: null, lastSavedFileHash: null, connectedFileName: null },
+  file: { status: 'disconnected', name: null, error: null },
   ready: false,
   library: {
     view: 'shelves',
@@ -158,7 +171,10 @@ function railHtml() {
  */
 export function createApp(root) {
   root.innerHTML = '';
-  root.innerHTML = html`<div class="shell">${raw(railHtml())}<main class="main"></main></div>`;
+  root.innerHTML = html`<div class="shell">${raw(railHtml())}<div class="content">
+      <div class="filebar-slot"></div>
+      <main class="main"></main>
+    </div></div>`;
   const main = qs('main', root);
   if (!main) throw new Error('shell sin <main>');
 
@@ -192,6 +208,12 @@ export function createApp(root) {
       if (gated) btn.setAttribute('disabled', '');
       else btn.removeAttribute('disabled');
       btn.setAttribute('aria-current', btn.getAttribute('data-tab') === tab ? 'true' : 'false');
+    }
+    // Pastilla del archivo: parte del chrome, oculta tras la puerta de bienvenida.
+    const filebarSlot = qs('.filebar-slot', root);
+    if (filebarSlot) {
+      if (gated) filebarSlot.innerHTML = '';
+      else renderFilebar(filebarSlot, store);
     }
     // Puerta de bienvenida: sin biblioteca no se renderiza ninguna pestaña.
     if (gated) {
