@@ -1,5 +1,8 @@
 import { html, qs, qsa, raw } from './lib/dom.js';
+import { formatAvg } from './lib/format.js';
+import { avgRatingOfGames, gameStatus } from './domain/selectors.js';
 import { views } from './views/index.js';
+import * as welcome from './views/welcome.js';
 
 /**
  * Meta del espejo IndexedDB (spec §5.1).
@@ -81,27 +84,43 @@ export const TABS = [
   { id: 'estadisticas', label: 'Estadísticas' },
 ];
 
+/** ¿Primer arranque sin biblioteca? → puerta de bienvenida (spec §5.2). */
+function isGated() {
+  const { ready, doc } = store.get();
+  return ready && !doc;
+}
+
+/** Widgets del raíl con valores reales del doc (— sin biblioteca). */
+function railWidgetsHtml() {
+  const games = store.get().doc?.games ?? [];
+  const count = /** @param {import('./domain/schema.js').Status} status */ (status) =>
+    games.filter((g) => gameStatus(g) === status).length;
+  return html`<div class="widgets">
+      <div class="bw"><span>Jugando ahora</span><b>${count('playing')}</b></div>
+      <div class="bw"><span>Terminados</span><b>${count('finished')}</b></div>
+      <div class="bw"><span>Valoración media</span><b>${formatAvg(avgRatingOfGames(games))}</b></div>
+    </div>`;
+}
+
 function railHtml() {
   const current = store.get().tab;
+  const gated = isGated();
   return html`<aside class="rail">
       <div class="logo" aria-hidden="true">GT</div>
-      <nav class="nav" aria-label="Secciones">
+      <nav class="nav${gated ? ' disabled' : ''}" aria-label="Secciones">
         ${TABS.map(
           (t) =>
             raw(html`<button
               type="button"
               data-tab="${t.id}"
+              ${gated ? 'disabled' : ''}
               aria-current="${t.id === current ? 'true' : 'false'}"
             >
               ${t.label}
             </button>`),
         )}
       </nav>
-      <div class="widgets">
-        <div class="bw"><span>Jugando ahora</span><b>—</b></div>
-        <div class="bw"><span>Terminados</span><b>—</b></div>
-        <div class="bw"><span>Valoración media</span><b>—</b></div>
-      </div>
+      ${raw(railWidgetsHtml())}
       <span class="note">offline-first · datos locales</span>
     </aside>`;
 }
@@ -120,7 +139,7 @@ export function createApp(root) {
 
   root.addEventListener('click', (e) => {
     const trigger = e.target instanceof HTMLElement ? e.target.closest('[data-tab]') : null;
-    if (!trigger) return;
+    if (!trigger || isGated()) return;
     const tab = trigger.getAttribute('data-tab');
     if (!tab || !(tab in views)) return;
     e.preventDefault();
@@ -128,9 +147,20 @@ export function createApp(root) {
   });
 
   const renderCurrent = () => {
-    const tab = store.get().tab in views ? store.get().tab : 'biblioteca';
+    const state = store.get();
+    const tab = state.tab in views ? state.tab : 'biblioteca';
+    const gated = isGated();
+    const nav = qs('.nav', root);
+    if (nav) nav.classList.toggle('disabled', gated);
     for (const btn of qsa('.nav button[data-tab]', root)) {
+      if (gated) btn.setAttribute('disabled', '');
+      else btn.removeAttribute('disabled');
       btn.setAttribute('aria-current', btn.getAttribute('data-tab') === tab ? 'true' : 'false');
+    }
+    // Puerta de bienvenida: sin biblioteca no se renderiza ninguna pestaña.
+    if (gated) {
+      welcome.render(main, store);
+      return;
     }
     const view = views[tab];
     if (!view) return;
