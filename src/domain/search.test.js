@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { chipsForDoc, filterGames, gameMatchesQuery, normalizeText } from './search.js';
+import { filterGames, gameMatchesQuery, normalizeText } from './search.js';
+import { chipsForDoc } from './selectors.js';
 
 /**
  * Juego de prueba con jugada mínima.

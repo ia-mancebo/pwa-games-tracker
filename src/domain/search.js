@@ -2,7 +2,6 @@
  * Búsqueda y filtros compartidos por estantería y panel (ticket 15, spec
  * §8.3). Módulo puro: sin DOM, sin IDB, sin reloj.
  */
-import { allGenres, allPlatforms, allTags } from './selectors.js';
 
 /**
  * Filtros activos de la biblioteca; cada dimensión es un único valor o null.
@@ -12,15 +11,6 @@ import { allGenres, allPlatforms, allTags } from './selectors.js';
  *   platform: string|null,
  *   tag: string|null,
  * }} Filters
- */
-
-/**
- * Chips disponibles para las filas de filtros (solo nombres).
- * @typedef {{
- *   genres: string[],
- *   platforms: string[],
- *   tags: string[],
- * }} Chips
  */
 
 /**
@@ -71,18 +61,4 @@ export function filterGames(games, { query = '', genre = null, platform = null, 
     if (tag != null && !(game.tags ?? []).includes(tag)) return false;
     return true;
   });
-}
-
-/**
- * Chips de las filas de filtros para el documento actual: reutiliza los
- * selectores de catálogo y devuelve solo nombres.
- * @param {import('./schema.js').Doc} doc
- * @returns {Chips}
- */
-export function chipsForDoc(doc) {
-  return {
-    genres: allGenres(doc).map((g) => g.name),
-    platforms: allPlatforms(doc).map((p) => p.name),
-    tags: allTags(doc),
-  };
 }

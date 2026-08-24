@@ -3,6 +3,7 @@
  * baldas y listas para filtros. Sin DOM, sin IDB, sin reloj.
  */
 import { STATUS_LABELS } from './schema.js';
+import { normalizeText } from './search.js';
 
 /**
  * Jugada más reciente de un juego: máximo por `addedAt`; en empate gana la
@@ -92,6 +93,22 @@ export function shelfData(doc) {
 }
 
 /**
+ * Juegos equivalentes al candidato (aviso de duplicados del Alta, spec §4.5):
+ * mismo `igdbId` si se da, o mismo título normalizado (minúsculas y sin
+ * tildes). Devuelve los juegos que coinciden, en el orden del documento.
+ * @param {import('./schema.js').Doc} doc
+ * @param {{ title: string, igdbId?: number }} candidate
+ * @returns {import('./schema.js').Game[]}
+ */
+export function findDuplicates(doc, { title, igdbId }) {
+  const norm = normalizeText(title.trim());
+  return doc.games.filter((game) => {
+    if (igdbId != null && game.igdbId === igdbId) return true;
+    return norm !== '' && normalizeText(game.title.trim()) === norm;
+  });
+}
+
+/**
  * @param {import('./schema.js').Doc} doc
  * @returns {string[]} etiquetas propias únicas, orden alfabético es
  */
@@ -115,6 +132,19 @@ export function allGenres(doc) {
  */
 export function allPlatforms(doc) {
   return uniqueByKeySorted(doc.games.flatMap((g) => g.platforms ?? []));
+}
+
+/**
+ * Chips de las filas de filtros para el documento actual: solo nombres.
+ * @param {import('./schema.js').Doc} doc
+ * @returns {{ genres: string[], platforms: string[], tags: string[] }}
+ */
+export function chipsForDoc(doc) {
+  return {
+    genres: allGenres(doc).map((g) => g.name),
+    platforms: allPlatforms(doc).map((p) => p.name),
+    tags: allTags(doc),
+  };
 }
 
 /**

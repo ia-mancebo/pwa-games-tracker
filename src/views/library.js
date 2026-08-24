@@ -7,10 +7,12 @@
 import { html, qs, raw } from '../lib/dom.js';
 import { STATUSES, STATUS_LABELS } from '../domain/schema.js';
 import { gameRating, shelfData } from '../domain/selectors.js';
-import { chipsForDoc, filterGames } from '../domain/search.js';
+import { filterGames } from '../domain/search.js';
+import { chipsForDoc } from '../domain/selectors.js';
 import { debounce } from '../lib/debounce.js';
 import { formatAvg } from '../lib/format.js';
 import { coverHtml, starsHtml } from '../ui/cover.js';
+import { openAddSheet } from './addSheet.js';
 
 /** Portadas visibles por balda antes de la tarjeta «+N más» (spec §8.1). */
 const SHELF_LIMIT = 6;
@@ -29,7 +31,13 @@ const QUERY_DEBOUNCE_MS = 150;
 let panelShown = PANEL_PAGE;
 
 /** Mensaje vacío cuando hay búsqueda o filtros activos sin coincidencias. */
-const NO_RESULTS = '<p class="empty"><b>Sin resultados</b> Prueba con otro término o quita algún filtro.</p>';
+const NO_RESULTS =
+  '<p class="empty"><b>Sin resultados</b> Prueba con otro término o quita algún filtro.</p>';
+
+/** Botón fijo de Alta (spec §8.4): presente en estantería y panel. */
+function fabHtml() {
+  return html`<button type="button" class="fab" data-add-game>➕ Añadir juego</button>`;
+}
 
 /** @typedef {ReturnType<typeof shelfData>[number]} Shelf */
 
@@ -49,7 +57,7 @@ const commitQuery = debounce(
     panelShown = PANEL_PAGE;
     store.set({ library: { ...store.get().library, query: value } });
   },
-  QUERY_DEBOUNCE_MS,
+  QUERY_DEBOUNCE_MS
 );
 
 /**
@@ -149,29 +157,30 @@ function searchBoxHtml(query) {
  * @returns {string}
  */
 function chipRowHtml(dim, values, active) {
-  return html`<div class="chip-row" role="group" aria-label="${DIM_LABELS[dim]}" data-dim="${dim}"
-    >${values.map(
-      (v) =>
-        raw(html`<button type="button" class="chip${active === v ? ' on' : ''}" data-f-${dim}="${v}"
-          >${v}</button
-        >`),
-    )}</div
-  >`;
+  return html`<div class="chip-row" role="group" aria-label="${DIM_LABELS[dim]}" data-dim="${dim}">
+    ${values.map((v) =>
+      raw(
+        html`<button type="button" class="chip${active === v ? ' on' : ''}" data-f-${dim}="${v}">
+          ${v}
+        </button>`
+      )
+    )}
+  </div>`;
 }
 
 /**
  * Tres filas de chips bajo el buscador; una fila no se pinta si está vacía
  * (la de etiquetas desaparece sin etiquetas propias).
- * @param {import('../domain/search.js').Chips} chips
+ * @param {ReturnType<typeof chipsForDoc>} chips
  * @param {import('../domain/search.js').Filters} f
  * @returns {string}
  */
 function filtersHtml(chips, f) {
-  return html`<div class="filters"
-    >${chips.genres.length > 0 ? raw(chipRowHtml('genre', chips.genres, f.genre)) : ''
-    }${chips.platforms.length > 0 ? raw(chipRowHtml('platform', chips.platforms, f.platform)) : ''
-    }${chips.tags.length > 0 ? raw(chipRowHtml('tag', chips.tags, f.tag)) : ''}</div
-  >`;
+  return html`<div class="filters">
+    ${chips.genres.length > 0 ? raw(chipRowHtml('genre', chips.genres, f.genre)) : ''}${
+      chips.platforms.length > 0 ? raw(chipRowHtml('platform', chips.platforms, f.platform)) : ''
+    }${chips.tags.length > 0 ? raw(chipRowHtml('tag', chips.tags, f.tag)) : ''}
+  </div>`;
 }
 
 /**
@@ -215,8 +224,7 @@ function shelfHtml(shelf) {
       <span>${shelf.count} · ★ ${formatAvg(shelf.avgRating)}</span>
     </button>
     <div class="row">
-      ${visible.map((game) => raw(coverCardHtml(game)))}
-      ${rest > 0 ? raw(moreCardHtml(shelf)) : ''}
+      ${visible.map((game) => raw(coverCardHtml(game)))} ${rest > 0 ? raw(moreCardHtml(shelf)) : ''}
       ${shelf.count === 0 ? raw('<p class="row-empty">Sin juegos todavía.</p>') : ''}
     </div>
   </section>`;
@@ -267,8 +275,7 @@ function panelHtml(doc, lib) {
     <div class="toolbar">
       <button type="button" class="chip" data-back-shelves>← Estantería</button>
       <strong>${status != null ? STATUS_LABELS[status] : ''}</strong>
-      ${raw(searchBoxHtml(f.query))}
-      ${raw(filtersHtml(chipsForDoc(doc), f))}
+      ${raw(searchBoxHtml(f.query))} ${raw(filtersHtml(chipsForDoc(doc), f))}
     </div>
     <div class="cardbox tight">
       <div class="b-thead">
@@ -277,14 +284,17 @@ function panelHtml(doc, lib) {
       </div>
       ${status != null ? visible.map((g) => raw(panelRowHtml(g, status))) : ''}
       ${empty ? raw(empty) : ''}
-      ${remaining > 0
-        ? raw(
-            html`<div class="panel-more">
-              <button type="button" class="chip" data-load-more>Cargar más</button>
-            </div>`,
-          )
-        : ''}
+      ${
+        remaining > 0
+          ? raw(
+              html`<div class="panel-more">
+                <button type="button" class="chip" data-load-more>Cargar más</button>
+              </div>`
+            )
+          : ''
+      }
     </div>
+    ${raw(fabHtml())}
   </div>`;
 }
 
@@ -306,12 +316,14 @@ function shelvesHtml(doc, lib) {
       <p class="sub">Tu estantería: una balda por Estado del juego.</p>
     </header>
     <div class="toolbar">
-      ${raw(searchBoxHtml(f.query))}
-      ${raw(filtersHtml(chipsForDoc(doc), f))}
+      ${raw(searchBoxHtml(f.query))} ${raw(filtersHtml(chipsForDoc(doc), f))}
     </div>
-    ${shelves.length > 0
-      ? raw(html`<div class="shelves">${shelves.map((s) => raw(shelfHtml(s)))}</div>`)
-      : raw(NO_RESULTS)}
+    ${
+      shelves.length > 0
+        ? raw(html`<div class="shelves">${shelves.map((s) => raw(shelfHtml(s)))}</div>`)
+        : raw(NO_RESULTS)
+    }
+    ${raw(fabHtml())}
   </div>`;
 }
 
@@ -328,12 +340,16 @@ function wire(container, store) {
     const target =
       e.target instanceof HTMLElement
         ? e.target.closest(
-            '[data-back-shelves],[data-load-more],[data-open-panel],[data-f-genre],[data-f-platform],[data-f-tag]',
+            '[data-back-shelves],[data-load-more],[data-open-panel],[data-f-genre],[data-f-platform],[data-f-tag],[data-add-game]'
           )
         : null;
     if (!target) return;
     if (target.hasAttribute('data-back-shelves')) {
       backToShelves(store);
+      return;
+    }
+    if (target.hasAttribute('data-add-game')) {
+      openAddSheet();
       return;
     }
     if (target.hasAttribute('data-load-more')) {
@@ -372,8 +388,7 @@ export function render(container, store) {
   // El buscador debe conservar foco y cursor entre renders (el DOM se
   // reescribe en cada cambio de estado).
   const prevSearch = qs('.search', container);
-  const hadFocus =
-    prevSearch instanceof HTMLInputElement && document.activeElement === prevSearch;
+  const hadFocus = prevSearch instanceof HTMLInputElement && document.activeElement === prevSearch;
   const caret = hadFocus ? (prevSearch.selectionStart ?? prevSearch.value.length) : 0;
 
   container.innerHTML =
