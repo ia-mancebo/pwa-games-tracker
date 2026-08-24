@@ -9,7 +9,7 @@ const DB_VERSION = 1;
 const STATE_KEY = 'doc';
 const META_KEY = 'app';
 
-/** @typedef {{ dirty: boolean, updatedAt: string|null, lastSavedFileHash: string|null, connectedFileName: string|null }} Meta */
+/** @typedef {{ dirty: boolean, updatedAt: string|null, lastSavedFileHash: string|null, connectedFileName: string|null, exportFileName?: string, persistAsked?: boolean }} Meta */
 
 /**
  * @param {IDBTransaction} tx

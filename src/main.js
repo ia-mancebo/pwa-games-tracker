@@ -1,9 +1,10 @@
 import './styles/tokens.css';
 import './styles/base.css';
 import './styles/components.css';
-import { createApp } from './app.js';
+import { createApp, store } from './app.js';
 import { initLibrary } from './data/library.js';
 import { startAutosave } from './data/filelink.js';
+import { acquireTabLock, onLockReleased } from './data/tablock.js';
 
 const root = document.querySelector('#app');
 if (root) {
@@ -13,6 +14,19 @@ if (root) {
     // Sin espejo accesible: la app arranca igual; el bienvenida (ticket 13) toma el control.
   }
   createApp(/** @type {HTMLElement} */ (root));
+  try {
+    // Segunda pestaña en solo lectura (ticket 19): sin lock, entra como
+    // secundaria y se promociona sola cuando el lock quede libre.
+    const primary = await acquireTabLock();
+    if (!primary) {
+      store.set({ tabRole: 'secondary' });
+      void onLockReleased(() => {
+        store.set({ tabRole: 'primary' });
+      });
+    }
+  } catch {
+    // Sin Web Locks la app funciona como pestaña única.
+  }
   try {
     // Autoguardado + chequeos de foco/visibilidad (ticket 18).
     startAutosave();

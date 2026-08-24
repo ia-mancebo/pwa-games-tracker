@@ -4,14 +4,18 @@ import { avgRatingOfGames, gameStatus } from './domain/selectors.js';
 import { views } from './views/index.js';
 import * as welcome from './views/welcome.js';
 import { renderFilebar } from './ui/filebar.js';
+import { openDataDialog } from './views/dataDialog.js';
 
 /**
- * Meta del espejo IndexedDB (spec §5.1).
+ * Meta del espejo IndexedDB (spec §5.1). `exportFileName` y `persistAsked` son
+ * preferencias locales del dispositivo (ticket 19): nunca viajan en el .json.
  * @typedef {{
  *   dirty: boolean,
  *   updatedAt: string|null,
  *   lastSavedFileHash: string|null,
  *   connectedFileName: string|null,
+ *   exportFileName?: string,
+ *   persistAsked?: boolean,
  * }} Meta
  */
 
@@ -23,6 +27,12 @@ import { renderFilebar } from './ui/filebar.js';
  *   name: string|null,
  *   error: string|null,
  * }} FileLinkState
+ */
+
+/**
+ * Rol de esta pestaña según Web Locks (ticket 19): la primaria opera con
+ * normalidad; una secundaria es solo lectura hasta hacerse activa.
+ * @typedef {'primary' | 'secondary'} TabRole
  */
 
 /**
@@ -48,6 +58,7 @@ import { renderFilebar } from './ui/filebar.js';
  *   meta: Meta,
  *   file: FileLinkState,
  *   ready: boolean,
+ *   tabRole: TabRole,
  *   library: LibraryState,
  * }} AppState
  */
@@ -73,6 +84,7 @@ let state = {
   meta: { dirty: false, updatedAt: null, lastSavedFileHash: null, connectedFileName: null },
   file: { status: 'disconnected', name: null, error: null },
   ready: false,
+  tabRole: 'primary',
   library: {
     view: 'shelves',
     panelStatus: null,
@@ -159,6 +171,7 @@ function railHtml() {
         )}
       </nav>
       ${raw(railWidgetsHtml())}
+      <button type="button" class="chip rail-datos" data-open-data ${gated ? 'disabled' : ''}>Datos</button>
       <span class="note">offline-first · datos locales</span>
     </aside>`;
 }
@@ -179,10 +192,17 @@ export function createApp(root) {
   if (!main) throw new Error('shell sin <main>');
 
   root.addEventListener('click', (e) => {
-    const trigger = e.target instanceof HTMLElement ? e.target.closest('[data-tab]') : null;
-    if (!trigger || isGated()) return;
+    const trigger =
+      e.target instanceof HTMLElement ? e.target.closest('[data-tab],[data-open-data]') : null;
+    if (!trigger) return;
+    if (trigger.hasAttribute('data-open-data')) {
+      if (isGated()) return;
+      e.preventDefault();
+      openDataDialog();
+      return;
+    }
     const tab = trigger.getAttribute('data-tab');
-    if (!tab || !(tab in views)) return;
+    if (!tab || !(tab in views) || isGated()) return;
     e.preventDefault();
     const previous = store.get().tab;
     // Volver a Biblioteca desde otra pestaña repone la estantería (ticket 14);
@@ -202,12 +222,19 @@ export function createApp(root) {
     const state = store.get();
     const tab = state.tab in views ? state.tab : 'biblioteca';
     const gated = isGated();
+    // Segunda pestaña en solo lectura: el CSS oculta el FAB vía esta clase.
+    root.classList.toggle('readonly-tab', state.tabRole === 'secondary');
     const nav = qs('.nav', root);
     if (nav) nav.classList.toggle('disabled', gated);
     for (const btn of qsa('.nav button[data-tab]', root)) {
       if (gated) btn.setAttribute('disabled', '');
       else btn.removeAttribute('disabled');
       btn.setAttribute('aria-current', btn.getAttribute('data-tab') === tab ? 'true' : 'false');
+    }
+    // Botón «Datos» del raíl: bloqueado tras la puerta de bienvenida.
+    for (const datosBtn of qsa('[data-open-data]', root)) {
+      if (gated) datosBtn.setAttribute('disabled', '');
+      else datosBtn.removeAttribute('disabled');
     }
     // Pastilla del archivo: parte del chrome, oculta tras la puerta de bienvenida.
     const filebarSlot = qs('.filebar-slot', root);

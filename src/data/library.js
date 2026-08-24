@@ -23,6 +23,9 @@ export class LibraryError extends Error {
   }
 }
 
+/** Nombre sugerido de exportación por defecto (spec §5.6). */
+export const DEFAULT_EXPORT_NAME = 'game-tracker.json';
+
 /**
  * Carga el espejo (doc + meta) desde IndexedDB al store.
  * @returns {Promise<void>}
@@ -253,6 +256,20 @@ export async function markSaved({ hash, now }) {
   };
   await putMeta(meta, { strict: true });
   store.set({ meta });
+}
+
+/**
+ * Preferencia local del dispositivo: nombre sugerido al exportar (ticket 19).
+ * Vive en meta y NO viaja dentro del .json. Vacío ⇒ valor por defecto.
+ * @param {string} name
+ * @returns {Promise<string>} nombre normalizado guardado
+ */
+export async function saveExportName(name) {
+  const trimmed = name.trim();
+  const meta = { ...store.get().meta, exportFileName: trimmed.length > 0 ? trimmed : DEFAULT_EXPORT_NAME };
+  await putMeta(meta);
+  store.set({ meta });
+  return meta.exportFileName;
 }
 
 /**

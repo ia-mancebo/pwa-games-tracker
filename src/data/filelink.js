@@ -9,6 +9,9 @@ import { importDoc, markSaved } from './library.js';
 import { validateDoc } from '../domain/validate.js';
 import { getHandle, hasFsa, pickJsonText, setHandle } from '../services/fsa.js';
 import { sha256Hex } from '../services/hash.js';
+import { snapshotBackup } from './opfs.js';
+import { requestPersistOnce } from './persist.js';
+import { assertWritable } from './tablock.js';
 
 /**
  * Handle FSA con escritura y permisos; tipado estructural para que los tests
@@ -199,6 +202,7 @@ function pickViaInput() {
  * @returns {Promise<LinkResult>}
  */
 export async function saveNow({ force = false } = {}) {
+  if (!assertWritable()) return { status: 'skipped' };
   const handle = /** @type {WritableFileHandle | null} */ (getHandle());
   const { doc, meta, file } = store.get();
   if (!handle || !doc || file.status === 'disconnected') return { status: 'skipped' };
@@ -236,6 +240,10 @@ export async function saveNow({ force = false } = {}) {
     }
     await markSaved({ hash, now: new Date() });
     setConnected(name);
+    // Copia rotativa OPFS y petición de persistencia: fire-and-forget (§5.6),
+    // nunca bloquean ni rompen el vuelco ya completado.
+    void snapshotBackup(/** @type {import('../domain/schema.js').Doc} */ (store.get().doc ?? doc));
+    void requestPersistOnce();
     return { status: 'saved', hash };
   } finally {
     saving = false;
@@ -250,6 +258,7 @@ export async function saveNow({ force = false } = {}) {
  * @returns {Promise<LinkResult>}
  */
 export async function reconnect() {
+  if (!assertWritable()) return { status: 'skipped' };
   const session = /** @type {WritableFileHandle | null} */ (getHandle());
   if (!session || !hasFsa()) return pickAndConnect();
   try {
@@ -378,8 +387,10 @@ function runScheduledSave() {
 
 /**
  * Agenda el vuelco 15 s después de la ÚLTIMA llamada (debounce, spec §5.4).
+ * En secundaria no se agenda nada: la pestaña activa es quien vuelca.
  */
 export function scheduleAutosave() {
+  if (!assertWritable()) return;
   scheduled = true;
   debouncedSave();
 }
