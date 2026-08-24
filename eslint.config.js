@@ -41,6 +41,8 @@ export default [
         prompt: 'readonly',
         self: 'writable',
         structuredClone: 'readonly',
+        TextEncoder: 'readonly',
+        TextDecoder: 'readonly',
         AbortController: 'readonly',
       },
     },

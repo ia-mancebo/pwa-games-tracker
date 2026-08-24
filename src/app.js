@@ -2,8 +2,23 @@ import { html, qs, qsa, raw } from './lib/dom.js';
 import { views } from './views/index.js';
 
 /**
+ * Meta del espejo IndexedDB (spec §5.1).
+ * @typedef {{
+ *   dirty: boolean,
+ *   updatedAt: string|null,
+ *   lastSavedFileHash: string|null,
+ *   connectedFileName: string|null,
+ * }} Meta
+ */
+
+/**
  * Estado global de la app. Las vistas son client-side (sin rutas de URL).
- * @typedef {{ tab: string }} AppState
+ * @typedef {{
+ *   tab: string,
+ *   doc: import('./domain/schema.js').Doc|null,
+ *   meta: Meta,
+ *   ready: boolean,
+ * }} AppState
  */
 
 /**
@@ -21,7 +36,12 @@ import { views } from './views/index.js';
  */
 
 /** @type {AppState} */
-let state = { tab: 'biblioteca' };
+let state = {
+  tab: 'biblioteca',
+  doc: null,
+  meta: { dirty: false, updatedAt: null, lastSavedFileHash: null, connectedFileName: null },
+  ready: false,
+};
 
 /** @type {Set<Listener>} */
 const listeners = new Set();
