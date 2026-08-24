@@ -1,13 +1,14 @@
 /**
- * Biblioteca navegable (ticket 14): Estantería con baldas por Estado del
- * juego —placa clicable, máximo 6 portadas y «+N más»— y Panel denso del
- * estado abierto, paginado en bloques de 100 (spec §8.1/§8.2). La búsqueda y
- * los filtros son el ticket 15; el clic sobre portada/fila abrirá la Ficha
- * (ticket 17).
+ * Biblioteca navegable (tickets 14–15): Estantería con baldas por Estado del
+ * juego y Panel denso del estado abierto, con la barra común de búsqueda y
+ * filtros (tres filas de chips) compartida por ambas vistas (spec §8.1–§8.3).
+ * El clic sobre portada/fila abrirá la Ficha (ticket 17).
  */
-import { html, raw } from '../lib/dom.js';
+import { html, qs, raw } from '../lib/dom.js';
 import { STATUSES, STATUS_LABELS } from '../domain/schema.js';
 import { gameRating, shelfData } from '../domain/selectors.js';
+import { chipsForDoc, filterGames } from '../domain/search.js';
+import { debounce } from '../lib/debounce.js';
 import { formatAvg } from '../lib/format.js';
 import { coverHtml, starsHtml } from '../ui/cover.js';
 
@@ -17,14 +18,108 @@ const SHELF_LIMIT = 6;
 /** Tamaño de los bloques de paginación del panel (spec §8.2). */
 const PANEL_PAGE = 100;
 
+/** Retardo del buscador (spec §8.3). */
+const QUERY_DEBOUNCE_MS = 150;
+
 /**
- * Filas visibles del panel abierto. Estado local de la vista: se reinicia
- * cada vez que se abre un panel.
+ * Filas visibles del panel abierto. Estado local de la vista: se reinicia al
+ * abrir un panel o al cambiar búsqueda/filtros.
  * @type {number}
  */
 let panelShown = PANEL_PAGE;
 
+/** Mensaje vacío cuando hay búsqueda o filtros activos sin coincidencias. */
+const NO_RESULTS = '<p class="empty"><b>Sin resultados</b> Prueba con otro término o quita algún filtro.</p>';
+
 /** @typedef {ReturnType<typeof shelfData>[number]} Shelf */
+
+/** Etiquetas accesibles de cada dimensión de chips. @type {Record<'genre'|'platform'|'tag', string>} */
+const DIM_LABELS = { genre: 'Género', platform: 'Plataforma', tag: 'Etiqueta propia' };
+
+/**
+ * Compromiso de la consulta con debounce compartido entre renders: relanza el
+ * temporizador en cada pulsación y escribe en el store 150 ms después.
+ */
+const commitQuery = debounce(
+  /**
+   * @param {import('../app.js').Store} store
+   * @param {string} value
+   */
+  (store, value) => {
+    panelShown = PANEL_PAGE;
+    store.set({ library: { ...store.get().library, query: value } });
+  },
+  QUERY_DEBOUNCE_MS,
+);
+
+/**
+ * Filtros normalizados del estado de biblioteca, tolerando campos ausentes.
+ * @param {{ query?: string, genre?: string|null, platform?: string|null, tag?: string|null }} lib
+ * @returns {import('../domain/search.js').Filters}
+ */
+function normFilters(lib) {
+  return {
+    query: lib.query ?? '',
+    genre: lib.genre ?? null,
+    platform: lib.platform ?? null,
+    tag: lib.tag ?? null,
+  };
+}
+
+/**
+ * ¿Hay búsqueda o algún filtro activo? Decide ocultar baldas vacías y el
+ * mensaje «Sin resultados».
+ * @param {import('../domain/search.js').Filters} f
+ */
+function hasActiveFilters(f) {
+  return f.query.trim() !== '' || f.genre != null || f.platform != null || f.tag != null;
+}
+
+/**
+ * Abre el Panel de un estado, reiniciando su paginación; conserva filtros.
+ * @param {import('../app.js').Store} store
+ * @param {import('../domain/schema.js').Status} status
+ */
+function openPanel(store, status) {
+  panelShown = PANEL_PAGE;
+  store.set({ library: { ...store.get().library, view: 'panel', panelStatus: status } });
+}
+
+/**
+ * Vuelve del Panel a la Estantería; conserva filtros.
+ * @param {import('../app.js').Store} store
+ */
+function backToShelves(store) {
+  store.set({ library: { ...store.get().library, view: 'shelves', panelStatus: null } });
+}
+
+/**
+ * Activa/desactiva una dimensión de filtro: selección única por dimensión
+ * (tocar el chip activo lo quita); resetea la paginación del panel.
+ * @param {import('../app.js').Store} store
+ * @param {'genre'|'platform'|'tag'} dim
+ * @param {string} value
+ */
+function toggleFilter(store, dim, value) {
+  const lib = store.get().library;
+  const current = dim === 'genre' ? lib.genre : dim === 'platform' ? lib.platform : lib.tag;
+  const patch = { ...lib };
+  if (dim === 'genre') patch.genre = current === value ? null : value;
+  else if (dim === 'platform') patch.platform = current === value ? null : value;
+  else patch.tag = current === value ? null : value;
+  panelShown = PANEL_PAGE;
+  store.set({ library: patch });
+}
+
+/**
+ * @template T
+ * @param {T|null|undefined} v
+ * @returns {T}
+ */
+function need(v) {
+  if (v == null) throw new Error('valor ausente');
+  return v;
+}
 
 /**
  * @param {string|null} value
@@ -38,21 +133,45 @@ function isStatus(value) {
 }
 
 /**
- * Abre el Panel de un estado, reiniciando su paginación.
- * @param {import('../app.js').Store} store
- * @param {import('../domain/schema.js').Status} status
+ * Buscador de la barra común. El `value` restaura la consulta tras re-render.
+ * @param {string} query
+ * @returns {string}
  */
-function openPanel(store, status) {
-  panelShown = PANEL_PAGE;
-  store.set({ library: { view: 'panel', panelStatus: status } });
+function searchBoxHtml(query) {
+  return html`<input class="search" placeholder="Buscar…" value="${query}" aria-label="Buscar" />`;
 }
 
 /**
- * Vuelve del Panel a la Estantería.
- * @param {import('../app.js').Store} store
+ * Fila de chips de una dimensión. `data-f-<dim>` lleva el valor del chip.
+ * @param {'genre'|'platform'|'tag'} dim
+ * @param {string[]} values
+ * @param {string|null} active
+ * @returns {string}
  */
-function backToShelves(store) {
-  store.set({ library: { view: 'shelves', panelStatus: null } });
+function chipRowHtml(dim, values, active) {
+  return html`<div class="chip-row" role="group" aria-label="${DIM_LABELS[dim]}" data-dim="${dim}"
+    >${values.map(
+      (v) =>
+        raw(html`<button type="button" class="chip${active === v ? ' on' : ''}" data-f-${dim}="${v}"
+          >${v}</button
+        >`),
+    )}</div
+  >`;
+}
+
+/**
+ * Tres filas de chips bajo el buscador; una fila no se pinta si está vacía
+ * (la de etiquetas desaparece sin etiquetas propias).
+ * @param {import('../domain/search.js').Chips} chips
+ * @param {import('../domain/search.js').Filters} f
+ * @returns {string}
+ */
+function filtersHtml(chips, f) {
+  return html`<div class="filters"
+    >${chips.genres.length > 0 ? raw(chipRowHtml('genre', chips.genres, f.genre)) : ''
+    }${chips.platforms.length > 0 ? raw(chipRowHtml('platform', chips.platforms, f.platform)) : ''
+    }${chips.tags.length > 0 ? raw(chipRowHtml('tag', chips.tags, f.tag)) : ''}</div
+  >`;
 }
 
 /**
@@ -128,25 +247,36 @@ function panelRowHtml(game, status) {
 
 /**
  * @param {import('../domain/schema.js').Doc} doc
- * @param {import('../domain/schema.js').Status|null} panelStatus
+ * @param {import('../app.js').LibraryState} lib
  * @returns {string}
  */
-function panelHtml(doc, panelStatus) {
-  const games = shelfData(doc).find((s) => s.status === panelStatus)?.games ?? [];
+function panelHtml(doc, lib) {
+  const f = normFilters(lib);
+  const status = lib.panelStatus;
+  // Filtra dentro del estado abierto; el orden recencia se conserva.
+  const games = filterGames(shelfData(doc).find((s) => s.status === status)?.games ?? [], f);
   const visible = games.slice(0, panelShown);
   const remaining = games.length - visible.length;
+  const empty =
+    visible.length > 0
+      ? ''
+      : hasActiveFilters(f)
+        ? NO_RESULTS
+        : '<p class="empty">Nada por aquí todavía.</p>';
   return html`<div class="fade">
     <div class="toolbar">
       <button type="button" class="chip" data-back-shelves>← Estantería</button>
-      <strong>${panelStatus != null ? STATUS_LABELS[panelStatus] : ''}</strong>
+      <strong>${status != null ? STATUS_LABELS[status] : ''}</strong>
+      ${raw(searchBoxHtml(f.query))}
+      ${raw(filtersHtml(chipsForDoc(doc), f))}
     </div>
     <div class="cardbox tight">
       <div class="b-thead">
         <span></span><span>Juego</span><span class="b-col-pf">Plataformas</span
         ><span class="b-col-stars">Valoración</span><span>Estado</span>
       </div>
-      ${panelStatus != null ? visible.map((g) => raw(panelRowHtml(g, panelStatus))) : ''}
-      ${visible.length === 0 ? raw(html`<p class="empty">Nada por aquí todavía.</p>`) : ''}
+      ${status != null ? visible.map((g) => raw(panelRowHtml(g, status))) : ''}
+      ${empty ? raw(empty) : ''}
       ${remaining > 0
         ? raw(
             html`<div class="panel-more">
@@ -160,21 +290,34 @@ function panelHtml(doc, panelStatus) {
 
 /**
  * @param {import('../domain/schema.js').Doc} doc
+ * @param {import('../app.js').LibraryState} lib
  * @returns {string}
  */
-function shelvesHtml(doc) {
+function shelvesHtml(doc, lib) {
+  const f = normFilters(lib);
+  const active = hasActiveFilters(f);
+  // Filtra dentro de cada balda: conteo y media ★ recomputan sobre la lista
+  // filtrada; las baldas sin resultados se ocultan con filtros activos.
+  const all = shelfData({ ...doc, games: filterGames(doc.games, f) });
+  const shelves = active ? all.filter((s) => s.count > 0) : all;
   return html`<div class="fade">
     <header class="view-head">
       <h1>Biblioteca</h1>
       <p class="sub">Tu estantería: una balda por Estado del juego.</p>
     </header>
-    <div class="shelves">${shelfData(doc).map((s) => raw(shelfHtml(s)))}</div>
+    <div class="toolbar">
+      ${raw(searchBoxHtml(f.query))}
+      ${raw(filtersHtml(chipsForDoc(doc), f))}
+    </div>
+    ${shelves.length > 0
+      ? raw(html`<div class="shelves">${shelves.map((s) => raw(shelfHtml(s)))}</div>`)
+      : raw(NO_RESULTS)}
   </div>`;
 }
 
 /**
- * Delegación de clics sobre la superficie recién renderizada; el wrapper es
- * nuevo en cada render, así no se acumulan listeners entre renders.
+ * Delegación de clics e inputs sobre la superficie recién renderizada; el
+ * wrapper es nuevo en cada render, así no se acumulan listeners entre renders.
  * @param {Element} container
  * @param {import('../app.js').Store} store
  */
@@ -184,7 +327,9 @@ function wire(container, store) {
   surface.addEventListener('click', (e) => {
     const target =
       e.target instanceof HTMLElement
-        ? e.target.closest('[data-back-shelves],[data-load-more],[data-open-panel]')
+        ? e.target.closest(
+            '[data-back-shelves],[data-load-more],[data-open-panel],[data-f-genre],[data-f-platform],[data-f-tag]',
+          )
         : null;
     if (!target) return;
     if (target.hasAttribute('data-back-shelves')) {
@@ -196,8 +341,19 @@ function wire(container, store) {
       render(container, store);
       return;
     }
+    for (const dim of /** @type {const} */ (['genre', 'platform', 'tag'])) {
+      const attr = `data-f-${dim}`;
+      if (target.hasAttribute(attr)) {
+        toggleFilter(store, dim, need(target.getAttribute(attr)));
+        return;
+      }
+    }
     const status = target.getAttribute('data-open-panel');
     if (isStatus(status)) openPanel(store, status);
+  });
+  surface.addEventListener('input', (e) => {
+    if (!(e.target instanceof HTMLInputElement) || !e.target.classList.contains('search')) return;
+    commitQuery(store, e.target.value);
   });
 }
 
@@ -212,7 +368,26 @@ export function render(container, store) {
     container.innerHTML = '';
     return;
   }
+
+  // El buscador debe conservar foco y cursor entre renders (el DOM se
+  // reescribe en cada cambio de estado).
+  const prevSearch = qs('.search', container);
+  const hadFocus =
+    prevSearch instanceof HTMLInputElement && document.activeElement === prevSearch;
+  const caret = hadFocus ? (prevSearch.selectionStart ?? prevSearch.value.length) : 0;
+
   container.innerHTML =
-    state.library.view === 'panel' ? panelHtml(doc, state.library.panelStatus) : shelvesHtml(doc);
+    state.library.view === 'panel'
+      ? panelHtml(doc, state.library)
+      : shelvesHtml(doc, state.library);
   wire(container, store);
+
+  if (hadFocus) {
+    const search = qs('.search', container);
+    if (search instanceof HTMLInputElement) {
+      search.focus();
+      const pos = Math.min(caret, search.value.length);
+      search.setSelectionRange(pos, pos);
+    }
+  }
 }

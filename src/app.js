@@ -16,10 +16,14 @@ import * as welcome from './views/welcome.js';
 
 /**
  * Vista activa dentro de Biblioteca: estantería o panel de un Estado del
- * juego (spec §8.1/§8.2).
+ * juego, más la búsqueda y filtros compartidos (spec §8.1–§8.3).
  * @typedef {{
  *   view: 'shelves'|'panel',
  *   panelStatus: import('./domain/schema.js').Status|null,
+ *   query: string,
+ *   genre: string|null,
+ *   platform: string|null,
+ *   tag: string|null,
  * }} LibraryState
  */
 
@@ -54,7 +58,14 @@ let state = {
   doc: null,
   meta: { dirty: false, updatedAt: null, lastSavedFileHash: null, connectedFileName: null },
   ready: false,
-  library: { view: 'shelves', panelStatus: null },
+  library: {
+    view: 'shelves',
+    panelStatus: null,
+    query: '',
+    genre: null,
+    platform: null,
+    tag: null,
+  },
 };
 
 /** @type {Set<Listener>} */
@@ -155,9 +166,10 @@ export function createApp(root) {
     if (!tab || !(tab in views)) return;
     e.preventDefault();
     const previous = store.get().tab;
-    // Volver a Biblioteca desde otra pestaña repone la estantería (ticket 14).
+    // Volver a Biblioteca desde otra pestaña repone la estantería (ticket 14);
+    // la búsqueda y los filtros persisten (barra común del ticket 15).
     if (tab === 'biblioteca' && previous !== 'biblioteca') {
-      store.set({ tab, library: { view: 'shelves', panelStatus: null } });
+      store.set({ tab, library: { ...store.get().library, view: 'shelves', panelStatus: null } });
       return;
     }
     store.set({ tab });

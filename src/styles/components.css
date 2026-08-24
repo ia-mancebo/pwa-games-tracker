@@ -383,6 +383,37 @@ button.plate:hover {
   font-size: 0.95rem;
 }
 
+/* Búsqueda y filtros compartidos (ticket 15, spec §8.3): buscador a ancho
+   completo y filas de chips con scroll horizontal, chips nowrap */
+.toolbar .search {
+  flex: 1 1 200px;
+  min-width: 0;
+  background: var(--bg1);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 7px 12px;
+  font-size: 0.92rem;
+}
+
+.toolbar .search::placeholder {
+  color: var(--faint);
+}
+
+.filters {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chip-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 2px;
+}
+
 .cardbox.tight {
   padding: 6px 12px;
 }

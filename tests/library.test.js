@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp, store } from '../src/app.js';
 import { importDoc, initLibrary } from '../src/data/library.js';
 import { coverHtml } from '../src/ui/cover.js';
@@ -36,6 +36,7 @@ function need(el) {
  *   id: string,
  *   title: string,
  *   tags?: string[],
+ *   genres?: {id: number, name: string}[],
  *   platforms?: {id: number, name: string}[],
  *   coverUrl?: string,
  *   plays: { id: string, status: string, addedAt: string, rating?: number }[],
@@ -96,7 +97,14 @@ beforeEach(async () => {
     doc: null,
     meta: { dirty: false, updatedAt: null, lastSavedFileHash: null, connectedFileName: null },
     ready: false,
-    library: { view: 'shelves', panelStatus: null },
+    library: {
+      view: 'shelves',
+      panelStatus: null,
+      query: '',
+      genre: null,
+      platform: null,
+      tag: null,
+    },
   });
   await initLibrary();
 });
@@ -289,6 +297,209 @@ describe('panel', () => {
     expect(store.get().library.view).toBe('shelves');
     expect(qs('.shelves', root)).toBeTruthy();
     expect(qs('.b-row', root)).toBeNull();
+  });
+});
+
+describe('búsqueda y filtros (ticket 15)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /**
+   * Escribe en el buscador de la vista activa y dispara el evento input.
+   * @param {Element} root
+   * @param {string} value
+   * @returns {HTMLInputElement}
+   */
+  function type(root, value) {
+    const input = need(qs('.search', root));
+    if (!(input instanceof HTMLInputElement)) throw new Error('.search no es un input');
+    // Simula tecleo real: foco en el campo y cursor al final antes de escribir.
+    input.focus();
+    input.value = value;
+    input.setSelectionRange(value.length, value.length);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return input;
+  }
+
+  /**
+   * Chip por dimensión y texto.
+   * @param {Element} root
+   * @param {string} dim
+   * @param {string} text
+   * @returns {HTMLElement}
+   */
+  function chip(root, dim, text) {
+    const el = qsa(`.chip-row[data-dim="${dim}"] .chip`, root).find(
+      (c) => c.textContent?.trim() === text,
+    );
+    return btn(el ?? null);
+  }
+
+  it('buscar «pokemon» tras el debounce filtra baldas y oculta las vacías', async () => {
+    await seed([
+      gameJson('gp', 'Pokémon Esmeralda', [{ status: 'playing', addedAt: '2026-07-01' }]),
+      gameJson('gh', 'Hades', [{ status: 'backlog', addedAt: '2026-06-01' }]),
+      gameJson('gc', 'Celeste', [{ status: 'finished', addedAt: '2026-05-01' }]),
+    ]);
+    const root = mount();
+    createApp(root);
+
+    vi.useFakeTimers();
+    const input = type(root, 'pokemon');
+
+    // Debounce observable: hasta ~150 ms nada cambia.
+    expect(qs('[data-game-id="gh"]', root)).toBeTruthy();
+    vi.advanceTimersByTime(150);
+
+    // Solo queda la balda con resultados; las vacías se ocultan.
+    const shelves = qsa('.shelves .shelf', root);
+    expect(shelves).toHaveLength(1);
+    expect(qs('.plate b', shelves[0])?.textContent).toBe('Jugando');
+    expect(qs('[data-game-id="gp"]', root)).toBeTruthy();
+    expect(qs('[data-game-id="gh"]', root)).toBeNull();
+    expect(qs('[data-game-id="gc"]', root)).toBeNull();
+
+    // Foco y cursor se conservan tras el re-render.
+    const fresh = need(qs('.search', root));
+    if (!(fresh instanceof HTMLInputElement)) throw new Error('.search no es un input');
+    expect(document.activeElement).toBe(fresh);
+    expect(fresh.value).toBe('pokemon');
+    expect(fresh.selectionStart).toBe('pokemon'.length);
+    void input;
+  });
+
+  it('«pokémon» y «POKÉMON» dan los mismos resultados que «pokemon»', async () => {
+    await seed([
+      gameJson('gp', 'Pokémon Esmeralda', [{ status: 'playing', addedAt: '2026-07-01' }]),
+      gameJson('gh', 'Hades', [{ status: 'backlog', addedAt: '2026-06-01' }]),
+    ]);
+    const root = mount();
+    createApp(root);
+
+    vi.useFakeTimers();
+    for (const q of ['pokémon', 'POKÉMON']) {
+      type(root, q);
+      vi.advanceTimersByTime(150);
+      const shelves = qsa('.shelves .shelf', root);
+      expect(shelves).toHaveLength(1);
+      expect(qs('[data-game-id="gp"]', shelves[0])).toBeTruthy();
+      expect(store.get().library.query).toBe(q);
+    }
+  });
+
+  it('sin coincidencias en la estantería muestra «Sin resultados»', async () => {
+    await seed([gameJson('g1', 'Hades', [{ status: 'playing', addedAt: '2026-07-01' }])]);
+    const root = mount();
+    createApp(root);
+
+    vi.useFakeTimers();
+    type(root, 'zzzz');
+    vi.advanceTimersByTime(150);
+
+    expect(qsa('.shelves .shelf', root)).toHaveLength(0);
+    expect(qs('.empty', root)?.textContent).toContain('Sin resultados');
+  });
+
+  it('los chips filtran el panel; tocar el activo lo quita; dos dimensiones acumulan', async () => {
+    await seed([
+      {
+        id: 'g1',
+        title: 'Hades',
+        genres: [{ id: 1, name: 'Roguelike' }],
+        platforms: [{ id: 6, name: 'PC (Microsoft Windows)' }],
+        plays: [{ id: 'g1-p1', status: 'playing', addedAt: '2026-07-01' }],
+      },
+      {
+        id: 'g2',
+        title: 'Pokémon Esmeralda',
+        genres: [{ id: 2, name: 'RPG' }],
+        platforms: [{ id: 130, name: 'Nintendo Switch' }],
+        tags: ['rol'],
+        plays: [{ id: 'g2-p1', status: 'playing', addedAt: '2026-06-01' }],
+      },
+    ]);
+    const root = mount();
+    createApp(root);
+
+    btn(qs('.plate[data-open-panel="playing"]', root)).click();
+    expect(qsa('.b-row', root)).toHaveLength(2);
+
+    btn(chip(root, 'genre', 'RPG')).click();
+    expect(qsa('.b-row', root)).toHaveLength(1);
+    expect(qs('.b-title', need(qs('.b-row', root)))?.textContent).toBe('Pokémon Esmeralda');
+    expect(chip(root, 'genre', 'RPG').classList.contains('on')).toBe(true);
+    expect(store.get().library.genre).toBe('RPG');
+
+    // Dos dimensiones distintas acumulan (Y lógico): aquí sin resultados.
+    btn(chip(root, 'platform', 'PC (Microsoft Windows)')).click();
+    expect(qsa('.b-row', root)).toHaveLength(0);
+    expect(qs('.empty', root)?.textContent).toContain('Sin resultados');
+    expect(chip(root, 'platform', 'PC (Microsoft Windows)').classList.contains('on')).toBe(true);
+    expect(chip(root, 'genre', 'RPG').classList.contains('on')).toBe(true);
+
+    // Tocar el chip activo lo quita; la otra dimensión sigue activa.
+    btn(chip(root, 'platform', 'PC (Microsoft Windows)')).click();
+    expect(qsa('.b-row', root)).toHaveLength(1);
+    expect(chip(root, 'platform', 'PC (Microsoft Windows)').classList.contains('on')).toBe(false);
+    expect(chip(root, 'genre', 'RPG').classList.contains('on')).toBe(true);
+
+    btn(chip(root, 'genre', 'RPG')).click();
+    expect(qsa('.b-row', root)).toHaveLength(2);
+    expect(chip(root, 'genre', 'RPG').classList.contains('on')).toBe(false);
+    expect(store.get().library.genre).toBeNull();
+    expect(store.get().library.platform).toBeNull();
+  });
+
+  it('la fila de etiquetas no aparece si el documento no tiene etiquetas propias', async () => {
+    await seed([
+      gameJson('g1', 'Hades', [{ status: 'playing', addedAt: '2026-07-01' }]),
+      gameJson('g2', 'Celeste', [{ status: 'finished', addedAt: '2026-06-01' }]),
+    ]);
+    const root = mount();
+    createApp(root);
+
+    expect(qs('.search', root)).toBeTruthy();
+    expect(qs('.chip-row[data-dim="tag"]', root)).toBeNull();
+    expect(qsa('.chip-row', root)).toHaveLength(0); // sin géneros ni plataformas tampoco
+
+    await seed([
+      { id: 'g3', title: 'Bastion', tags: ['rol'], plays: [
+        { id: 'g3-p1', status: 'playing', addedAt: '2026-07-02' },
+      ] },
+    ]);
+    const tagRow = need(qs('.chip-row[data-dim="tag"]', root));
+    expect(tagRow.textContent).toContain('rol');
+  });
+
+  it('«Cargar más» pagina sobre la lista filtrada del panel', async () => {
+    await seed(
+      Array.from({ length: 120 }, (_, i) => {
+        const n = String(i + 1).padStart(3, '0');
+        return gameJson(`g${n}`, `Juego ${n}`, [{ status: 'finished', addedAt: '2026-04-15' }]);
+      }),
+    );
+    const root = mount();
+    createApp(root);
+
+    btn(qs('.plate[data-open-panel="finished"]', root)).click();
+    expect(qsa('.b-row', root)).toHaveLength(100);
+
+    vi.useFakeTimers();
+    type(root, 'Juego');
+    vi.advanceTimersByTime(150);
+    expect(qsa('.b-row', root)).toHaveLength(100);
+    expect(qs('[data-load-more]', root)?.textContent?.trim()).toBe('Cargar más');
+
+    btn(qs('[data-load-more]', root)).click();
+    expect(qsa('.b-row', root)).toHaveLength(120);
+
+    // Cambiar la consulta reinicia la paginación sobre la nueva lista filtrada.
+    type(root, '12');
+    vi.advanceTimersByTime(150);
+    const rows = qsa('.b-row', root);
+    expect(rows).toHaveLength(3); // Juego 012, Juego 112, Juego 120
+    expect(qs('[data-load-more]', root)).toBeNull();
   });
 });
 
