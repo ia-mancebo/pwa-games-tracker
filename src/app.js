@@ -15,12 +15,22 @@ import * as welcome from './views/welcome.js';
  */
 
 /**
+ * Vista activa dentro de Biblioteca: estantería o panel de un Estado del
+ * juego (spec §8.1/§8.2).
+ * @typedef {{
+ *   view: 'shelves'|'panel',
+ *   panelStatus: import('./domain/schema.js').Status|null,
+ * }} LibraryState
+ */
+
+/**
  * Estado global de la app. Las vistas son client-side (sin rutas de URL).
  * @typedef {{
  *   tab: string,
  *   doc: import('./domain/schema.js').Doc|null,
  *   meta: Meta,
  *   ready: boolean,
+ *   library: LibraryState,
  * }} AppState
  */
 
@@ -44,6 +54,7 @@ let state = {
   doc: null,
   meta: { dirty: false, updatedAt: null, lastSavedFileHash: null, connectedFileName: null },
   ready: false,
+  library: { view: 'shelves', panelStatus: null },
 };
 
 /** @type {Set<Listener>} */
@@ -143,6 +154,12 @@ export function createApp(root) {
     const tab = trigger.getAttribute('data-tab');
     if (!tab || !(tab in views)) return;
     e.preventDefault();
+    const previous = store.get().tab;
+    // Volver a Biblioteca desde otra pestaña repone la estantería (ticket 14).
+    if (tab === 'biblioteca' && previous !== 'biblioteca') {
+      store.set({ tab, library: { view: 'shelves', panelStatus: null } });
+      return;
+    }
     store.set({ tab });
   });
 

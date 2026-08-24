@@ -227,38 +227,235 @@
   font-size: 0.74rem;
 }
 
-/* Estantería en solo lectura (ticket 13): balda = placa + lista simple */
+/* Estantería (ticket 14): placas clicables + filas con scroll horizontal y snap */
 .shelves {
   display: flex;
   flex-direction: column;
   gap: 24px;
 }
 
-.shelf-list {
-  list-style: none;
-  padding: 0;
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+button.plate {
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
 }
 
-.shelf-item {
+button.plate:hover {
+  border-color: var(--muted);
+}
+
+.row {
   display: flex;
-  align-items: baseline;
+  gap: 16px;
+  overflow-x: auto;
+  padding: 18px 2px 22px;
+  border-bottom: 8px solid #100d0b;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.row::-webkit-scrollbar {
+  height: 8px;
+}
+
+.row::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 99px;
+}
+
+.row-empty {
+  align-self: center;
+  color: var(--faint);
+  font-size: 0.85rem;
+}
+
+/* Portada (ticket 14): carátula o placeholder con iniciales sobre degradado
+   estable derivado del id (--c1/--c2 inline en el placeholder) */
+.cover {
+  position: relative;
+  display: block;
+  width: 126px;
+  aspect-ratio: 2 / 3;
+  border-radius: 9px;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease;
+  background:
+    radial-gradient(120% 90% at 80% 0%, var(--c1, #3a332c), transparent 60%),
+    linear-gradient(150deg, var(--c1, #3a332c), var(--c2, #241f19));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 10px 24px -10px rgba(0, 0, 0, 0.65);
+}
+
+.cover::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(10, 8, 6, 0.76), transparent 48%);
+}
+
+.cover img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cover b {
+  position: absolute;
+  top: 10px;
+  left: 11px;
+  z-index: 1;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.cover.mini {
+  width: 46px;
+  border-radius: 7px;
+}
+
+.cover.mini b {
+  display: none;
+}
+
+.card:hover .cover {
+  transform: translateY(-5px) rotate(-0.4deg);
+  box-shadow:
+    0 20px 30px -14px rgba(0, 0, 0, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09);
+}
+
+.card {
+  width: 126px;
+  flex-shrink: 0;
+  scroll-snap-align: start;
+  position: relative;
+  text-align: left;
+}
+
+.card .cap {
+  display: flex;
   justify-content: space-between;
-  gap: 12px;
-  padding: 7px 11px;
-  background: var(--bg1);
-  border: 1px solid var(--line-soft);
-  border-radius: 8px;
+  margin-top: 8px;
+  min-height: 20px;
+  font-size: 0.78rem;
+  color: var(--muted);
 }
 
-.shelf-title {
-  font-size: 0.92rem;
+.card.more {
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  aspect-ratio: 2 / 3;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.card.more:hover {
+  border-color: var(--acc);
+  color: var(--ink);
+}
+
+/* Panel del estado abierto (ticket 14): lista densa tipo tabla */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding-bottom: 16px;
+}
+
+.toolbar strong {
+  font-size: 0.95rem;
+}
+
+.cardbox.tight {
+  padding: 6px 12px;
+}
+
+.b-thead,
+.b-row {
+  display: grid;
+  grid-template-columns: 52px minmax(140px, 1.6fr) minmax(90px, 1fr) 96px 118px;
+  gap: 14px;
+  align-items: center;
+  padding: 10px;
+}
+
+.b-thead {
+  color: var(--faint);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-bottom: 1px solid var(--line);
+  padding-top: 12px;
+  padding-bottom: 8px;
+}
+
+.b-row {
+  border-bottom: 1px solid var(--line-soft);
+  transition: background 0.12s;
+}
+
+.b-row:hover {
+  background: var(--bg2);
+}
+
+.b-cell {
+  min-width: 0;
+}
+
+.b-title {
+  display: block;
+  font-weight: 600;
+  font-size: 0.94rem;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.b-col-pf {
+  font-size: 0.78rem;
+  color: var(--muted);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tag-mini {
+  display: inline-block;
+  font-size: 0.67rem;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--bg2);
+  color: var(--muted);
+  margin-top: 4px;
+  margin-right: 4px;
+}
+
+.tag-mini.own {
+  background: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--acc) 55%, transparent);
+  color: var(--ink);
+}
+
+.panel-more {
+  padding: 12px 4px 8px;
+  text-align: center;
 }
 
 .stars {
@@ -444,6 +641,28 @@
 @media (max-width: 700px) {
   .welcome-options {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Panel denso en móvil: solo portada, título y píldora */
+@media (max-width: 640px) {
+  .b-thead {
+    display: none;
+  }
+
+  .b-row {
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+
+  .b-col-pf,
+  .b-col-stars {
+    display: none;
+  }
+
+  .card,
+  .card .cover {
+    width: 112px;
   }
 }
 
