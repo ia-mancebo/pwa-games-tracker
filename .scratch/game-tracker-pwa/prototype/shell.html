@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Game Tracker · prototipo de shell (desechable)</title>
+<!-- PROTOTIPO DESECHABLE · Tres variantes del shell (Biblioteca / Novedades / Estadísticas),
+     intercambiables vía ?v=a|b|c, flechas y barra flotante inferior. Incluye cajón comparador
+     de stack. Responde al ticket 03: dirección visual + stack. Datos ficticios, sin
+     persistencia. Ejecutar: abrir este archivo en el navegador. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Instrument+Sans:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,550;0,9..144,650;1,9..144,500&display=swap" rel="stylesheet">
+<style>
+:root{
+--bg0:#151210;--bg1:#1c1815;--bg2:#272119;--line:#37312a;--line-soft:#282320;
+--ink:#ece5d8;--muted:#a29684;--faint:#6e6355;
+--st-quiero:#e9b04d;--st-jugando:#5fc98f;--st-terminado:#9a90ec;--st-abandonado:#cf6a52;
+--acc-a:#e9c46a;--acc-b:#5fc98f;--acc-c:#b79ced;
+--sans:"Instrument Sans",system-ui,sans-serif;
+--mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg0);color:var(--ink);font-family:var(--sans);min-height:100vh;padding-bottom:110px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--acc,var(--acc-a));outline-offset:2px;border-radius:6px}
+[hidden]{display:none!important}
+.wrap{max-width:1180px;margin:0 auto;padding-left:clamp(14px,3vw,32px);padding-right:clamp(14px,3vw,32px)}
+.mono{font-family:var(--mono)}
+.muted{color:var(--muted)}
+[data-variant="a"]{--acc:var(--acc-a)}
+[data-variant="b"]{--acc:var(--acc-b)}
+[data-variant="c"]{--acc:var(--acc-c)}
+
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tabs button{padding:8px 14px;border-radius:999px;color:var(--muted);font-weight:500;font-size:.95rem;transition:color .15s,background .15s}
+.tabs button:hover{color:var(--ink)}
+.tabs button[aria-current="true"]{background:var(--bg2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.search{background:var(--bg1);border:1px solid var(--line);border-radius:999px;padding:8px 16px;color:var(--ink);min-width:190px;font-size:.92rem}
+.search::placeholder{color:var(--faint)}
+.pill{display:inline-flex;align-items:center;font-size:.78rem;font-weight:600;padding:3px 10px;border-radius:999px;letter-spacing:.02em;white-space:nowrap}
+.st-quiero{color:var(--st-quiero);background:color-mix(in srgb,var(--st-quiero) 13%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--st-quiero) 45%,transparent)}
+.st-jugando{color:var(--st-jugando);background:color-mix(in srgb,var(--st-jugando) 13%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--st-jugando) 45%,transparent)}
+.st-terminado{color:var(--st-terminado);background:color-mix(in srgb,var(--st-terminado) 13%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--st-terminado) 45%,transparent)}
+.st-abandonado{color:var(--st-abandonado);background:color-mix(in srgb,var(--st-abandonado) 13%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--st-abandonado) 45%,transparent)}
+.stars{color:var(--st-quiero);letter-spacing:2px;font-size:.9rem;white-space:nowrap}
+.stars .off{color:var(--faint)}
+.chip{font-size:.82rem;padding:5px 12px;border-radius:999px;border:1px solid var(--line);color:var(--muted);transition:border-color .15s,color .15s,background .15s;white-space:nowrap;flex-shrink:0}
+.chip:hover{border-color:var(--muted);color:var(--ink)}
+.chip.on{background:var(--acc);border-color:var(--acc);color:#171310;font-weight:600}
+.bar{height:8px;background:var(--bg2);border-radius:99px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--acc);border-radius:99px}
+.fade{animation:fade .18s ease-out}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.empty{padding:48px 16px;color:var(--faint);text-align:center;font-size:.95rem}
+
+.cover{position:relative;aspect-ratio:2/3;border-radius:9px;overflow:hidden;flex-shrink:0;background:radial-gradient(120% 90% at 80% 0%,var(--c1),transparent 60%),linear-gradient(150deg,var(--c1),var(--c2));box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 10px 24px -10px rgba(0,0,0,.65)}
+.cover::before{content:"";position:absolute;inset:0;background:linear-gradient(to top,rgba(10,8,6,.76),transparent 48%)}
+.cover[data-pat="2"]::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(115deg,rgba(255,255,255,.05) 0 2px,transparent 2px 9px)}
+.cover[data-pat="3"]::after{content:"";position:absolute;inset:0;background:radial-gradient(58% 42% at 50% 28%,rgba(255,255,255,.16),transparent 72%)}
+.cover b{position:absolute;top:10px;left:11px;font-family:"Unbounded",var(--sans);font-weight:700;font-size:.95rem;color:rgba(255,255,255,.85);letter-spacing:.05em;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+.cover em{position:absolute;left:11px;right:11px;bottom:9px;font-style:normal;font-weight:600;font-size:.78rem;line-height:1.25;color:#f3ede2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cover.mini{width:46px;border-radius:7px}
+.cover.mini b,.cover.mini em{display:none}
+
+.v-a .a-top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-top:26px;flex-wrap:wrap}
+.v-a .wordmark{font-family:"Unbounded",var(--sans);font-weight:700;font-size:1.02rem;letter-spacing:.13em}
+.v-a .wordmark em{font-style:normal;color:var(--acc);margin-left:.4em;font-weight:500}
+.v-a .a-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid var(--line);padding:14px 0 12px;margin-bottom:4px}
+.v-a .a-count{font-size:.76rem;color:var(--muted)}
+.v-a .sec{font-family:"Unbounded",var(--sans);font-weight:500;font-size:.82rem;text-transform:uppercase;letter-spacing:.09em;margin:34px 0 14px}
+.v-a .shelf{margin-top:26px}
+.v-a .plate{display:inline-flex;align-items:baseline;gap:10px;background:var(--bg1);border:1px solid var(--line);border-left:4px solid var(--sc,var(--acc));padding:7px 14px 6px 11px;border-radius:3px;transform:rotate(-.5deg)}
+.v-a .plate b{font-family:"Unbounded",var(--sans);font-size:.72rem;font-weight:500;text-transform:uppercase;letter-spacing:.1em}
+.v-a .plate span{color:var(--muted);font-size:.74rem}
+
+.v-a .row{display:flex;gap:16px;overflow-x:auto;padding:18px 2px 22px;border-bottom:8px solid #100d0b;box-shadow:0 1px 0 rgba(255,255,255,.04);scroll-snap-type:x proximity;scrollbar-width:thin}
+.v-a .row::-webkit-scrollbar{height:8px}
+.v-a .row::-webkit-scrollbar-thumb{background:var(--line);border-radius:99px}
+.v-a .card{width:126px;flex-shrink:0;scroll-snap-align:start;position:relative}
+.v-a .card .cover{width:126px;transition:transform .16s ease,box-shadow .16s ease}
+.v-a .card:hover .cover{transform:translateY(-5px) rotate(-.4deg);box-shadow:0 20px 30px -14px rgba(0,0,0,.8),inset 0 1px 0 rgba(255,255,255,.09)}
+.v-a .cap{display:flex;justify-content:space-between;align-items:center;margin-top:8px;min-height:20px;font-size:.78rem;color:var(--muted)}
+.v-a .badge{position:absolute;top:8px;right:8px;z-index:1;background:rgba(14,11,8,.85);border:1px solid rgba(255,255,255,.16);color:#f1e9da;font-family:var(--mono);font-size:.64rem;padding:3px 7px;border-radius:5px}
+.v-a .month-strip{display:flex;gap:8px;overflow-x:auto;padding:18px 16px 12px;margin:0 -16px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.v-a .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-top:6px}
+.v-a .tile{background:var(--bg1);border:1px solid var(--line);border-radius:9px;padding:16px 18px}
+.v-a .tile b{display:block;font-family:"Unbounded",var(--sans);font-size:1.75rem;font-weight:700;color:var(--acc);line-height:1.15;margin-bottom:8px}
+.v-a .tile span{color:var(--muted);font-size:.8rem}
+.v-a .stat-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:16px}
+.v-a .stat-cols .wide{grid-column:1/-1}
+
+.hbar{display:flex;flex-direction:column;gap:2px}
+.hbar .hb{display:grid;grid-template-columns:minmax(88px,130px) 1fr 36px;align-items:center;gap:12px;padding:6px 0;font-size:.86rem}
+.hbar .n{font-family:var(--mono);text-align:right;color:var(--muted);font-size:.78rem}
+.cardbox{background:var(--bg1);border:1px solid var(--line);border-radius:11px;padding:18px}
+.cardbox h3{font-size:.72rem;text-transform:uppercase;letter-spacing:.11em;color:var(--muted);margin-bottom:10px;font-weight:600}
+.cardbox.tight{padding:6px 12px}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:16px}
+.kpi{background:var(--bg1);border:1px solid var(--line);border-radius:11px;padding:16px}
+.kpi .num{font-family:var(--mono);font-size:1.6rem;font-weight:500;color:var(--acc);display:block;margin-bottom:8px}
+.kpi .lbl{font-size:.7rem;color:var(--faint);text-transform:uppercase;letter-spacing:.09em;margin-top:2px}
+
+.v-b .b-shell{display:grid;grid-template-columns:236px minmax(0,1fr);align-items:start}
+.v-b .b-rail{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:20px;padding:24px 16px;border-right:1px solid var(--line)}
+.b-logo{width:40px;height:40px;border-radius:10px;background:var(--acc-b);color:#10130f;display:grid;place-items:center;font-family:"Space Grotesk",var(--sans);font-weight:700;font-size:1rem}
+.b-nav{display:flex;flex-direction:column;gap:3px}
+.b-nav button{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border-radius:9px;color:var(--muted);text-align:left;font-size:.93rem;font-weight:500;transition:background .12s,color .12s}
+.b-nav button:hover{background:var(--bg1);color:var(--ink)}
+.b-nav button[aria-current="true"]{background:var(--bg2);color:var(--ink);box-shadow:inset 2px 0 0 var(--acc)}
+.b-nav em{font-style:normal;font-family:var(--mono);font-size:.75rem;color:var(--faint)}
+.b-nav button[aria-current="true"] em{color:var(--acc)}
+.b-widgets{margin-top:auto;display:flex;flex-direction:column;gap:10px}
+.bw{background:var(--bg1);border:1px solid var(--line-soft);border-radius:10px;padding:11px 13px}
+.bw span{display:block;font-size:.64rem;color:var(--faint);text-transform:uppercase;letter-spacing:.09em;margin-bottom:3px}
+.bw b{font-weight:500;font-size:1.15rem}
+.b-note{font-size:.68rem;color:var(--faint);letter-spacing:.04em}
+
+.v-b .b-main{padding:22px clamp(14px,3vw,34px) 30px}
+.b-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-bottom:16px}
+.b-toolbar .search{min-width:160px;max-width:300px}
+.b-thead,.b-row{display:grid;grid-template-columns:52px minmax(140px,1.6fr) minmax(90px,1fr) 96px 118px;gap:14px;align-items:center;padding:10px}
+.b-thead{color:var(--faint);font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;border-bottom:1px solid var(--line);padding-top:12px;padding-bottom:8px}
+.b-row{border-bottom:1px solid var(--line-soft);transition:background .12s}
+.b-row:hover{background:var(--bg2)}
+.b-cell{min-width:0}
+.b-title{display:block;font-weight:600;font-size:.94rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.b-sub{display:block;color:var(--muted);font-size:.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.b-num{font-family:var(--mono);font-size:.78rem;color:var(--muted);white-space:nowrap}
+.tag-mini{display:inline-block;font-size:.67rem;padding:2px 8px;border-radius:99px;background:var(--bg2);color:var(--muted);margin-top:4px;margin-right:4px}
+.tag-mini.own{background:none;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--acc) 55%,transparent);color:var(--ink)}
+.hype{display:flex;align-items:center;gap:8px}
+.hype .bar{width:70px}
+.kind{font-size:.68rem;padding:3px 9px;border-radius:99px;border:1px solid var(--line);color:var(--muted);white-space:nowrap;text-align:center}
+.kind.proximo{color:var(--acc);border-color:color-mix(in srgb,var(--acc) 45%,transparent)}
+
+.news-table .b-thead,.news-table .b-row{grid-template-columns:92px minmax(120px,1fr) 92px 150px}
+@media(max-width:900px){
+.v-b .b-shell{grid-template-columns:minmax(0,1fr)}
+.v-b .b-rail{position:static;height:auto;flex-direction:row;align-items:center;gap:12px;padding:12px 16px;border-right:none;border-bottom:1px solid var(--line);min-width:0}
+.b-nav{flex-direction:row;flex:1;overflow-x:auto;min-width:0}
+.b-nav button{padding:8px 11px;white-space:nowrap}
+.b-nav em,.b-widgets,.b-note{display:none}
+}
+@media(max-width:640px){
+.b-thead{display:none}
+.b-toolbar .search{flex:1 1 100%;max-width:none;min-width:0}
+.b-toolbar{row-gap:8px}
+.v-a .badge{font-size:.56rem;padding:2px 5px}
+.b-row{grid-template-columns:48px minmax(0,1fr) auto;gap:10px}
+.b-col-pf,.b-col-stars{display:none}
+.news-table .b-thead{display:none}
+.news-table .b-row{grid-template-columns:auto minmax(0,1fr)}
+.c-kind,.c-hype{display:none}
+.v-a .card,.v-a .card .cover{width:112px}
+.c-hero .cover{width:104px}
+.c-hero{gap:14px}
+}
+
+.v-c .c-head{text-align:center;padding:38px 16px 0}
+.c-mark{font-family:"Fraunces",serif;font-style:italic;font-weight:650;font-size:clamp(1.8rem,4vw,2.4rem);letter-spacing:.01em}
+.c-mark::first-letter{color:var(--acc)}
+.c-sub{color:var(--muted);font-family:"Fraunces",serif;font-style:italic;font-size:.88rem;margin-top:2px}
+.c-tabs{display:flex;justify-content:center;gap:26px;padding:18px 0 10px;border-bottom:1px solid var(--line-soft)}
+.c-tabs button{padding:4px 2px;border-radius:0;color:var(--muted);font-size:.95rem;border-bottom:2px solid transparent;background:none}
+.c-tabs button:hover{color:var(--ink);background:none;box-shadow:none}
+.c-tabs button[aria-current="true"]{background:none;color:var(--ink);box-shadow:none;border-color:var(--acc)}
+.c-col{max-width:720px;margin:0 auto;padding-left:clamp(18px,4vw,30px);padding-right:clamp(18px,4vw,30px)}
+.c-lead{font-size:.68rem;letter-spacing:.22em;text-transform:uppercase;color:var(--acc);margin-bottom:16px;padding-top:30px}
+.c-hero{display:flex;gap:22px;align-items:flex-end}
+.c-hero .cover{width:138px}
+.c-hero h2{font-family:"Fraunces",serif;font-weight:650;font-size:clamp(1.45rem,3.2vw,1.95rem);line-height:1.12;margin-bottom:8px;margin-top:10px}
+.c-prose{color:var(--muted);font-size:.97rem;max-width:58ch;line-height:1.65}
+
+.c-rule{border:none;border-top:1px solid var(--line-soft);margin:30px 0 26px}
+.c-tools{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px}
+.c-tools .search{min-width:0;max-width:250px;padding:7px 14px;font-size:.86rem}
+.c-count{font-family:var(--mono);font-size:.74rem;color:var(--faint);white-space:nowrap}
+.ledger{list-style:none}
+.ledger li{display:flex;align-items:baseline;gap:10px;padding:10px 0;font-size:.97rem}
+.ledger .dot{width:9px;height:9px;border-radius:2px;background:var(--sc);flex-shrink:0;transform:translateY(-1px)}
+.ledger .lt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46%;font-weight:500}
+.ledger .leader{flex:1;border-bottom:2px dotted var(--line);transform:translateY(-4px)}
+.ledger .note{font-family:var(--mono);font-size:.75rem;color:var(--muted);white-space:nowrap}
+.c-brief{display:flex;gap:16px;padding:16px 0;border-top:1px solid var(--line-soft)}
+.c-brief .cover{width:56px}
+.c-brief p{font-size:.95rem;line-height:1.65;color:var(--ink);max-width:56ch}
+.c-brief strong{font-family:var(--mono);font-weight:500;font-size:.85em;color:var(--acc)}
+.c-stat{color:var(--muted);font-size:1.02rem;line-height:1.85;max-width:62ch;margin-bottom:14px}
+.c-stat strong{font-family:var(--mono);font-weight:500;color:var(--acc);font-size:.95em}
+.c-genres{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.c-genres span{border:1px solid var(--line);border-radius:999px;padding:4px 13px;font-size:.8rem;color:var(--muted)}
+
+.switcher{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:70;display:flex;align-items:center;gap:2px;background:#f3eee3;color:#181410;border-radius:999px;padding:6px 8px;box-shadow:0 12px 32px rgba(0,0,0,.55);font-weight:600;font-size:.85rem}
+.switcher button{padding:6px 12px;border-radius:999px;font-size:1rem;line-height:1}
+.switcher button:hover{background:rgba(0,0,0,.08)}
+#swLabel{min-width:122px;text-align:center;font-family:"Space Grotesk",var(--sans);letter-spacing:.03em;font-size:.8rem}
+.sw-sep{width:1px;height:18px;background:rgba(0,0,0,.16);margin:0 3px}
+#btnStack{font-size:.76rem!important;font-weight:700;letter-spacing:.02em}
+.backdrop{position:fixed;inset:0;background:rgba(8,6,4,.62);z-index:80}
+.drawer{position:fixed;z-index:81;left:50%;top:50%;transform:translate(-50%,-50%);width:min(660px,calc(100vw - 28px));max-height:min(86vh,760px);overflow:auto;background:var(--bg1);border:1px solid var(--line);border-radius:16px;padding:28px 28px 30px;box-shadow:0 30px 80px -18px rgba(0,0,0,.8)}
+.drawer h2{font-family:"Space Grotesk",var(--sans);font-size:1.25rem;margin-bottom:6px}
+.drawer .sub{color:var(--muted);font-size:.88rem;margin-bottom:18px;line-height:1.6}
+.opt{border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-bottom:12px}
+.opt.rec{box-shadow:inset 0 0 0 1px var(--st-jugando)}
+.opt h3{font-size:1rem;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rec-badge{font-size:.62rem;background:var(--st-jugando);color:#10130f;padding:2px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.07em}
+.opt .meta{font-family:var(--mono);font-size:.73rem;color:var(--muted);margin:5px 0 9px}
+.opt ul{list-style:none}
+.opt li{font-size:.87rem;padding-left:18px;position:relative;color:var(--ink);line-height:1.55}
+.opt li::before{position:absolute;left:4px;font-weight:700}
+.opt li.plus::before{content:"+";color:var(--st-jugando)}
+.opt li.minus::before{content:"–";color:var(--st-abandonado)}
+.dclose{position:absolute;top:14px;right:14px;width:34px;height:34px;border-radius:999px;color:var(--muted);font-size:1.05rem}
+.dclose:hover{background:var(--bg2);color:var(--ink)}
+.drawer-foot{font-size:.78rem;color:var(--faint);margin-top:14px;line-height:1.65}
+.v-a .plate{cursor:pointer;transition:border-color .15s}
+.v-a button.plate:hover{border-color:var(--muted)}
+.v-a .card.more{display:grid;place-items:center;border:1px dashed var(--line);border-radius:9px;color:var(--muted);font-size:.84rem;width:126px;flex-shrink:0;aspect-ratio:2/3;transition:border-color .15s,color .15s}
+.v-a .card.more:hover{border-color:var(--acc);color:var(--ink)}
+.v-a .card.news .cover b{display:none}
+#detail .detail-sheet{position:fixed;inset:0;z-index:65;background:var(--bg0);overflow:auto;padding:18px clamp(16px,4vw,28px) 110px}
+.d-hero{display:flex;gap:22px;align-items:flex-end;margin-top:24px}
+.d-cover{width:150px;flex-shrink:0}
+.d-head h2{font-family:"Space Grotesk",var(--sans);font-size:clamp(1.3rem,3vw,1.7rem);margin:10px 0 6px}
+.d-stars{display:flex;gap:2px;align-items:center;margin-top:4px}
+.d-stars .star{font-size:1.3rem;color:var(--faint);padding:2px;line-height:1}
+.d-stars .star.on{color:var(--st-quiero)}
+.d-sec{margin-top:24px;max-width:640px}
+.d-sec h3{font-size:.68rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:9px}
+.d-meta{font-size:.9rem;color:var(--muted)}
+.d-status{display:flex;flex-wrap:wrap;gap:8px}
+.d-desc{font-size:.95rem;line-height:1.7;color:var(--ink);max-width:62ch}
+.d-gallery{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;scrollbar-width:thin}
+.d-shot{width:210px;aspect-ratio:16/9;border-radius:9px;flex-shrink:0;position:relative;background:radial-gradient(120% 100% at 80% 0%,var(--c1),transparent 60%),linear-gradient(150deg,var(--c1),var(--c2));box-shadow:inset 0 1px 0 rgba(255,255,255,.09)}
+.d-shot span{position:absolute;bottom:8px;left:10px;font-size:.7rem;color:rgba(255,255,255,.7);font-family:var(--mono)}
+.b-row[data-detail],.b-row[data-ndetail]{cursor:pointer}
+.v-a .card[data-detail],.v-a .card[data-ndetail]{cursor:pointer}
+@media(max-width:560px){.d-hero{flex-direction:column;align-items:flex-start}.d-cover{width:122px}}
+.b-toolbar strong{font-size:.95rem}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="detail" hidden></div>
+<div class="switcher" role="toolbar" aria-label="Selector de variante de prototipo">
+<button data-sw="prev" aria-label="Variante anterior">‹</button>
+<span id="swLabel">A · Estantería</span>
+<button data-sw="next" aria-label="Variante siguiente">›</button>
+<span class="sw-sep"></span>
+<button id="btnStack" aria-haspopup="dialog">stack ⓘ</button>
+</div>
+<div class="backdrop" id="backdrop" hidden></div>
+
+<section class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drTitle" hidden>
+<button class="dclose" id="btnClose" aria-label="Cerrar">✕</button>
+<h2 id="drTitle">¿Con qué stack se construye?</h2>
+<p class="sub">Las tres opciones comparten Vite y <strong>vite-plugin-pwa</strong> para el service worker, y ninguna cambia lo decidido en los research: Worker proxy delante de IGDB, y <strong>.json</strong> + IndexedDB como almacenamiento.</p>
+<div class="opt rec">
+<h3>Svelte 5 + Vite <span class="rec-badge">recomendada</span></h3>
+<p class="meta">runtime ~12 KB · reactividad por runes · SFC compilados</p>
+<ul>
+<li class="plus">Runes encajan con el dominio: filtros de biblioteca y espejo IndexedDB son estado reactivo puro.</li>
+<li class="plus">Bundle pequeño y sin virtual DOM: arranque rápido en un Android 11 modesto.</li>
+<li class="minus">Ecosistema menor que React; menos ejemplos para casos raros.</li>
+</ul>
+</div>
+<div class="opt">
+<h3>Vanilla TS + Vite</h3>
+<p class="meta">~0 KB de runtime · web estándar · este prototipo funciona así tal cual</p>
+<ul>
+<li class="plus">Cero dependencias de framework: el archivo que estás viendo es la prueba de viabilidad del shell.</li>
+<li class="plus">Control total del render y del service worker.</li>
+<li class="minus">Estado, listas y render hechos a mano: más andamiaje propio que mantener.</li>
+</ul>
+</div>
+
+<div class="opt">
+<h3>React 19 + Vite</h3>
+<p class="meta">~50–60 KB de runtime · ecosistema máximo</p>
+<ul>
+<li class="plus">Ecosistema y ayuda de IA abundantes; camino fácil si el proyecto crece de manos.</li>
+<li class="minus">Peso y ceremonia sobredimensionados para tres pestañas de datos locales.</li>
+<li class="minus">Re-renders y gestión de dependencias que aquí no compran nada.</li>
+</ul>
+</div>
+<p class="drawer-foot">Restricciones fijas: GitHub Pages estático · 100 % offline · sin backend propio (el Worker de IGDB va aparte). Este prototipo usa datos ficticios y código desechable. Lo que cierra este ticket: la dirección visual (A/B/C o mezcla) y la elección de stack.</p>
+</section>
+<script>
+"use strict";
+const STATUS={quiero:{label:"Quiero jugar"},jugando:{label:"Jugando"},terminado:{label:"Terminado"},abandonado:{label:"Abandonado"}};
+const LBL={biblioteca:"Biblioteca",novedades:"Novedades",estadisticas:"Estadísticas"};
+const ORDER=["jugando","quiero","terminado","abandonado"];
+
+const GAMES=[
+{t:"Hades",s:"jugando",r:5,pf:["PC","Switch"],ge:["Roguelike","Acción"],tg:["viciante"],hue:8,pat:1},
+{t:"Disco Elysium",s:"jugando",r:5,pf:["PC"],ge:["RPG"],tg:["narrativo"],hue:265,pat:3},
+{t:"Elden Ring",s:"jugando",r:4,pf:["PS5","PC"],ge:["RPG","Acción"],tg:["mundo abierto"],hue:38,pat:2},
+{t:"Balatro",s:"jugando",r:4,pf:["PC","Android"],ge:["Cartas","Roguelike"],tg:["píldora"],hue:152,pat:1},
+{t:"Vampire Survivors",s:"jugando",r:3,pf:["PC","Android"],ge:["Acción"],tg:[],hue:285,pat:2},
+{t:"Persona 5 Royal",s:"quiero",r:null,pf:["PS5"],ge:["JRPG"],tg:["larguísimo"],hue:330,pat:3},
+{t:"Blue Prince",s:"quiero",r:null,pf:["PC","PS5"],ge:["Puzzle"],tg:[],hue:196,pat:1},
+{t:"Clair Obscur: Expedition 33",s:"quiero",r:null,pf:["PS5","PC"],ge:["RPG"],tg:["por turnos"],hue:12,pat:2},
+{t:"Chrono Trigger",s:"quiero",r:null,pf:["PC"],ge:["JRPG"],tg:["clásico"],hue:210,pat:3},
+{t:"Hollow Knight: Silksong",s:"quiero",r:null,pf:["PC","Switch"],ge:["Metroidvania"],tg:[],hue:175,pat:2},
+{t:"Hades II",s:"quiero",r:null,pf:["PC","Switch"],ge:["Roguelike"],tg:[],hue:300,pat:1},
+{t:"Metaphor: ReFantazio",s:"quiero",r:null,pf:["PC","PS5"],ge:["JRPG"],tg:[],hue:225,pat:3},
+
+{t:"Celeste",s:"terminado",r:5,pf:["PC","Switch"],ge:["Plataformas"],tg:[],end:"mar 2024",ey:2024,hue:200,pat:1},
+{t:"Outer Wilds",s:"terminado",r:5,pf:["PC"],ge:["Aventura","Puzzle"],tg:["imperdible"],end:"ago 2023",ey:2023,hue:45,pat:3},
+{t:"Hollow Knight",s:"terminado",r:5,pf:["PC","Switch"],ge:["Metroidvania"],tg:[],end:"dic 2022",ey:2022,hue:255,pat:2},
+{t:"Return of the Obra Dinn",s:"terminado",r:4,pf:["PC"],ge:["Puzzle"],tg:["misterio"],end:"abr 2023",ey:2023,hue:30,pat:1},
+{t:"Tunic",s:"terminado",r:4,pf:["PC"],ge:["Aventura","Puzzle"],tg:[],end:"feb 2025",ey:2025,hue:96,pat:2},
+{t:"Stardew Valley",s:"abandonado",r:3,pf:["Switch","PC"],ge:["Simulación"],tg:["relajante"],hue:110,pat:3},
+{t:"Cuphead",s:"abandonado",r:2,pf:["Switch"],ge:["Plataformas","Acción"],tg:["difícil"],hue:15,pat:1}
+];
+const NEWS=[
+{t:"La Bruma de Aval",d:"9 ago 2026",mo:"ago 2026",k:"reciente",hype:81,ge:["RPG"],pf:["PC"],hue:205,pat:3},
+{t:"Paperbound Legends",d:"21 ago 2026",mo:"ago 2026",k:"reciente",hype:47,ge:["Plataformas"],pf:["Switch"],hue:50,pat:1},
+{t:"Everdeep Aurora",d:"12 jul 2026",mo:"jul 2026",k:"reciente",hype:72,ge:["Metroidvania"],pf:["PC","Switch"],hue:185,pat:2},
+{t:"Neon Harbor",d:"28 jul 2026",mo:"jul 2026",k:"reciente",hype:55,ge:["Aventura"],pf:["PS5","PC"],hue:310,pat:1},
+
+{t:"Garden of Static",d:"17 sep 2026",mo:"sep 2026",k:"proximo",hype:66,ge:["Puzzle"],pf:["PC","Switch"],hue:130,pat:2},
+{t:"Oath of Emberfall",d:"14 oct 2026",mo:"oct 2026",k:"proximo",hype:88,ge:["RPG","Acción"],pf:["PS5","Xbox","PC"],hue:18,pat:3},
+{t:"Silent Meridian",d:"6 nov 2026",mo:"nov 2026",k:"proximo",hype:59,ge:["Terror"],pf:["PC"],hue:0,pat:1},
+{t:"Vermilion Sky",d:"11 dic 2026",mo:"dic 2026",k:"proximo",hype:74,ge:["Acción"],pf:["PS5","PC"],hue:355,pat:2}
+];
+const DESCS={
+"Hades":"Escapa del inframundo una y otra vez en este roguelike de acción donde cada muerte hace avanzar la historia del príncipe Zagreo.",
+"Disco Elysium":"RPG detectivesco sin combate: conversaciones, habilidades que discuten contigo y una ciudad quebrada por el pasado.",
+"Elden Ring":"Un mundo abierto de sombras y jefes colosales firmado por FromSoftware y George R. R. Martin.",
+"Balatro":"Póker roguelike: construye combos absurdos de manos de póker para vencer a los ojos.",
+"Vampire Survivors":"Sobrevive a hordas infinitas eligiendo bien tus armas; tú solo te mueves, ellos mueren solos.",
+"Persona 5 Royal":"Ladrones fantasma en el Metaverso de Tokio: calendario escolar, mazmorras estilizadas y mucho estilo.",
+"Blue Prince":"Explora una mansión que se rediseña con cada puerta que abres en este cruce de puzzle y roguelike.",
+"Clair Obscur: Expedition 33":"RPG por turnos de aire Belle Époque: acaba con la Pintora antes de que borre tu generación.",
+"Chrono Trigger":"El JRPG clásico de viajes en el tiempo de Squaresoft, con combates sin pantallas de carga.",
+"Celeste":"Escala la montaña píxel a píxel; un plataformas exigente y sincero sobre la ansiedad.",
+"Outer Wilds":"Un bucle de 22 minutos para descubrir por qué explota el sol, en un sistema solar lleno de secretos.",
+"Hollow Knight":"Metroidvania de agujas y susurros bajo el reino en ruinas de Hallownest.",
+"Return of the Obra Dinn":"Deduce el destino de los 60 tripulantes del Obra Dinn con un reloj que congela el instante de cada muerte.",
+"Tunic":"Un zorro con espada explora un mundo guiado por un manual de instrucciones lleno de secretos cifrados.",
+"Stardew Valley":"Hereda la granja de tu abuelo: cultiva, pesca, mina y hazte amigo del pueblo.",
+"Cuphead":"Jefe tras jefe a lo cartoon de los años treinta, dibujado a mano y despiadado.",
+"Hollow Knight: Silksong":"Hornet protagoniza una nueva expedición por un reino de seda e himnos.",
+"Hades II":"Melinoe, hermana de Zagreo, se enfrenta a Cronos en la secuela del roguelike de Supergiant.",
+"Metaphor: ReFantazio":"Fantasía política de los creadores de Persona: magia, tribus y una elección real por el trono."
+};
+const SHOTS={
+"Hades":[8,20,350],"Elden Ring":[38,25,45],"Hollow Knight":[255,270,240],
+"Celeste":[200,215],"Outer Wilds":[45,60],"Balatro":[152,140]
+};
+const NDESCS={
+"La Bruma de Aval":"RPG de exploración en un valle donde la niebla reescribe el mapa cada amanecer.",
+"Paperbound Legends":"Plataformas dibujado a tinta donde el papel es terreno y arma a la vez.",
+"Everdeep Aurora":"Metroidvania subterráneo excavado a pico, con una atmósfera melancólica y pixel-art precioso.",
+"Neon Harbor":"Aventura noir en un puerto lleno de neones, contratos y fantasmas digitales.",
+"Garden of Static":"Puzzle relajante sobre restaurar un jardín congelado en el tiempo.",
+"Oath of Emberfall":"RPG de acción con juramentos de fuego: cada promesa cambia las mazmorras.",
+"Silent Meridian":"Terror psicológico en un observatorio abandonado donde el silencio mide otra cosa.",
+"Vermilion Sky":"Acción aérea vertical sobre ciudades flotantes en guerra."
+};
+const NSHOTS={
+"La Bruma de Aval":[205,220],"Paperbound Legends":[50,65],"Everdeep Aurora":[185,200],
+"Neon Harbor":[310,325],"Garden of Static":[130,145],"Oath of Emberfall":[18,35],
+"Silent Meridian":[0,15],"Vermilion Sky":[355,340]};
+let V="a",TAB="biblioteca";
+let VIEW="shelves";
+let NVIEW="shelves",NLIST="reciente",NGF="";
+let DETAIL=null;
+let GF="";
+const SHELF_LIMIT=6;
+const FILTER={q:""};
+const BF=new Set();
+const $=s=>document.querySelector(s);
+const gameByT=t=>GAMES.find(x=>x.t===t);
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;")}
+function escQ(){return esc(FILTER.q).replace(/"/g,"&quot;")}
+function stars(r){return r==null?'<span class="stars muted">—</span>':`<span class="stars">${"★".repeat(r)}<span class="off">${"☆".repeat(5-r)}</span></span>`}
+function pill(s){return `<span class="pill st-${s}">${STATUS[s].label}</span>`}
+function dot(s){return `<i class="dot" style="--sc:var(--st-${s})"></i>`}
+function ini(t){return t.split(/[\s:]+/).filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase()}
+
+function cover(x,cls){const h2=(x.hue+42)%360;return `<div class="cover ${cls||""}" style="--c1:hsl(${x.hue} 46% 40%);--c2:hsl(${h2} 54% 19%)" data-pat="${x.pat}"><b>${ini(x.t)}</b><em>${x.t}</em></div>`}
+function match(g){const q=FILTER.q.trim().toLowerCase();if(!q)return true;const hay=(g.t+" "+g.ge.join(" ")+" "+g.tg.join(" ")+" "+g.pf.join(" ")).toLowerCase();return hay.includes(q)}
+function avg(list){const rs=list.filter(g=>g.r!=null).map(g=>g.r);return rs.length?rs.reduce((a,b)=>a+b,0)/rs.length:null}
+function fmtAvg(v){return v==null?"—":String(Math.round(v*10)/10).replace(".",",")}
+function tally(arr){return arr.reduce((m,x)=>(m[x]=(m[x]||0)+1,m),{})}
+function byPlatform(){return Object.entries(tally(GAMES.flatMap(g=>g.pf))).sort((a,b)=>b[1]-a[1])}
+function byGenre(){return Object.entries(tally(GAMES.flatMap(g=>g.ge))).sort((a,b)=>b[1]-a[1])}
+function byYear(){return Object.entries(tally(GAMES.filter(g=>g.ey).map(g=>String(g.ey)))).sort()}
+function count(s){return GAMES.filter(g=>g.s===s).length}
+function tabBtns(cls){return `<nav class="tabs ${cls||""}">${Object.keys(LBL).map(id=>`<button data-tab="${id}" aria-current="${TAB===id}">${LBL[id]}</button>`).join("")}</nav>`}
+function hbar(entries,max){return `<div class="hbar">${entries.map(([k,v])=>`<div class="hb"><span>${k}</span><span class="bar"><i style="width:${Math.max(4,Math.round(v/max*100))}%"></i></span><span class="n">${v}</span></div>`).join("")}</div>`}
+
+function pageA(){
+const top=`<header class="wrap"><div class="a-top"><div class="wordmark">GAME<em>TRACKER</em></div><input class="search" data-q placeholder="Filtrar estantería…" value="${escQ()}"></div>
+<div class="a-bar">${tabBtns()}<span class="a-count mono">${GAMES.length} entradas · datos de ejemplo</span></div></header>`;
+let body="";
+if(TAB==="biblioteca"){
+body=ORDER.map(s=>{
+const all=GAMES.filter(g=>g.s===s),list=all.filter(match);
+const av=avg(all);
+return `<section class="shelf wrap"><div class="plate" style="--sc:var(--st-${s})"><b>${STATUS[s].label}</b><span>${list.length}${av!=null?" · ★ "+fmtAvg(av):""}</span></div>
+<div class="row">${list.length?list.map(g=>`<figure class="card">${cover(g)}<figcaption class="cap">${stars(g.r)}</figcaption></figure>`).join(""):`<p class="empty">Sin resultados para «${esc(FILTER.q)}».</p>`}</div></section>`;
+}).join("");
+}
+
+else if(TAB==="novedades"){
+const months=[...new Set(NEWS.map(n=>n.mo))];
+const card=n=>`<figure class="card">${cover(n)}<span class="badge">${n.d}</span><figcaption class="cap"><span>${n.ge.join(", ")}</span></figcaption></figure>`;
+body=`<div class="month-strip wrap">${months.map(m=>`<span class="chip"><strong>${m.toUpperCase()}</strong>&nbsp;· ${NEWS.filter(n=>n.mo===m).length}</span>`).join("")}</div>
+<section class="wrap"><h2 class="sec">Recién salidos</h2><div class="row">${NEWS.filter(n=>n.k==="reciente").map(card).join("")}</div>
+<h2 class="sec">Próximamente</h2><div class="row">${NEWS.filter(n=>n.k==="proximo").map(card).join("")}</div></section>`;
+}else{
+const plat=byPlatform().slice(0,5),gen=byGenre().slice(0,6),yrs=byYear();
+body=`<div class="wrap" style="padding-top:18px">
+<div class="tiles">
+<div class="tile"><b>${GAMES.length}</b><span>entradas en la biblioteca</span></div>
+<div class="tile"><b>${count("jugando")}</b><span>en juego ahora mismo</span></div>
+<div class="tile"><b>${count("terminado")}</b><span>terminadas (${Math.round(count("terminado")/GAMES.length*100)} %)</span></div>
+<div class="tile"><b>★ ${fmtAvg(avg(GAMES))}</b><span>valoración media</span></div>
+</div>
+<div class="stat-cols">
+<div class="cardbox"><h3>Por plataforma</h3>${hbar(plat,plat[0][1])}</div>
+<div class="cardbox"><h3>Terminados por año</h3>${hbar(yrs,Math.max(...yrs.map(y=>y[1])))}</div>
+<div class="cardbox wide"><h3>Géneros más frecuentes</h3>${hbar(gen.slice(0,6),gen[0][1])}</div>
+</div></div>`;
+}
+return `<div class="v-a fade">${top}${body}</div>`;
+}
+
+function bRow(g){return `<div class="b-row" data-detail="${g.t}" tabindex="0">${cover(g,"mini")}<span class="b-cell"><span class="b-title">${g.t}</span>${g.tg.map(t=>`<span class="tag-mini own">#${t}</span>`).join("")}</span><span class="b-col-pf mono" style="font-size:.78rem;color:var(--muted)">${g.pf.join(", ")}</span><span class="b-col-stars">${stars(g.r)}</span>${pill(g.s)}</div>`}
+function pageB(){
+const counts={biblioteca:GAMES.length,novedades:NEWS.length,estadisticas:""};
+const nav=`<nav class="b-nav">${Object.keys(LBL).map(id=>`<button data-tab="${id}" aria-current="${TAB===id}"><span>${LBL[id]}</span>${counts[id]!==""?`<em>${counts[id]}</em>`:""}</button>`).join("")}</nav>`;
+const rail=`<aside class="b-rail"><div class="b-logo">GT</div>${nav}
+<div class="b-widgets">
+<div class="bw"><span>Jugando ahora</span><b>${count("jugando")}</b></div>
+<div class="bw"><span>Terminados en 2025</span><b>${GAMES.filter(g=>g.ey===2025).length}</b></div>
+<div class="bw"><span>Valoración media</span><b>★ ${fmtAvg(avg(GAMES))}</b></div>
+</div>
+<span class="b-note mono">offline-first · datos locales</span></aside>`;
+let body="";
+
+if(TAB==="biblioteca"){
+if(VIEW==="list"){
+const act=[...BF];
+const solo=act.length===1?act[0]:"jugando";
+const list=GAMES.filter(g=>g.s===solo&&match(g)&&(!GF||g.ge.includes(GF)));
+const genres=[...new Set(GAMES.filter(g=>g.s===solo).flatMap(g=>g.ge))].sort((a,b)=>a.localeCompare(b,"es"));
+const gchips=genres.length?genres.map(x=>`<button class="chip ${GF===x?"on":""}" data-genre="${x}">${x}</button>`).join(""):"";
+const chips=ORDER.filter(s=>s!==solo).map(s=>`<button class="chip" data-shelf="${s}">${STATUS[s].label}</button>`).join("");
+body=`<div class="b-main">
+<div class="b-toolbar"><button class="chip" data-back="1">← Estantería</button><strong>${STATUS[solo].label}</strong></div>
+<div class="b-toolbar"><input class="search" data-q placeholder="Filtrar…" value="${escQ()}">${chips}</div>
+${gchips?`<div class="b-toolbar">${gchips}</div>`:""}
+<div class="cardbox tight">
+<div class="b-thead"><span></span><span>Juego</span><span class="b-col-pf">Plataformas</span><span class="b-col-stars">Valoración</span><span>Estado</span></div>
+${list.map(bRow).join("")||'<p class="empty">Nada coincide con la búsqueda en este estado.</p>'}
+</div></div>`;
+}else{
+const shelf=s=>{
+const all=GAMES.filter(g=>g.s===s&&match(g));
+const lim=all.slice(0,SHELF_LIMIT);
+const rest=all.length-lim.length;
+const av=avg(all);
+return `<section class="shelf"><button class="plate" style="--sc:var(--st-${s})" data-shelf="${s}" title="Ver como lista"><b>${STATUS[s].label}</b><span>${all.length}${av!=null?" · ★ "+fmtAvg(av):""}</span></button>
+<div class="row">${lim.map(g=>`<button class="card" data-detail="${g.t}" tabindex="0">${cover(g)}<span class="cap">${stars(g.r)}</span></button>`).join("")}${rest>0?`<button class="card more" data-shelf="${s}">+${rest} más</button>`:""}</div></section>`};
+body=`<div class="b-main"><div class="b-toolbar"><input class="search" data-q placeholder="Filtrar estantería…" value="${escQ()}"></div><div class="v-a">${ORDER.map(shelf).join("")}</div></div>`;
+}
+}else if(TAB==="novedades"){
+if(NVIEW==="list"){
+const all=NEWS.filter(n=>n.k===NLIST);
+const genres=[...new Set(all.flatMap(n=>n.ge))].sort((a,b)=>a.localeCompare(b,"es"));
+const list=all.filter(n=>!NGF||n.ge.includes(NGF));
+const gchips=genres.length?genres.map(x=>`<button class="chip ${NGF===x?"on":""}" data-ngenre="${x}">${x}</button>`).join(""):"";
+body=`<div class="b-main">
+<div class="b-toolbar"><button class="chip" data-nback="1">← Novedades</button><strong>${NLIST==="reciente"?"Recién salidos":"Próximamente"}</strong></div>
+<div class="b-toolbar">${["reciente","proximo"].filter(k=>k!==NLIST).map(k=>`<button class="chip" data-nshelf="${k}">${k==="reciente"?"Recién salidos":"Próximamente"}</button>`).join("")}</div>
+${gchips?`<div class="b-toolbar">${gchips}</div>`:""}
+<div class="cardbox tight">
+<div class="b-thead"><span></span><span>Título</span><span class="b-col-pf">Fecha</span><span class="b-col-stars">Interés</span><span>Tipo</span></div>
+${list.map(n=>`<div class="b-row" data-ndetail="${n.t}" tabindex="0">${cover(n,"mini")}<span class="b-cell"><span class="b-title">${n.t}</span><span class="b-sub">${n.ge.join(", ")} · ${n.pf.join(", ")}</span></span><span class="b-col-pf b-num">${n.d}</span><span class="b-col-stars"><span class="hype"><span class="bar"><i style="width:${n.hype}%"></i></span><span class="b-num">${n.hype}</span></span></span><span class="kind ${n.k==="proximo"?"proximo":""}">${n.k==="proximo"?"Próximo":"Reciente"}</span></div>`).join("")||'<p class="empty">Nada con ese género.</p>'}
+</div></div>`;
+}else{
+const months=[...new Set(NEWS.map(n=>n.mo))];
+const card=n=>`<button class="card news" data-ndetail="${n.t}">${cover(n)}<span class="badge">${n.d}</span><span class="cap"><span>${n.ge.join(", ")}</span></span></button>`;
+body=`<div class="b-main"><div class="v-a">
+<div class="month-strip">${months.map(m=>`<span class="chip"><strong>${m.toUpperCase()}</strong>&nbsp;· ${NEWS.filter(n=>n.mo===m).length}</span>`).join("")}</div>
+<section class="shelf"><button class="plate" data-nshelf="reciente"><b>Recién salidos</b><span>${NEWS.filter(n=>n.k==="reciente").length} títulos</span></button><div class="row">${NEWS.filter(n=>n.k==="reciente").map(card).join("")}</div></section>
+<section class="shelf"><button class="plate" data-nshelf="proximo"><b>Próximamente</b><span>calendario</span></button><div class="row">${NEWS.filter(n=>n.k==="proximo").map(card).join("")}</div></section>
+</div></div>`;
+}
+
+}else{
+const plat=byPlatform().slice(0,5),gen=byGenre().slice(0,6),yrs=byYear();
+body=`<div class="b-main">
+<div class="kpi-grid">
+<div class="kpi"><span class="num">${GAMES.length}</span><span class="lbl">entradas</span></div>
+<div class="kpi"><span class="num">${count("jugando")}</span><span class="lbl">jugando</span></div>
+<div class="kpi"><span class="num">${count("terminado")}</span><span class="lbl">terminadas</span></div>
+<div class="kpi"><span class="num">★ ${fmtAvg(avg(GAMES))}</span><span class="lbl">media</span></div>
+</div>
+<div class="cardbox"><h3>Por plataforma</h3>${hbar(plat,plat[0][1])}</div>
+<div class="cardbox" style="margin-top:14px"><h3>Géneros</h3>${hbar(gen,gen[0][1])}</div>
+<div class="cardbox" style="margin-top:14px"><h3>Terminados por año</h3>${hbar(yrs,Math.max(...yrs.map(y=>y[1])))}</div>
+</div>`;
+}
+return `<div class="v-b fade"><div class="b-shell">${rail}${body}</div></div>`;
+}
+
+function pageC(){
+const head=`<header class="c-head"><div class="c-mark">Game Tracker</div><p class="c-sub">bitácora personal de juego</p>${tabBtns("c-tabs")}</header>`;
+let body="";
+if(TAB==="biblioteca"){
+const cur=GAMES.find(g=>g.s==="jugando");
+const rest=GAMES.filter(match);
+const note=g=>g.s==="terminado"?`terminado · ${g.end||""}`:g.s==="jugando"?"en marcha":g.s==="quiero"?"en espera":"abandonado";
+body=`<main class="c-col fade">
+<p class="c-lead">Ahora mismo</p>
+<article class="c-hero">${cover(cur)}<div><span class="pill st-jugando">Jugando</span><h2>${cur.t}</h2><p class="c-prose">${cur.ge.join(", ").toLowerCase()} para ${cur.pf.join(" y ")}.${cur.r?` Así va: ${cur.r} sobre 5.`:""}</p></div></article>
+<hr class="c-rule">
+<div class="c-tools"><input class="search" data-q placeholder="Buscar en el registro…" value="${escQ()}"><span class="c-count">${rest.length} entradas</span></div>
+<ul class="ledger">${rest.map(g=>`<li>${dot(g.s)}<span class="lt">${g.t}</span><i class="leader"></i>${stars(g.r)}<span class="note">${note(g)}</span></li>`).join("")}</ul>
+</main>`;
+
+}else if(TAB==="novedades"){
+body=`<main class="c-col fade"><p class="c-lead">Lo que viene y lo que acaba de llegar</p>
+${NEWS.map(n=>`<article class="c-brief">${cover(n,"mini")}<p>${n.k==="reciente"?`<strong>${n.t}</strong> ya está a la venta desde el ${n.d}`:`<strong>${n.t}</strong> llega el <strong>${n.d}</strong>`}: ${n.ge.join(", ").toLowerCase()} en ${n.pf.join(", ")}.</p></article>`).join("")}
+</main>`;
+}else{
+const plat=byPlatform().map(([k,v])=>`<strong>${v}</strong> en ${k}`).join(", ");
+const yrs=byYear().map(([k,v])=>`<strong>${v}</strong> en ${k}`).join(", ");
+body=`<main class="c-col fade"><p class="c-lead">El fondo en cifras</p>
+<p class="c-stat">Tu biblioteca suma <strong>${GAMES.length}</strong> entradas: <strong>${count("jugando")}</strong> en marcha, <strong>${count("quiero")}</strong> esperando turno, <strong>${count("terminado")}</strong> terminadas y <strong>${count("abandonado")}</strong> abandonadas sin remisión.</p>
+<p class="c-stat">El reparto por plataforma deja ${plat}. Y valoras con cariño: la media se queda en <strong>★ ${fmtAvg(avg(GAMES))}</strong>.</p>
+<p class="c-stat">Los años fértiles: ${yrs}. Los géneros que te persiguen:</p>
+<div class="c-genres">${byGenre().slice(0,8).map(([k,v])=>`<span>${k} · ${v}</span>`).join("")}</div>
+</main>`;
+}
+return `<div class="v-c fade">${head}${body}</div>`;
+}
+
+function detailHTML(){
+const g=gameByT(DETAIL.t);
+if(g)return `<div class="detail-sheet fade"><button class="dclose" data-close-detail aria-label="Volver">✕</button>
+<div class="d-hero"><div class="d-cover">${cover(g)}</div>
+<div class="d-head"><span class="pill st-${g.s}">${STATUS[g.s].label}</span><h2>${g.t}</h2>
+<div class="d-stars">${[1,2,3,4,5].map(i=>`<button class="star ${g.r!=null&&i<=g.r?"on":""}" data-rate="${i}" aria-label="Valorar con ${i}">★</button>`).join("")}${g.r!=null?`<button class="chip" data-rate="0">quitar</button>`:""}</div></div></div>
+${(DESCS[g.t]||NDESCS[g.t])?`<div class="d-sec"><h3>Descripción</h3><p class="d-desc">${DESCS[g.t]||NDESCS[g.t]}</p></div>`:""}
+<div class="d-sec"><h3>Plataformas</h3><p class="mono d-meta">${g.pf.join(", ")}</p></div>
+<div class="d-sec"><h3>Géneros</h3><div class="d-status">${g.ge.map(x=>`<span class="chip">${x}</span>`).join("")}</div></div>
+${g.tg.length?`<div class="d-sec"><h3>Etiquetas propias</h3><div>${g.tg.map(x=>`<span class="tag-mini own">#${x}</span>`).join("")}</div></div>`:""}
+${g.end?`<div class="d-sec"><h3>Terminado</h3><p class="mono d-meta">${g.end}</p></div>`:""}
+<div class="d-sec"><h3>Estado</h3><div class="d-status">${ORDER.map(s=>`<button class="chip ${g.s===s?"on":""}" data-status="${s}">${STATUS[s].label}</button>`).join("")}</div></div>
+${((SHOTS[g.t]||NSHOTS[g.t])||[]).length?`<div class="d-sec"><h3>Galería</h3><div class="d-gallery">${(SHOTS[g.t]||NSHOTS[g.t]).map((h,i)=>`<div class="d-shot" style="--c1:hsl(${h} 45% 38%);--c2:hsl(${(h+40)%360} 50% 18%)"><span>captura ${i+1}</span></div>`).join("")}</div></div>`:""}
+</div>`;
+const n=NEWS.find(x=>x.t===DETAIL.t);
+const inLib=!!gameByT(n.t);
+return `<div class="detail-sheet fade"><button class="dclose" data-close-detail aria-label="Volver">✕</button>
+<div class="d-hero"><div class="d-cover">${cover(n)}</div>
+<div class="d-head"><span class="pill ${n.k==="proximo"?"st-quiero":"st-terminado"}">${n.k==="proximo"?"Próximamente":"Recién salido"}</span><h2>${n.t}</h2>
+<p class="mono d-meta">${n.k==="proximo"?`Llega el ${n.d}`:`A la venta desde el ${n.d}`}</p>
+<div class="hype" style="max-width:220px;margin-top:8px"><span class="bar"><i style="width:${n.hype}%"></i></span><span class="b-num">${n.hype}</span></div></div></div>
+${NDESCS[n.t]?`<div class="d-sec"><h3>Descripción</h3><p class="d-desc">${NDESCS[n.t]}</p></div>`:""}
+<div class="d-sec"><h3>Géneros</h3><div class="d-status">${n.ge.map(x=>`<span class="chip">${x}</span>`).join("")}</div></div>
+<div class="d-sec"><h3>Plataformas</h3><p class="mono d-meta">${n.pf.join(", ")}</p></div>
+<div class="d-sec">${inLib?`<p class="d-meta">Ya está en tu biblioteca.</p>`:`<button class="chip on" data-add="1">➕ Quiero jugarlo</button><p class="d-meta" style="margin-top:10px">Se añade a tu biblioteca como «Quiero jugar».</p>`}</div>
+${(NSHOTS[n.t]||[]).length?`<div class="d-sec"><h3>Galería</h3><div class="d-gallery">${NSHOTS[n.t].map((h,i)=>`<div class="d-shot" style="--c1:hsl(${h} 45% 38%);--c2:hsl(${(h+40)%360} 50% 18%)"><span>captura ${i+1}</span></div>`).join("")}</div></div>`:""}
+</div>`;
+}
+const PAGES={a:pageA,b:pageB,c:pageC};
+const NAMES={a:"Estantería",b:"Mezcla A+B",c:"Diario"};
+function render(){document.body.dataset.variant=V;$("#app").innerHTML=PAGES[V]();$("#swLabel").textContent=`${V.toUpperCase()} · ${NAMES[V]}`;
+const d=$("#detail");if(DETAIL){d.innerHTML=detailHTML();d.hidden=false}else{d.hidden=true;d.innerHTML=""}}
+function syncURL(){try{history.replaceState(null,"",`?v=${V}&t=${TAB}`)}catch(e){}}
+function setV(v){V=v;syncURL();render()}
+function cycle(d){const k=["a","b","c"],i=k.indexOf(V);setV(k[(i+(d==="next"?1:k.length-1))%k.length])}
+function openDrawer(on){$("#drawer").hidden=!on;$("#backdrop").hidden=!on;if(on)$("#btnClose").focus()}
+document.addEventListener("click",e=>{
+const tb=e.target.closest("[data-tab]");if(tb){TAB=tb.dataset.tab;if(TAB==="biblioteca"){VIEW="shelves";BF.clear();FILTER.q="";GF=""}if(TAB==="novedades"){NVIEW="shelves";FILTER.q=""}syncURL();render();return}
+const sw=e.target.closest("[data-sw]");if(sw){cycle(sw.dataset.sw);return}
+const sh=e.target.closest("[data-shelf]");if(sh){VIEW="list";BF.clear();BF.add(sh.dataset.shelf);FILTER.q="";GF="";render();return}
+if(e.target.closest("[data-back]")){VIEW="shelves";BF.clear();FILTER.q="";GF="";render();return}
+const ns=e.target.closest("[data-nshelf]");if(ns){NVIEW="list";NLIST=ns.dataset.nshelf;FILTER.q="";NGF="";render();return}
+if(e.target.closest("[data-nback]")){NVIEW="shelves";FILTER.q="";NGF="";render();return}
+const ng=e.target.closest("[data-ngenre]");if(ng){NGF=NGF===ng.dataset.ngenre?"":ng.dataset.ngenre;render();return}
+const gc=e.target.closest("[data-genre]");if(gc){GF=GF===gc.dataset.genre?"":gc.dataset.genre;render();return}
+const dt=e.target.closest("[data-detail]");if(dt){DETAIL={kind:"game",t:dt.dataset.detail};render();return}
+const nd=e.target.closest("[data-ndetail]");if(nd){DETAIL={kind:"news",t:nd.dataset.ndetail};render();return}
+if(e.target.closest("[data-close-detail]")||e.target.id==="dbackdrop"){DETAIL=null;render();return}
+const st=e.target.closest("[data-status]");if(st){const g=gameByT(DETAIL.t);if(g)g.s=st.dataset.status;render();return}
+const rt=e.target.closest("[data-rate]");if(rt){const g=gameByT(DETAIL.t);if(g)g.r=rt.dataset.rate==="0"?null:+rt.dataset.rate;render();return}
+const ad=e.target.closest("[data-add]");if(ad){const n=NEWS.find(x=>x.t===DETAIL.t);if(n&&!gameByT(n.t))GAMES.push({t:n.t,s:"quiero",r:null,pf:n.pf,ge:n.ge,tg:[],hue:n.hue,pat:n.pat});DETAIL={kind:"game",t:n.t};render();return}
+const ch=e.target.closest("[data-chip]");if(ch){BF.has(ch.dataset.chip)?BF.delete(ch.dataset.chip):BF.add(ch.dataset.chip);render();return}
+if(e.target.closest("[data-clear]")){BF.clear();render();return}
+if(e.target.closest("#btnStack"))return openDrawer(true);
+if(e.target.closest("#btnClose")||e.target.id==="backdrop")return openDrawer(false);
+});
+document.addEventListener("input",e=>{
+if(!e.target.matches("[data-q]"))return;
+FILTER.q=e.target.value;const pos=e.target.selectionStart;
+render();
+const inp=$("[data-q]");if(inp){inp.focus();try{inp.setSelectionRange(pos,pos)}catch(err){}}
+});
+document.addEventListener("keydown",e=>{
+if(e.key==="Escape"){if(DETAIL){DETAIL=null;render();return}openDrawer(false);return}
+const tag=document.activeElement&&document.activeElement.tagName;
+if(tag==="INPUT"||tag==="TEXTAREA"||(document.activeElement&&document.activeElement.isContentEditable))return;
+if(DETAIL)return;
+if(e.key==="ArrowLeft")cycle("prev");
+if(e.key==="ArrowRight")cycle("next");
+});
+(function(){
+const q=new URLSearchParams(location.search);
+const v=(q.get("v")||"a").toLowerCase(),t=(q.get("t")||"biblioteca").toLowerCase();
+if(PAGES[v])V=v;if(LBL[t])TAB=t;
+render();
+})();
+</script>
+</body>
+</html>
+
