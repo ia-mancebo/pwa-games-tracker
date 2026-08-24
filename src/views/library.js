@@ -1,8 +1,9 @@
 /**
- * Biblioteca navegable (tickets 14–15): Estantería con baldas por Estado del
+ * Biblioteca navegable (tickets 14–17): Estantería con baldas por Estado del
  * juego y Panel denso del estado abierto, con la barra común de búsqueda y
  * filtros (tres filas de chips) compartida por ambas vistas (spec §8.1–§8.3).
- * El clic sobre portada/fila abrirá la Ficha (ticket 17).
+ * El clic sobre portada/fila abre la Ficha (ticket 17), que sustituye a ambas
+ * dentro de la misma superficie.
  */
 import { html, qs, raw } from '../lib/dom.js';
 import { STATUSES, STATUS_LABELS } from '../domain/schema.js';
@@ -13,6 +14,7 @@ import { debounce } from '../lib/debounce.js';
 import { formatAvg } from '../lib/format.js';
 import { coverHtml, starsHtml } from '../ui/cover.js';
 import { openAddSheet } from './addSheet.js';
+import { openGame, renderGame } from './game.js';
 
 /** Portadas visibles por balda antes de la tarjeta «+N más» (spec §8.1). */
 const SHELF_LIMIT = 6;
@@ -102,6 +104,16 @@ function backToShelves(store) {
 }
 
 /**
+ * Abre la Ficha de un juego (ticket 17): conserva la vista y los filtros
+ * activos para que «← Volver» regrese a la superficie previa.
+ * @param {import('../app.js').Store} store
+ * @param {string} gameId
+ */
+function openFicha(store, gameId) {
+  openGame(store, gameId);
+}
+
+/**
  * Activa/desactiva una dimensión de filtro: selección única por dimensión
  * (tocar el chip activo lo quita); resetea la paginación del panel.
  * @param {import('../app.js').Store} store
@@ -184,8 +196,7 @@ function filtersHtml(chips, f) {
 }
 
 /**
- * Tarjeta de portada de una balda. El clic abrirá la Ficha (ticket 17); hoy
- * es un no-op con el id ya en el marcado.
+ * Tarjeta de portada de una balda; el clic abre la Ficha (ticket 17).
  * @param {import('../domain/schema.js').Game} game
  * @returns {string}
  */
@@ -232,7 +243,7 @@ function shelfHtml(shelf) {
 
 /**
  * Fila densa del panel: portada mini, título con etiquetas propias,
- * plataformas, valoración y píldora de estado. El clic abrirá la Ficha
+ * plataformas, valoración y píldora de estado; el clic abre la Ficha
  * (ticket 17).
  * @param {import('../domain/schema.js').Game} game
  * @param {import('../domain/schema.js').Status} status
@@ -340,7 +351,7 @@ function wire(container, store) {
     const target =
       e.target instanceof HTMLElement
         ? e.target.closest(
-            '[data-back-shelves],[data-load-more],[data-open-panel],[data-f-genre],[data-f-platform],[data-f-tag],[data-add-game]'
+            '[data-back-shelves],[data-load-more],[data-open-panel],[data-f-genre],[data-f-platform],[data-f-tag],[data-add-game],[data-game-id]'
           )
         : null;
     if (!target) return;
@@ -350,6 +361,11 @@ function wire(container, store) {
     }
     if (target.hasAttribute('data-add-game')) {
       openAddSheet();
+      return;
+    }
+    if (target.hasAttribute('data-game-id')) {
+      // Portada de balda o fila del panel → Ficha del juego (ticket 17).
+      openFicha(store, need(target.getAttribute('data-game-id')));
       return;
     }
     if (target.hasAttribute('data-load-more')) {
@@ -382,6 +398,13 @@ export function render(container, store) {
   const doc = state.doc;
   if (!doc) {
     container.innerHTML = '';
+    return;
+  }
+
+  // Ficha abierta: sustituye a estantería y panel dentro de la misma
+  // superficie (ticket 17); el buscador no existe aquí.
+  if (state.library.gameId != null) {
+    renderGame(container, store);
     return;
   }
 

@@ -15,8 +15,9 @@ import * as welcome from './views/welcome.js';
  */
 
 /**
- * Vista activa dentro de Biblioteca: estantería o panel de un Estado del
- * juego, más la búsqueda y filtros compartidos (spec §8.1–§8.3).
+ * Vista activa dentro de Biblioteca: estantería, panel de un Estado del juego
+ * o Ficha de un juego concreto, más la búsqueda y filtros compartidos
+ * (spec §8.1–§8.5).
  * @typedef {{
  *   view: 'shelves'|'panel',
  *   panelStatus: import('./domain/schema.js').Status|null,
@@ -24,6 +25,7 @@ import * as welcome from './views/welcome.js';
  *   genre: string|null,
  *   platform: string|null,
  *   tag: string|null,
+ *   gameId?: string|null,
  * }} LibraryState
  */
 
@@ -65,6 +67,7 @@ let state = {
     genre: null,
     platform: null,
     tag: null,
+    gameId: null,
   },
 };
 
@@ -168,11 +171,15 @@ export function createApp(root) {
     const previous = store.get().tab;
     // Volver a Biblioteca desde otra pestaña repone la estantería (ticket 14);
     // la búsqueda y los filtros persisten (barra común del ticket 15).
+    // Cambiar de pestaña cierra siempre la Ficha abierta (ticket 17).
     if (tab === 'biblioteca' && previous !== 'biblioteca') {
-      store.set({ tab, library: { ...store.get().library, view: 'shelves', panelStatus: null } });
+      store.set({
+        tab,
+        library: { ...store.get().library, view: 'shelves', panelStatus: null, gameId: null },
+      });
       return;
     }
-    store.set({ tab });
+    store.set({ tab, library: { ...store.get().library, gameId: null } });
   });
 
   const renderCurrent = () => {

@@ -84,27 +84,40 @@ export async function importDoc(candidate, where = {}) {
 }
 
 /**
- * Primitiva de mutación atómica: clona el doc, deja que `fn` lo mute, valida
- * el resultado y lo persiste. Si `fn` o la validación fallan, el doc anterior
- * queda intacto.
+ * Cola de escritura: las mutaciones se encadenan para que cada draft clone el
+ * doc YA persistido por la anterior; sin esto, dos ediciones rápidas clonarían
+ * el mismo estado y la última pisaría a la primera.
+ * @type {Promise<unknown>}
+ */
+let writeQueue = Promise.resolve();
+
+/**
+ * Primitiva de mutación atómica y serializada: clona el doc, deja que `fn` lo
+ * mute, valida el resultado y lo persiste. Si `fn` o la validación fallan, el
+ * doc anterior queda intacto.
  * @param {(doc: import('../domain/schema.js').Doc) => void} fn
  * @param {{ now: Date }} when
  * @returns {Promise<import('../domain/schema.js').Doc>}
  */
-export async function mutate(fn, { now }) {
-  const current = store.get().doc;
-  if (!current) throw new LibraryError('No hay biblioteca cargada', 'NO_DOC');
-  const draft = /** @type {import('../domain/schema.js').Doc} */ (structuredClone(current));
-  fn(draft);
-  draft.updatedAt = now.toISOString();
-  const res = validateDoc(draft);
-  if (!res.ok) throw new LibraryError(res.reason, res.code);
-  const doc = res.doc;
-  const meta = { ...store.get().meta, dirty: true, updatedAt: doc.updatedAt };
-  await putState(doc);
-  await putMeta(meta);
-  store.set({ doc, meta });
-  return doc;
+export function mutate(fn, { now }) {
+  const run = async () => {
+    const current = store.get().doc;
+    if (!current) throw new LibraryError('No hay biblioteca cargada', 'NO_DOC');
+    const draft = /** @type {import('../domain/schema.js').Doc} */ (structuredClone(current));
+    fn(draft);
+    draft.updatedAt = now.toISOString();
+    const res = validateDoc(draft);
+    if (!res.ok) throw new LibraryError(res.reason, res.code);
+    const doc = res.doc;
+    const meta = { ...store.get().meta, dirty: true, updatedAt: doc.updatedAt };
+    await putState(doc);
+    await putMeta(meta);
+    store.set({ doc, meta });
+    return doc;
+  };
+  const result = writeQueue.then(run, run);
+  writeQueue = result.catch(() => {});
+  return result;
 }
 
 /**
@@ -118,13 +131,27 @@ export function addGame(input) {
 }
 
 /**
+ * Aplica un parche: los valores definidos se asignan; los `undefined` BORRAN
+ * el campo (campo ausente = desconocido, spec §4).
+ * @template {object} T
+ * @param {T} target
+ * @param {Partial<T>} patch
+ */
+function applyPatch(target, patch) {
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) delete target[/** @type {string & keyof T} */ (key)];
+    else target[/** @type {string & keyof T} */ (key)] = value;
+  }
+}
+
+/**
  * @param {string} gameId
  * @param {Partial<import('../domain/schema.js').Game>} patch
  */
 export function updateGame(gameId, patch) {
   return mutate((doc) => {
     const game = findGame(doc, gameId);
-    Object.assign(game, patch);
+    applyPatch(game, patch);
   }, { now: new Date() });
 }
 
@@ -163,7 +190,7 @@ export function addPlay(gameId, input) {
 export function updatePlay(gameId, playId, patch) {
   return mutate((doc) => {
     const play = findPlay(doc, gameId, playId);
-    Object.assign(play, patch);
+    applyPatch(play, patch);
   }, { now: new Date() });
 }
 

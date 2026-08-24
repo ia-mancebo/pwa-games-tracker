@@ -446,6 +446,12 @@ button.plate:hover {
   background: var(--bg2);
 }
 
+/* Portadas de balda y filas del panel abren la Ficha (ticket 17) */
+.card[data-game-id],
+.b-row[data-game-id] {
+  cursor: pointer;
+}
+
 .b-cell {
   min-width: 0;
 }
@@ -958,6 +964,347 @@ button.plate:hover {
 @media (max-width: 700px) {
   .welcome-options {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Ficha (ticket 17, spec §8.5): adaptación del .detail-sheet del prototipo a
+   la superficie principal; reutiliza chip, pill, lbl, form-error y mono */
+.ficha .toolbar {
+  padding-bottom: 8px;
+}
+
+.d-hero {
+  display: flex;
+  gap: 22px;
+  align-items: flex-end;
+  margin-top: 10px;
+}
+
+.d-cover {
+  width: 150px;
+  flex-shrink: 0;
+}
+
+.d-cover .cover {
+  width: 100%;
+}
+
+.d-head {
+  min-width: 0;
+}
+
+.d-title {
+  font-size: clamp(1.3rem, 3vw, 1.7rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 10px 0 4px;
+}
+
+.d-title-btn {
+  text-align: left;
+  font: inherit;
+  letter-spacing: inherit;
+}
+
+.d-title-btn:hover {
+  color: var(--acc);
+}
+
+.d-stars {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.star {
+  font-size: 1.3rem;
+  color: var(--faint);
+  padding: 2px;
+  line-height: 1;
+}
+
+.star:hover {
+  color: var(--muted);
+}
+
+.star.on {
+  color: var(--st-backlog);
+}
+
+.star.sm {
+  font-size: 0.95rem;
+}
+
+.chip-xs {
+  font-size: 0.7rem;
+  padding: 2px 9px;
+}
+
+.chip.static {
+  cursor: default;
+}
+
+.chip.static:hover {
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.chip.danger {
+  color: var(--st-abandoned);
+}
+
+.chip.danger:hover:not([disabled]) {
+  border-color: var(--st-abandoned);
+  color: var(--st-abandoned);
+}
+
+.chip[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.d-sec {
+  margin-top: 24px;
+  max-width: 680px;
+}
+
+.d-sec h3 {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  margin-bottom: 9px;
+}
+
+.d-meta {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.d-meta.wrap {
+  overflow-wrap: anywhere;
+}
+
+.d-desc {
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--ink);
+  max-width: 62ch;
+}
+
+.d-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.d-gallery {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+  max-width: none;
+}
+
+.d-shot {
+  width: 210px;
+  aspect-ratio: 16 / 9;
+  border-radius: 9px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--bg2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09);
+}
+
+.d-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Edición inline de datos compartidos (título y campos de alta manual) */
+.inline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.inline-form input[type='text'],
+.inline-form textarea,
+.tag-add,
+.p-pf select,
+.p-date input[type='date'],
+.p-pf input[type='text'] {
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 7px 11px;
+  font-size: 0.92rem;
+  min-width: 0;
+}
+
+.inline-form textarea {
+  resize: vertical;
+}
+
+.d-title ~ .inline-form input[type='text'],
+[data-title-form] input[type='text'] {
+  max-width: 420px;
+}
+
+.inline-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Editor de etiquetas propias: chips con × más campo para añadir */
+.tag-edit {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-edit .tag-mini {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tag-x {
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 0 2px;
+  color: var(--muted);
+}
+
+.tag-x:hover {
+  color: var(--st-abandoned);
+}
+
+.tag-add {
+  width: 140px;
+}
+
+/* Jugadas: tarjetas editables en línea */
+.plays {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.play-card {
+  background: var(--bg1);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.p-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.p-stars {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.p-dates {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.p-date,
+.p-notes,
+.p-pf {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lbl {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+}
+
+.p-added {
+  font-size: 0.78rem;
+  color: var(--faint);
+  padding-bottom: 9px;
+}
+
+.p-pf select {
+  max-width: 280px;
+}
+
+.p-own {
+  display: flex;
+}
+
+.p-pf input[type='text'] {
+  max-width: 320px;
+}
+
+.p-notes textarea {
+  max-width: 520px;
+}
+
+.p-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 10px;
+}
+
+.p-confirm {
+  font-size: 0.85rem;
+  color: var(--st-abandoned);
+  font-weight: 600;
+}
+
+/* Zona de riesgo: borrado del juego con confirmación inline */
+.danger-zone {
+  border: 1px solid color-mix(in srgb, var(--st-abandoned) 35%, transparent);
+  border-radius: 11px;
+  padding: 14px 16px;
+}
+
+.danger-msg {
+  font-size: 0.9rem;
+  margin-bottom: 10px;
+}
+
+@media (max-width: 560px) {
+  .d-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .d-cover {
+    width: 122px;
   }
 }
 
