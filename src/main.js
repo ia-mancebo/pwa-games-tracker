@@ -5,6 +5,7 @@ import { createApp, store } from './app.js';
 import { initLibrary } from './data/library.js';
 import { startAutosave } from './data/filelink.js';
 import { acquireTabLock, onLockReleased } from './data/tablock.js';
+import { initCoverSeeding } from './data/covers.js';
 
 const root = document.querySelector('#app');
 if (root) {
@@ -14,6 +15,13 @@ if (root) {
     // Sin espejo accesible: la app arranca igual; el bienvenida (ticket 13) toma el control.
   }
   createApp(/** @type {HTMLElement} */ (root));
+  try {
+    // Siembra offline de carátulas (ticket 22): observador fire-and-forget,
+    // nunca bloquea el arranque ni la UI.
+    initCoverSeeding();
+  } catch {
+    // Sin Cache Storage la app funciona igual; las carátulas quedan solo online.
+  }
   try {
     // Segunda pestaña en solo lectura (ticket 19): sin lock, entra como
     // secundaria y se promociona sola cuando el lock quede libre.
