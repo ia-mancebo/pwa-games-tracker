@@ -3,7 +3,13 @@
  * Política forward-only (spec §4.4): comprueba schema, version y tipos ANTES
  * de tocar nada. Nunca muta el input: `ok.doc` es una copia normalizada.
  */
-import { SCHEMA_ID, DOC_VERSION, validateGameShape, isDateTime } from './schema.js';
+import {
+  SCHEMA_ID,
+  DOC_VERSION,
+  validateGameShape,
+  validateConnectionShape,
+  isDateTime,
+} from './schema.js';
 
 /**
  * @typedef {'BAD_JSON'|'BAD_SCHEMA'|'FUTURE_VERSION'|'BAD_TYPE'|'BAD_SHAPE'} ValidationCode
@@ -39,7 +45,7 @@ export function validateDoc(candidate) {
     return { ok: false, code: 'BAD_SCHEMA', reason: 'El archivo no tiene la estructura esperada.' };
   }
   const obj = /** @type {Record<string, unknown>} */ (root);
-  const known = ['schema', 'version', 'updatedAt', 'games'];
+  const known = ['schema', 'version', 'updatedAt', 'games', 'connection'];
   for (const key of Object.keys(obj)) {
     if (!known.includes(key)) {
       return { ok: false, code: 'BAD_SHAPE', reason: `Campo desconocido en la raíz: «${key}»` };
@@ -64,6 +70,12 @@ export function validateDoc(candidate) {
   }
   if (!isDateTime(obj.updatedAt)) {
     return { ok: false, code: 'BAD_TYPE', reason: 'Fecha de actualización inválida.' };
+  }
+  if (obj.connection !== undefined) {
+    const res = validateConnectionShape(obj.connection);
+    if (!res.ok) {
+      return { ok: false, code: 'BAD_SHAPE', reason: res.reason ?? 'Conexión inválida.' };
+    }
   }
   if (!Array.isArray(obj.games)) {
     return { ok: false, code: 'BAD_TYPE', reason: 'La lista de juegos es inválida.' };

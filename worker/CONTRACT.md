@@ -6,7 +6,7 @@ Este documento fija el contrato entre el Cloudflare Worker (ticket 20) y los cli
 
 - **Base URL**: `https://<worker>.<cuenta>.workers.dev` (la URL exacta sale del dashboard de Cloudflare tras el deploy; ver `worker/README.md`).
 - **Métodos**: solo `GET`. `OPTIONS` responde preflight con `204`.
-- **CORS**: todas las respuestas llevan `Access-Control-Allow-Origin: *` (constante `ALLOWED_ORIGIN` en `worker.js`; restringir al origen de GitHub Pages es un cambio de una línea).
+- **CORS**: todas las respuestas llevan `Access-Control-Allow-Origin: <origen autorizado>` (constante `ALLOWED_ORIGIN` en `worker.js`). El repo se entrega con un placeholder que DEBE sustituirse por el origen real de GitHub Pages antes del Deploy; con el placeholder, el navegador bloquea todas las peticiones.
 - **Content-Type**: `application/json` en todos los cuerpos.
 - **Errores**: siempre `{ "error": string }` con el código HTTP adecuado. Nunca incluyen secretos ni trazas.
 

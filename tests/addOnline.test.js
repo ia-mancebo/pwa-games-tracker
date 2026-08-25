@@ -3,7 +3,7 @@ import './support/storage.js';
 import { createApp, store } from '../src/app.js';
 import { importDoc, initLibrary, newLibrary } from '../src/data/library.js';
 import { openAddSheet } from '../src/views/addSheet.js';
-import { setWorkerUrl } from '../src/services/igdb.js';
+import { seedWorkerUrl } from './support/connection.js';
 import { todayFrom } from '../src/domain/schema.js';
 import { qs, qsa } from '../src/lib/dom.js';
 
@@ -144,7 +144,6 @@ function typeQuery(sheet, value) {
 }
 
 beforeEach(async () => {
-  window.localStorage.removeItem('gt.workerUrl');
   document.body.innerHTML = '';
   store.set({
     tab: 'biblioteca',
@@ -166,14 +165,13 @@ beforeEach(async () => {
 afterEach(() => {
   vi.unstubAllGlobals();
   setOnline(true);
-  window.localStorage.removeItem('gt.workerUrl');
 });
 
 describe('camino online activo (servicio configurado + conexión)', () => {
   it('la pestaña online nace activa; el debounce agrupa tecleo en UNA petición con q codificado', async () => {
-    setWorkerUrl(WORKER_URL);
     const fetchMock = stubFetch();
     await newLibrary(NOW);
+    seedWorkerUrl(WORKER_URL);
     const root = mount();
     createApp(root);
 
@@ -190,12 +188,12 @@ describe('camino online activo (servicio configurado + conexión)', () => {
   });
 
   it('pinta resultados con carátula, título, año y plataformas', async () => {
-    setWorkerUrl(WORKER_URL);
     stubFetch([
       SEARCH_RESULT,
       { ...SEARCH_RESULT, igdbId: 1020, title: 'Elden Ring', releaseDate: '2022-02-25', coverUrl: null },
     ]);
     await newLibrary(NOW);
+    seedWorkerUrl(WORKER_URL);
     const root = mount();
     createApp(root);
 
@@ -215,9 +213,9 @@ describe('camino online activo (servicio configurado + conexión)', () => {
   });
 
   it('elegir un resultado crea el juego con datos IGDB y primera jugada Quiero jugar', async () => {
-    setWorkerUrl(WORKER_URL);
     stubFetch();
     await newLibrary(NOW);
+    seedWorkerUrl(WORKER_URL);
     const root = mount();
     createApp(root);
 
@@ -244,9 +242,9 @@ describe('camino online activo (servicio configurado + conexión)', () => {
   });
 
   it('tras guardar llama onSaved con el juego creado', async () => {
-    setWorkerUrl(WORKER_URL);
     stubFetch();
     await newLibrary(NOW);
+    seedWorkerUrl(WORKER_URL);
     const onSaved = vi.fn();
     openAddSheet({ onSaved });
 
@@ -260,9 +258,9 @@ describe('camino online activo (servicio configurado + conexión)', () => {
   });
 
   it('resultado con igdbId duplicado avisa; «Crear otro igual» guarda igualmente', async () => {
-    setWorkerUrl(WORKER_URL);
     stubFetch();
     await seed([{ ...gameJson('g1', 'Otra cosa'), igdbId: 1877 }]);
+    seedWorkerUrl(WORKER_URL);
     const root = mount();
     createApp(root);
 
@@ -282,9 +280,9 @@ describe('camino online activo (servicio configurado + conexión)', () => {
   });
 
   it('título equivalente al escribir también avisa de duplicados (mismo flujo manual)', async () => {
-    setWorkerUrl(WORKER_URL);
     stubFetch([SEARCH_RESULT]);
     await seed([gameJson('g1', 'Celeste', { status: 'finished' })]);
+    seedWorkerUrl(WORKER_URL);
     const root = mount();
     createApp(root);
 
@@ -307,9 +305,9 @@ describe('camino online activo (servicio configurado + conexión)', () => {
   });
 
   it('sin resultados muestra el estado vacío «Sin resultados»', async () => {
-    setWorkerUrl(WORKER_URL);
     stubFetch([]);
     await newLibrary(NOW);
+    seedWorkerUrl(WORKER_URL);
     const root = mount();
     createApp(root);
 
@@ -320,12 +318,12 @@ describe('camino online activo (servicio configurado + conexión)', () => {
   });
 
   it('fallo del servicio muestra el error inline sin cerrar la hoja', async () => {
-    setWorkerUrl(WORKER_URL);
     const fetchMock = vi.fn(async () => {
       throw new TypeError('Failed to fetch');
     });
     vi.stubGlobal('fetch', fetchMock);
     await newLibrary(NOW);
+    seedWorkerUrl(WORKER_URL);
     const root = mount();
     createApp(root);
 
@@ -341,10 +339,10 @@ describe('camino online activo (servicio configurado + conexión)', () => {
 
 describe('camino online deshabilitado', () => {
   it('sin conexión: pestaña deshabilitada con motivo y el manual sigue operativo', async () => {
-    setWorkerUrl(WORKER_URL);
     const fetchMock = stubFetch();
     setOnline(false);
     await newLibrary(NOW);
+    seedWorkerUrl(WORKER_URL);
     const root = mount();
     createApp(root);
 
@@ -362,7 +360,7 @@ describe('camino online deshabilitado', () => {
     expect(qs('.add-sheet')).toBeNull();
   });
 
-  it('sin servicio: motivo de configuración y affordance inline para fijar la URL', async () => {
+  it('sin servicio: motivo que apunta a Datos sin campo inline; configurada en Datos, la hoja abre online', async () => {
     stubFetch();
     await newLibrary(NOW);
     const root = mount();
@@ -371,29 +369,16 @@ describe('camino online deshabilitado', () => {
     let sheet = openSheet();
     expect(need(qs('[data-online-tab]', sheet)).hasAttribute('disabled')).toBe(true);
     expect(sheet.textContent).toContain('Sin servicio configurado');
-    expect(qs('input[name="worker-url"]', sheet)).toBeTruthy();
+    expect(sheet.textContent).toContain('Datos');
+    expect(qs('input[name="worker-url"]', sheet)).toBeNull();
+    btn(qs('[data-close-add]', sheet)).click();
 
-    const urlInput = need(qs('input[name="worker-url"]', sheet));
-    if (!(urlInput instanceof HTMLInputElement)) throw new Error('worker-url no es un input');
-    urlInput.value = 'no-es-una-url';
-    btn(qs('[data-save-worker]', sheet)).click();
-    expect(need(qs('[data-worker-error]', sheet))).toBeTruthy();
-    expect(need(qs('[data-online-tab]', sheet)).hasAttribute('disabled')).toBe(true);
-
-    sheet = need(qs('.add-sheet'));
-    const validInput = need(qs('input[name="worker-url"]', sheet));
-    if (!(validInput instanceof HTMLInputElement)) throw new Error('worker-url no es un input');
-    validInput.value = `${WORKER_URL}/`;
-    btn(qs('[data-save-worker]', sheet)).click();
-
-    sheet = await vi.waitFor(() => need(qs('.add-sheet')));
-    const tab = await vi.waitFor(() => {
-      const el = qs('[data-online-tab]', sheet);
-      if (!el || !el.classList.contains('on')) throw new Error('pestaña online aún inactiva');
-      return el;
-    });
-    expect(tab.hasAttribute('disabled')).toBe(false);
-    expect(window.localStorage.getItem('gt.workerUrl')).toBe(WORKER_URL);
+    // El usuario guarda la URL en la sección «Conexión» de Datos; la siguiente
+    // hoja de Alta nace con el camino online operativo.
+    seedWorkerUrl(WORKER_URL);
+    sheet = openSheet();
+    expect(need(qs('[data-online-tab]', sheet)).hasAttribute('disabled')).toBe(false);
+    expect(btn(need(qs('[data-online-tab]', sheet))).classList.contains('on')).toBe(true);
 
     typeQuery(sheet, 'celeste');
     await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 2000 });

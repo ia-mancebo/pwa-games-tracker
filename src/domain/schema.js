@@ -53,12 +53,21 @@ export const STATUS_LABELS = {
  */
 
 /**
+ * Conexión a la Fuente de datos (CONTEXT.md): ajustes que viajan DENTRO del
+ * .json. v1 solo conoce la URL del proxy; nunca contiene credenciales.
+ * @typedef {{
+ *   workerUrl?: string,
+ * }} Connection
+ */
+
+/**
  * Raíz del documento `.json` (spec §4.1).
  * @typedef {{
  *   schema: 'game-tracker',
  *   version: 1,
  *   updatedAt: string,
  *   games: Game[],
+ *   connection?: Connection,
  * }} Doc
  */
 
@@ -157,6 +166,34 @@ export function createGame(input) {
  */
 export function createDoc({ games = [], now }) {
   return { schema: SCHEMA_ID, version: DOC_VERSION, updatedAt: now.toISOString(), games };
+}
+
+/**
+ * Normaliza una URL de proxy: sin espacios laterales ni barra final.
+ * @param {string} url
+ * @returns {string}
+ */
+export function normalizeWorkerUrl(url) {
+  return url.trim().replace(/\/+$/, '');
+}
+
+/**
+ * Validación de forma de la Conexión (campo raíz opcional del doc).
+ * @param {unknown} connection
+ * @returns {{ ok: boolean, reason?: string }}
+ */
+export function validateConnectionShape(connection) {
+  if (typeof connection !== 'object' || connection === null || Array.isArray(connection)) {
+    return { ok: false, reason: 'Conexión malformada' };
+  }
+  const c = /** @type {Record<string, unknown>} */ (connection);
+  for (const key of Object.keys(c)) {
+    if (key !== 'workerUrl') return { ok: false, reason: `Campo desconocido en conexión: «${key}»` };
+  }
+  if (c.workerUrl !== undefined && typeof c.workerUrl !== 'string') {
+    return { ok: false, reason: 'URL de proxy inválida' };
+  }
+  return { ok: true };
 }
 
 /**

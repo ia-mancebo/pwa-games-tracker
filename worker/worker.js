@@ -15,8 +15,10 @@ import {
   dedupeById,
 } from './lib.js';
 
-// Cambiar a un origen concreto (p. ej. 'https://<usuario>.github.io') para restringir el acceso.
-const ALLOWED_ORIGIN = '*';
+// Origen autorizado a llamar al proxy. Sustituye el placeholder por tu URL real
+// (la de GitHub Pages, p. ej. 'https://mi-usuario.github.io') ANTES del Deploy:
+// si despliegas con el placeholder, el navegador bloqueará todas las peticiones.
+const ALLOWED_ORIGIN = 'https://ia-mancebo.github.io';
 
 const TWITCH_TOKEN_URL = 'https://id.twitch.tv/oauth2/token';
 const IGDB_API_BASE = 'https://api.igdb.com/v4';

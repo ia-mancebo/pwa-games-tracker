@@ -1,14 +1,16 @@
 /**
  * Cliente del proxy Cloudflare Worker para IGDB (ticket 21, spec §6 y
- * worker/CONTRACT.md). La URL base vive en localStorage ('gt.workerUrl');
- * cualquier fallo de red/HTTP/respuesta se degrada al mensaje único de la
- * spec §7.3. Novedades usa el mismo cliente desde el ticket 23.
+ * worker/CONTRACT.md). La URL base es la Conexión del doc (CONTEXT.md):
+ * doc.connection.workerUrl, que viaja dentro del .json del usuario; cualquier
+ * fallo de red/HTTP/respuesta se degrada al mensaje único de la spec §7.3.
+ * Novedades usa el mismo cliente desde el ticket 23.
  */
+import { normalizeWorkerUrl } from '../domain/schema.js';
+import { store } from '../app.js';
 
 /** Mensaje único de modo degradado para cualquier fallo del servicio (spec §7.3). */
 export const IGDB_SERVICE_ERROR = 'No se pudo contactar con el servicio';
 
-const WORKER_KEY = 'gt.workerUrl';
 const TIMEOUT_MS = 10_000;
 
 const NOVEDADES_SECTIONS = ['recientes', 'proximos', 'populares', 'esperados'];
@@ -36,36 +38,13 @@ export class IgdbError extends Error {
  */
 
 /**
- * Almacenamiento local disponible (undefined si el entorno lo bloquea).
- * @returns {Storage | undefined}
- */
-function localStorage() {
-  try {
-    return typeof window === 'undefined' ? undefined : window.localStorage;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * URL base configurada, sin espacios ni barra final; '' si no hay nada.
+ * URL base configurada en la Conexión del doc, sin espacios ni barra final;
+ * '' si no hay biblioteca cargada o no hay conexión guardada.
  * @returns {string}
  */
 export function getWorkerUrl() {
-  const value = (localStorage()?.getItem(WORKER_KEY) ?? '').trim();
-  return value.replace(/\/+$/, '');
-}
-
-/**
- * Persiste la URL base; cadena vacía o de espacios la borra.
- * @param {string} url
- */
-export function setWorkerUrl(url) {
-  const cleaned = url.trim().replace(/\/+$/, '');
-  const storage = localStorage();
-  if (!storage) return;
-  if (cleaned === '') storage.removeItem(WORKER_KEY);
-  else storage.setItem(WORKER_KEY, cleaned);
+  const stored = store.get().doc?.connection?.workerUrl;
+  return typeof stored === 'string' ? normalizeWorkerUrl(stored) : '';
 }
 
 /**

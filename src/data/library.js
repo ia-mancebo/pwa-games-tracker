@@ -4,7 +4,7 @@
  * la verdad a largo plazo. Toda mutación reemplaza `state.doc` atómicamente,
  * marca `dirty` y valida el resultado antes de persistir.
  */
-import { createDoc, createGame, createPlay } from '../domain/schema.js';
+import { createDoc, createGame, createPlay, normalizeWorkerUrl } from '../domain/schema.js';
 import { validateDoc } from '../domain/validate.js';
 import { latestPlay } from '../domain/selectors.js';
 import { getState, getMeta, putMeta, putStateAndMeta } from './db.js';
@@ -271,6 +271,27 @@ export async function saveExportName(name) {
   await putMeta(meta);
   store.set({ meta });
   return meta.exportFileName;
+}
+
+/**
+ * Guarda la Conexión del doc (CONTEXT.md): la URL del proxy IGDB viaja DENTRO
+ * del .json y llega a cualquier dispositivo que cargue ese archivo. Vacío ⇒
+ * sin conexión. Nunca contiene credenciales (esas viven solo en el Worker).
+ * @param {string} url
+ * @returns {Promise<string>} URL normalizada guardada ('' si se quitó)
+ */
+export function saveWorkerUrl(url) {
+  const cleaned = normalizeWorkerUrl(url);
+  return mutate((doc) => {
+    if (cleaned === '') {
+      if (doc.connection) {
+        delete doc.connection.workerUrl;
+        if (Object.keys(doc.connection).length === 0) delete doc.connection;
+      }
+      return;
+    }
+    doc.connection = { ...doc.connection, workerUrl: cleaned };
+  }, { now: new Date() }).then(() => cleaned);
 }
 
 /**

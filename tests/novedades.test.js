@@ -7,7 +7,7 @@ import {
   resetNovedadesRefresh,
 } from '../src/data/novedades.js';
 import { getSnapshot, saveSnapshot } from '../src/data/snapshot.js';
-import { setWorkerUrl } from '../src/services/igdb.js';
+import { seedWorkerUrl } from './support/connection.js';
 import { COVERS_CACHE } from '../src/data/covers.js';
 import { store } from '../src/app.js';
 import { initLibrary, newLibrary, importDoc } from '../src/data/library.js';
@@ -195,7 +195,6 @@ function apiCalls(fetchMock) {
 }
 
 beforeEach(async () => {
-  window.localStorage.removeItem('gt.workerUrl');
   document.body.innerHTML = '';
   stores.clear();
   resetNovedadesRefresh();
@@ -231,12 +230,11 @@ afterEach(() => {
   resetNovedadesView();
   vi.unstubAllGlobals();
   setOnline(true);
-  window.localStorage.removeItem('gt.workerUrl');
 });
 
 describe('refreshNovedades', () => {
   it('con servicio y conexión guarda la instantánea y siembra carátulas', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     const fetchMock = stubFetch();
 
     await expect(refreshNovedades()).resolves.toEqual({ status: 'ok' });
@@ -253,7 +251,7 @@ describe('refreshNovedades', () => {
   });
 
   it('sin conexión no toca la red ni la instantánea', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     setOnline(false);
     const fetchMock = stubFetch();
 
@@ -272,7 +270,7 @@ describe('refreshNovedades', () => {
   });
 
   it('fallo de red o HTTP se degrada a service-error', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => {
@@ -285,7 +283,7 @@ describe('refreshNovedades', () => {
   });
 
   it('respuesta malformada del Worker también es service-error', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     stubFetch({ recientes: 'no-soy-array' });
 
     await expect(refreshNovedades()).resolves.toEqual({ status: 'service-error' });
@@ -295,7 +293,7 @@ describe('refreshNovedades', () => {
 
 describe('autoRefreshIfNeeded', () => {
   it('sin instantánea refresca aunque la sesión sea reciente', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     const fetchMock = stubFetch();
 
     await autoRefreshIfNeeded();
@@ -305,7 +303,7 @@ describe('autoRefreshIfNeeded', () => {
   });
 
   it('instantánea fresca (<12 h): no vuelve a la red', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     await saveSnapshot(smallBody());
     const fetchMock = stubFetch();
 
@@ -315,7 +313,7 @@ describe('autoRefreshIfNeeded', () => {
   });
 
   it('instantánea >12 h y conexión: refresca en silencio', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     await saveSnapshot(smallBody());
     await ageSnapshot(13 * HOUR_MS);
     const fetchMock = stubFetch();
@@ -326,7 +324,7 @@ describe('autoRefreshIfNeeded', () => {
   });
 
   it('instantánea >12 h pero sin conexión: no intenta nada', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     await saveSnapshot(smallBody());
     await ageSnapshot(13 * HOUR_MS);
     setOnline(false);
@@ -340,7 +338,7 @@ describe('autoRefreshIfNeeded', () => {
 
 describe('initNovedadesRetry', () => {
   it('al volver la red reintenta en silencio si el último intento falló', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     setOnline(false);
     await refreshNovedades();
     retryCleanup = initNovedadesRetry();
@@ -354,7 +352,7 @@ describe('initNovedadesRetry', () => {
   });
 
   it('no reintenta si el último intento no falló', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     await saveSnapshot(smallBody());
     retryCleanup = initNovedadesRetry();
 
@@ -368,7 +366,7 @@ describe('initNovedadesRetry', () => {
 
 describe('vista Novedades', () => {
   it('pinta las cuatro secciones 12/12/6/6 y el sello permanente', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     await saveSnapshot(fullBody());
 
     const root = await renderBoard();
@@ -387,7 +385,7 @@ describe('vista Novedades', () => {
   });
 
   it('el botón manual Actualiza: vuelve a la red y repinta desde la instantánea', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     stubFetch(fullBody());
     const root = await renderBoard();
 
@@ -397,7 +395,7 @@ describe('vista Novedades', () => {
   });
 
   it('sin conexión sirve la instantánea con banda «Sin conexión» y Reintentar', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     await saveSnapshot(fullBody());
     setOnline(false);
 
@@ -410,7 +408,7 @@ describe('vista Novedades', () => {
   });
 
   it('fallo del servicio tras reintentar muestra la banda del servicio', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     await saveSnapshot(fullBody());
     vi.stubGlobal(
       'fetch',
@@ -431,7 +429,7 @@ describe('vista Novedades', () => {
   });
 
   it('sin instantánea y sin conexión muestra el estado vacío de primera vez', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     setOnline(false);
 
     const root = await renderBoard();
@@ -452,7 +450,7 @@ describe('vista Novedades', () => {
   });
 
   it('instantánea >7 días levanta la banda destacada sin bloquear el tablón', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     await saveSnapshot(fullBody());
     await ageSnapshot(8 * DAY_MS);
 
@@ -463,7 +461,7 @@ describe('vista Novedades', () => {
   });
 
   it('«➕ Quiero jugarlo» crea el juego local como Quiero jugar y el botón cambia', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     await saveSnapshot(fullBody());
     const root = await renderBoard();
 
@@ -489,7 +487,7 @@ describe('vista Novedades', () => {
   });
 
   it('título equivalente en biblioteca → «Ya en tu biblioteca» sin duplicar', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     await saveSnapshot(fullBody());
     await seedLibrary(['juego 100']);
     const root = await renderBoard();
@@ -503,7 +501,7 @@ describe('vista Novedades', () => {
   });
 
   it('la placa despliega la lista, los chips de género filtran y «← Novedades» vuelve', async () => {
-    setWorkerUrl(WORKER_URL);
+    seedWorkerUrl(WORKER_URL);
     const body = fullBody();
     body.recientes[1] = novGame(111, { genres: [{ id: 12, name: 'RPG' }] });
     await saveSnapshot(body);

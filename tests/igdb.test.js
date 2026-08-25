@@ -1,13 +1,31 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import './support/storage.js';
+import { store } from '../src/app.js';
 import {
   IgdbError,
   fetchNovedades,
   getWorkerUrl,
   isConfigured,
   searchGames,
-  setWorkerUrl,
 } from '../src/services/igdb.js';
+
+const WORKER_URL = 'https://gt-proxy.example.workers.dev';
+
+/**
+ * Doc mínimo con (o sin) Conexión para alimentar las lecturas del cliente;
+ * va directo al store: aquí se prueba la lectura, no la persistencia.
+ * @param {string} url
+ */
+function seedWorkerUrl(url) {
+  store.set({
+    doc: {
+      schema: 'game-tracker',
+      version: 1,
+      updatedAt: '2026-08-25T00:00:00.000Z',
+      games: [],
+      ...(url.trim() === '' ? {} : { connection: { workerUrl: url } }),
+    },
+  });
+}
 
 /** @type {import('vitest').Mock} */
 let fetchMock;
@@ -40,29 +58,29 @@ function contractGame(overrides = {}) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  window.localStorage.removeItem('gt.workerUrl');
+  store.set({ doc: null });
 });
 
-describe('configuración del Worker (localStorage)', () => {
-  it('sin configuración previa devuelve cadena vacía y no está configurado', () => {
+describe('configuración del Worker (Conexión del doc)', () => {
+  it('sin biblioteca cargada devuelve cadena vacía y no está configurado', () => {
     expect(getWorkerUrl()).toBe('');
     expect(isConfigured()).toBe(false);
   });
 
-  it('setWorkerUrl recorta espacios y barra final; round-trip con localStorage y isConfigured', () => {
-    setWorkerUrl('  https://gt-proxy.example.workers.dev/  ');
-    expect(getWorkerUrl()).toBe('https://gt-proxy.example.workers.dev');
-    expect(window.localStorage.getItem('gt.workerUrl')).toBe('https://gt-proxy.example.workers.dev');
-    expect(isConfigured()).toBe(true);
-
-    setWorkerUrl('   ');
+  it('con doc sin conexión sigue igual de vacío', () => {
+    seedWorkerUrl('');
     expect(getWorkerUrl()).toBe('');
-    expect(window.localStorage.getItem('gt.workerUrl')).toBeNull();
     expect(isConfigured()).toBe(false);
+  });
+
+  it('lee la URL de doc.connection recortando espacios y barra final', () => {
+    seedWorkerUrl(`  ${WORKER_URL}/  `);
+    expect(getWorkerUrl()).toBe(WORKER_URL);
+    expect(isConfigured()).toBe(true);
   });
 
   it('una cadena que no es URL http(s) no cuenta como configurada', () => {
-    setWorkerUrl('notaurl');
+    seedWorkerUrl('notaurl');
     expect(getWorkerUrl()).toBe('notaurl');
     expect(isConfigured()).toBe(false);
   });
@@ -73,7 +91,7 @@ describe('searchGames', () => {
     const results = [contractGame(), contractGame({ igdbId: 1020, title: 'Elden Ring' })];
     fetchMock = vi.fn(async () => jsonRes({ results }));
     vi.stubGlobal('fetch', fetchMock);
-    setWorkerUrl('https://gt-proxy.example.workers.dev');
+    seedWorkerUrl(WORKER_URL);
 
     await expect(searchGames('celeste 2 & co')).resolves.toEqual(results);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -85,7 +103,7 @@ describe('searchGames', () => {
   it('HTTP 500 lanza IgdbError con el mensaje de servicio', async () => {
     fetchMock = vi.fn(async () => jsonRes({ error: 'Error interno del Worker.' }, { ok: false, status: 500 }));
     vi.stubGlobal('fetch', fetchMock);
-    setWorkerUrl('https://gt-proxy.example.workers.dev');
+    seedWorkerUrl(WORKER_URL);
 
     await expect(searchGames('x')).rejects.toMatchObject({
       name: 'IgdbError',
@@ -98,7 +116,7 @@ describe('searchGames', () => {
       throw new TypeError('Failed to fetch');
     });
     vi.stubGlobal('fetch', fetchMock);
-    setWorkerUrl('https://gt-proxy.example.workers.dev');
+    seedWorkerUrl(WORKER_URL);
 
     await expect(searchGames('x')).rejects.toBeInstanceOf(IgdbError);
     await expect(searchGames('x')).rejects.toMatchObject({
@@ -109,7 +127,7 @@ describe('searchGames', () => {
   it('JSON malformado (sin results array) lanza IgdbError', async () => {
     fetchMock = vi.fn(async () => jsonRes({ unexpected: true }));
     vi.stubGlobal('fetch', fetchMock);
-    setWorkerUrl('https://gt-proxy.example.workers.dev');
+    seedWorkerUrl(WORKER_URL);
 
     await expect(searchGames('x')).rejects.toBeInstanceOf(IgdbError);
   });
@@ -135,7 +153,7 @@ describe('searchGames', () => {
           })
       );
       vi.stubGlobal('fetch', fetchMock);
-      setWorkerUrl('https://gt-proxy.example.workers.dev');
+      seedWorkerUrl(WORKER_URL);
 
       const pending = searchGames('x');
       const expectation = expect(pending).rejects.toMatchObject({
@@ -161,7 +179,7 @@ describe('fetchNovedades', () => {
     };
     fetchMock = vi.fn(async () => jsonRes(body));
     vi.stubGlobal('fetch', fetchMock);
-    setWorkerUrl('https://gt-proxy.example.workers.dev');
+    seedWorkerUrl(WORKER_URL);
 
     await expect(fetchNovedades()).resolves.toEqual(body);
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://gt-proxy.example.workers.dev/api/novedades');
@@ -170,7 +188,7 @@ describe('fetchNovedades', () => {
   it('cuerpo sin las secciones esperadas lanza IgdbError', async () => {
     fetchMock = vi.fn(async () => jsonRes({ recientes: [] }));
     vi.stubGlobal('fetch', fetchMock);
-    setWorkerUrl('https://gt-proxy.example.workers.dev');
+    seedWorkerUrl(WORKER_URL);
 
     await expect(fetchNovedades()).rejects.toMatchObject({
       name: 'IgdbError',

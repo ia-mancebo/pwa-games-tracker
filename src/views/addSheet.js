@@ -15,7 +15,7 @@ import { store } from '../app.js';
 import { openGame } from './game.js';
 import { statusPillHtml } from '../ui/pill.js';
 import { coverHtml } from '../ui/cover.js';
-import { IGDB_SERVICE_ERROR, isConfigured, searchGames, setWorkerUrl } from '../services/igdb.js';
+import { IGDB_SERVICE_ERROR, isConfigured, searchGames } from '../services/igdb.js';
 
 /** Motivo del camino online sin servicio configurado. */
 export const ONLINE_UNAVAILABLE_REASON =
@@ -49,7 +49,6 @@ const MAX_DUP_LIST = 3;
  *   path: 'online'|'manual',
  *   online: OnlineState,
  *   pending: import('../services/igdb.js').IgdbGame|null,
- *   workerError: string|null,
  * }} SheetState
  */
 
@@ -196,40 +195,17 @@ function onlineResultsHtml(online) {
 }
 
 /**
- * Bloque online deshabilitado: pestañas, motivo y, si falta configuración,
- * affordance inline para fijar la URL del Worker (la UI de Datos llega en los
- * tickets 19/23).
- * @param {SheetState} state
+ * Bloque online deshabilitado: pestañas y motivo; sin conexión configurada
+ * empuja a la sección «Conexión» del diálogo Datos.
  * @param {boolean} configured
  * @returns {string}
  */
-function disabledOnlineHtml(state, configured) {
-  const setup = configured
-    ? ''
-    : raw(
-        html`<div class="worker-setup">
-          <input
-            type="text"
-            name="worker-url"
-            placeholder="https://tu-worker.workers.dev"
-            aria-label="URL del proxy IGDB"
-          />
-          <button type="button" class="chip" data-save-worker>Guardar</button>
-          ${state.workerError
-            ? raw(
-                html`<span class="form-error" role="alert" data-worker-error>
-                  ${state.workerError}
-                </span>`
-              )
-            : ''}
-        </div>`
-      );
+function disabledOnlineHtml(configured) {
   return html`<div class="add-paths">
       <button type="button" class="add-tab" data-online-tab disabled>Buscar online</button>
       <span class="add-tab on">Crear manualmente</span>
     </div>
-    <p class="add-online-reason">${configured ? OFFLINE_REASON : ONLINE_UNAVAILABLE_REASON}</p>
-    ${setup}`;
+    <p class="add-online-reason">${configured ? OFFLINE_REASON : ONLINE_UNAVAILABLE_REASON}</p>`;
 }
 
 /**
@@ -324,7 +300,7 @@ function sheetHtml(state, { onlineReady, configured }) {
           </div>
           <div class="add-feedback" data-add-feedback>${raw(feedbackHtml(state))}</div>
         </div>`
-    : html`<div data-online-block>${raw(disabledOnlineHtml(state, configured))}</div>`;
+    : html`<div data-online-block>${raw(disabledOnlineHtml(configured))}</div>`;
   return html`<div class="add-backdrop" data-close-add></div>
     <section class="add-sheet" role="dialog" aria-modal="true" aria-labelledby="add-sheet-title">
       <header class="add-head">
@@ -375,7 +351,6 @@ export function openAddSheet(opts = {}) {
     path: onlineReady ? 'online' : 'manual',
     online: { status: 'idle', results: [], error: null },
     pending: null,
-    workerError: null,
   };
   layer = document.createElement('div');
   layer.className = 'add-layer fade';
@@ -503,26 +478,6 @@ export function openAddSheet(opts = {}) {
   };
   const scheduleSearch = debounce(runSearch, SEARCH_DEBOUNCE_MS);
 
-  const paintDisabledBlock = () => {
-    const box = layer ? qs('[data-online-block]', layer) : null;
-    if (box && !configured) box.innerHTML = disabledOnlineHtml(state, configured);
-  };
-
-  const saveWorkerUrl = () => {
-    const layerNow = layer;
-    if (!layerNow || configured) return;
-    const input = qs('input[name="worker-url"]', layerNow);
-    setWorkerUrl(input instanceof HTMLInputElement ? input.value : '');
-    if (isConfigured()) {
-      closeAddSheet();
-      openAddSheet({ host: opts.host, onSaved: opts.onSaved });
-      return;
-    }
-    setWorkerUrl('');
-    state.workerError = 'URL no válida — pega la https://… del Worker';
-    paintDisabledBlock();
-  };
-
   layer.innerHTML = sheetHtml(state, { onlineReady, configured });
 
   layer.addEventListener('click', (e) => {
@@ -552,10 +507,6 @@ export function openAddSheet(opts = {}) {
         state.duplicates = null;
         void doSubmit(false);
       }
-      return;
-    }
-    if (e.target.closest('[data-save-worker]')) {
-      saveWorkerUrl();
       return;
     }
     if (e.target.closest('[data-manual-tab]')) {

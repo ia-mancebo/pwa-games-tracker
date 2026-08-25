@@ -12,6 +12,7 @@ import { closeDataDialog, isDataOpen, openDataDialog } from '../src/views/dataDi
 import { qs, qsa } from '../src/lib/dom.js';
 
 const TODAY = '2026-08-25';
+const WORKER_URL = 'https://gt-proxy.example.workers.dev';
 const realSetTimeout = setTimeout;
 
 /** Cede macrotareas reales para que IDB (setImmediate) y crypto terminen. */
@@ -464,6 +465,64 @@ describe('saveExportName (preferencia local del dispositivo)', () => {
 
     expect(await saveExportName('   ')).toBe(DEFAULT_EXPORT_NAME);
     expect(store.get().meta.exportFileName).toBe(DEFAULT_EXPORT_NAME);
+  });
+});
+
+describe('Conexión: URL del proxy en el diálogo Datos', () => {
+  /** Carga una biblioteca y abre el diálogo. */
+  async function openWithDoc() {
+    await importDoc(DOC_A_TEXT, { hash: await sha256Hex(DOC_A_TEXT), fileName: null });
+    openDataDialog();
+  }
+
+  /**
+   * Escribe un valor en el input de conexión y pulsa Guardar conexión.
+   * @param {string} value
+   */
+  async function saveConnection(value) {
+    const input = qs('[data-worker-url]', document.body);
+    if (!(input instanceof HTMLInputElement)) throw new Error('falta el input de conexión');
+    input.value = value;
+    btn(qs('[data-save-worker]', document.body)).click();
+    await settle();
+  }
+
+  it('guarda la URL normalizada dentro de doc.connection y confirma inline', async () => {
+    await openWithDoc();
+    await saveConnection(` ${WORKER_URL}/ `);
+
+    expect(store.get().doc?.connection?.workerUrl).toBe(WORKER_URL);
+    expect(validateDoc(store.get().doc)).toMatchObject({ ok: true });
+    expect(qs('.datos-note', document.body)?.textContent).toContain('Conexión guardada');
+    const input = qs('[data-worker-url]', document.body);
+    if (!(input instanceof HTMLInputElement)) throw new Error('falta el input de conexión');
+    expect(input.value).toBe(WORKER_URL);
+  });
+
+  it('una URL que no es http(s) se revierte y avisa sin tocar el doc', async () => {
+    await openWithDoc();
+    await saveConnection('no-es-una-url');
+
+    expect(qs('.form-error', document.body)?.textContent).toContain('URL no válida');
+    expect(store.get().doc?.connection).toBeUndefined();
+  });
+
+  it('vaciar el campo quita la Conexión del doc', async () => {
+    await openWithDoc();
+    await saveConnection(WORKER_URL);
+    await saveConnection('');
+
+    expect(store.get().doc?.connection).toBeUndefined();
+    expect(qs('.datos-note', document.body)?.textContent).toContain('Conexión quitada');
+  });
+
+  it('en pestaña secundaria (solo lectura) no guarda y lo dice', async () => {
+    await openWithDoc();
+    store.set({ tabRole: 'secondary' });
+    await saveConnection(WORKER_URL);
+
+    expect(store.get().doc?.connection).toBeUndefined();
+    expect(qs('.form-error', document.body)?.textContent).toContain('solo lectura');
   });
 });
 

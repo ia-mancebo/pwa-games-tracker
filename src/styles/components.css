@@ -872,29 +872,6 @@ button.plate:hover {
   padding: 8px 2px 0;
 }
 
-.worker-setup {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin: -6px 0 18px;
-}
-
-.worker-setup input {
-  flex: 1 1 220px;
-  min-width: 0;
-  background: var(--bg2);
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  padding: 6px 10px;
-  font-size: 0.82rem;
-}
-
-.worker-setup [data-worker-error] {
-  flex-basis: 100%;
-  font-size: 0.78rem;
-}
-
 .add-form .field {
   display: block;
   border: none;

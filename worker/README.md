@@ -56,7 +56,7 @@ Las formas exactas están documentadas en [`CONTRACT.md`](./CONTRACT.md). Si `/a
 
 ## 5 · Conectar con la app
 
-Pega la URL base (`https://<nombre-worker>.<subdominio>.workers.dev`) como constante del proxy en la app (ver ticket 23). No hay que desplegar nada más: el Worker ya envía cabeceras CORS abiertas.
+Pega la URL base (`https://<nombre-worker>.<subdominio>.workers.dev`) en la app: botón **Datos** → sección **Conexión**. Queda guardada dentro del `game-tracker.json` del usuario y viaja con su biblioteca.
 
 ## Solución de problemas
 

@@ -12,6 +12,8 @@ import { listBackups, readBackup } from '../data/opfs.js';
 import { persistenceStatusLine, requestPersistOnce } from '../data/persist.js';
 import { assertWritable } from '../data/tablock.js';
 import { sha256Hex } from '../services/hash.js';
+import { getWorkerUrl, isConfigured } from '../services/igdb.js';
+import { saveWorkerUrl } from '../data/library.js';
 
 /** @typedef {import('../data/opfs.js').BackupInfo} BackupInfo */
 
@@ -223,6 +225,33 @@ async function doSaveName(input) {
   }
 }
 
+/**
+ * Guarda la Conexión (URL del proxy IGDB) dentro del doc; vacío la quita.
+ * Una URL no http(s) se revierte y se avisa, como hacía la hoja de Alta.
+ * @param {Element | null} input
+ */
+async function doSaveWorkerUrl(input) {
+  const value = input instanceof HTMLInputElement ? input.value : '';
+  if (!assertWritable()) {
+    paint({ note: '', error: 'Pestaña en solo lectura: la conexión solo puede editarse en la pestaña activa.' });
+    return;
+  }
+  try {
+    const saved = await saveWorkerUrl(value);
+    if (saved !== '' && !isConfigured()) {
+      await saveWorkerUrl('');
+      paint({ note: '', error: 'URL no válida — pega la https://… del Worker' });
+      return;
+    }
+    paint({
+      note: saved === '' ? 'Conexión quitada.' : `Conexión guardada: «${saved}».`,
+      error: '',
+    });
+  } catch (err) {
+    paint({ note: '', error: message(err) });
+  }
+}
+
 /** @param {string} name */
 async function doRestore(name) {
   try {
@@ -302,6 +331,24 @@ function sheetHtml() {
         <button type="button" class="chip" data-save-name>Guardar nombre</button>
       </section>
 
+      <section class="datos-sec">
+        <h3>Conexión</h3>
+        <p class="datos-hint">
+          URL del proxy IGDB (Cloudflare Worker) que alimenta «Buscar online» y Novedades. Se guarda dentro de tu
+          .json y viaja con la biblioteca; las credenciales viven solo en el Worker.
+        </p>
+        <label class="lbl" for="datos-worker-input">URL del proxy IGDB</label>
+        <input
+          id="datos-worker-input"
+          class="datos-name mono"
+          type="text"
+          value="${getWorkerUrl()}"
+          placeholder="https://tu-worker.workers.dev"
+          data-worker-url
+        />
+        <button type="button" class="chip" data-save-worker>Guardar conexión</button>
+      </section>
+
       ${raw(backupsSectionHtml())}
 
       <section class="datos-sec">
@@ -334,6 +381,9 @@ function wire(layerEl) {
   qs('[data-share]', layerEl)?.addEventListener('click', () => void doShare());
   qs('[data-save-name]', layerEl)?.addEventListener('click', () => {
     void doSaveName(qs('[data-export-name]', layerEl));
+  });
+  qs('[data-save-worker]', layerEl)?.addEventListener('click', () => {
+    void doSaveWorkerUrl(qs('[data-worker-url]', layerEl));
   });
   for (const restoreBtn of qsa('[data-restore]', layerEl)) {
     restoreBtn.addEventListener('click', () => {

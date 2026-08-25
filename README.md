@@ -49,7 +49,7 @@ Si `/api/search` responde, tienes búsqueda y Novedades. La guía completa con s
 
 ## Paso 3 · Configurar la URL en la app
 
-Abre tu app desplegada (paso 4) y pulsa **Añadir juego** → pestaña **Buscar online**. Al no haber servicio configurado verás el campo «URL del proxy IGDB»: pega ahí tu URL `https://<worker>.workers.dev` y pulsa **Guardar**. La misma URL alimenta las búsquedas y la pestaña **Novedades** (queda guardada en el dispositivo vía `localStorage`; configúrala una vez por navegador).
+Abre tu app desplegada (paso 4) y pulsa **Datos** → sección **Conexión**: pega ahí tu URL `https://<worker>.workers.dev` y pulsa **Guardar conexión**. La misma URL alimenta las búsquedas («Añadir juego» → **Buscar online**) y la pestaña **Novedades**. La Conexión se guarda **dentro de tu `game-tracker.json`**, así que viaja con tu biblioteca: al conectar el mismo archivo en otro dispositivo, la configuración ya está.
 
 ## Paso 4 · Publicar tu copia en GitHub Pages (~10 min)
 

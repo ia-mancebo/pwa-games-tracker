@@ -176,6 +176,19 @@ describe('validateDoc', () => {
     expect(validateDoc(doc).ok).toBe(false);
   });
 
+  it('acepta connection con workerUrl y rechaza formas inválidas', () => {
+    const withConnection = { ...validDocInput(), connection: { workerUrl: 'https://gt.workers.dev' } };
+    expect(validateDoc(withConnection)).toMatchObject({
+      ok: true,
+      doc: { connection: { workerUrl: 'https://gt.workers.dev' } },
+    });
+    expect(validateDoc({ ...validDocInput(), connection: {} })).toMatchObject({ ok: true });
+
+    expect(validateDoc({ ...validDocInput(), connection: 'https://x' })).toMatchObject({ code: 'BAD_SHAPE' });
+    expect(validateDoc({ ...validDocInput(), connection: { workerUrl: 7 } })).toMatchObject({ code: 'BAD_SHAPE' });
+    expect(validateDoc({ ...validDocInput(), connection: { credencial: 'x' } })).toMatchObject({ code: 'BAD_SHAPE' });
+  });
+
   it('no muta el input y devuelve copia', () => {
     const input = validDocInput();
     const res = validateDoc(input);

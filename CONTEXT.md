@@ -22,3 +22,4 @@ Glosario del dominio. Sin detalles de implementación: los términos y nada más
 - **Instantánea de Novedades**: copia del último contenido refrescado de Novedades que la app conserva para mostrar el tablón cuando no puede refrescar.
 - **Dashboard de estadísticas**: resúmenes agregados calculados sobre la biblioteca propia.
 - **Fuente de datos**: servicio externo del que se obtienen juegos, géneros, carátulas y fechas de lanzamiento.
+- **Conexión**: ajustes que ligan la app a su Fuente de datos externa. Forman parte del archivo de datos personal de la Biblioteca y viajan con él; nunca incluyen credenciales.
