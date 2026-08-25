@@ -793,6 +793,108 @@ button.plate:hover {
   margin-bottom: 18px;
 }
 
+/* Camino online de la Alta (ticket 21): búsqueda con debounce + resultados */
+.add-online input[name='online-query'] {
+  width: 100%;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 9px 12px;
+  font-size: 0.95rem;
+}
+
+.add-online input[name='online-query']::placeholder {
+  color: var(--faint);
+}
+
+.add-results-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: min(46vh, 340px);
+  overflow: auto;
+}
+
+.add-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 7px 10px;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.add-result:hover {
+  border-color: var(--acc);
+  background: color-mix(in srgb, var(--acc) 7%, var(--bg2));
+}
+
+.add-result .cover {
+  width: 52px;
+  border-radius: 6px;
+}
+
+.r-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.r-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.r-sub {
+  color: var(--muted);
+  font-size: 0.76rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-online-hint {
+  color: var(--faint);
+  font-size: 0.84rem;
+  padding: 8px 2px 0;
+}
+
+.worker-setup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: -6px 0 18px;
+}
+
+.worker-setup input {
+  flex: 1 1 220px;
+  min-width: 0;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+}
+
+.worker-setup [data-worker-error] {
+  flex-basis: 100%;
+  font-size: 0.78rem;
+}
+
 .add-form .field {
   display: block;
   border: none;
