@@ -3,10 +3,10 @@ import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// Debe coincidir con el nombre del repositorio de GitHub: Pages sirve la app
-// en https://<user>.github.io/game-tracker/ y de aquí derivan los assets,
-// el scope y el start_url del manifest.
-const BASE = '/game-tracker/';
+// Debe coincidir con el nombre del repositorio de GitHub (pwa-games-tracker):
+// Pages sirve la app en https://<user>.github.io/pwa-games-tracker/ y de aquí
+// derivan los assets, el scope y el start_url del manifest.
+const BASE = '/pwa-games-tracker/';
 
 /**
  * El manifest se emite con los src absolutos de los iconos ('/icons/…') tal
