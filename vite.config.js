@@ -1,5 +1,39 @@
+import { readFile, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+
+// Debe coincidir con el nombre del repositorio de GitHub: Pages sirve la app
+// en https://<user>.github.io/game-tracker/ y de aquí derivan los assets,
+// el scope y el start_url del manifest.
+const BASE = '/game-tracker/';
+
+/**
+ * El manifest se emite con los src absolutos de los iconos ('/icons/…') tal
+ * cual: el plugin PWA no los reescribe con `base`, así que servidos bajo un
+ * subpath apuntarían a la raíz del dominio y darían 404 (instalabilidad rota,
+ * spec §10). Reescribe el fichero ya escrito en disco; generateSW corre más
+ * tarde (closeBundle), por lo que el precache y sus revisiones MD5 quedan
+ * calculados sobre el contenido ya corregido.
+ * @returns {import('vite').Plugin}
+ */
+function manifestIconsUnderBase() {
+  /** @type {string} */
+  let outDir = 'dist';
+  return {
+    name: 'manifest-icons-under-base',
+    apply: 'build',
+    configResolved(config) {
+      outDir = config.build.outDir;
+    },
+    async writeBundle() {
+      const file = resolve(outDir, 'manifest.webmanifest');
+      const source = await readFile(file, 'utf8');
+      if (!source.includes('"/icons/')) return;
+      await writeFile(file, source.replaceAll('"/icons/', `"${BASE}icons/`));
+    },
+  };
+}
 
 /**
  * Opciones PWA (ticket 25, spec §10–11). Exportadas para poder verificarlas
@@ -9,6 +43,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 export const pwaOptions = {
   registerType: 'prompt',
   injectRegister: null,
+  // Si Pages sirviera manifest.webmanifest con un MIME incorrecto, la solución
+  // es añadir aquí `manifestFilename: 'manifest.json'` (spec §10).
   includeAssets: ['favicon-64.png', 'robots.txt'],
   manifest: {
     name: 'Game Tracker',
@@ -51,9 +87,10 @@ export const pwaOptions = {
 };
 
 export default defineConfig({
+  base: BASE,
   build: {
     target: 'es2022',
     sourcemap: false,
   },
-  plugins: [VitePWA(pwaOptions)],
+  plugins: [[...VitePWA(pwaOptions), manifestIconsUnderBase()]],
 });
