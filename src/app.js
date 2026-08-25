@@ -51,6 +51,16 @@ import { openDataDialog } from './views/dataDialog.js';
  */
 
 /**
+ * Filtros globales del dashboard de estadísticas (ticket 24): selección única
+ * por dimensión, acumulables entre dimensiones.
+ * @typedef {{
+ *   platform: string|null,
+ *   genre: string|null,
+ *   tag: string|null,
+ * }} StatsState
+ */
+
+/**
  * Estado global de la app. Las vistas son client-side (sin rutas de URL).
  * @typedef {{
  *   tab: string,
@@ -60,6 +70,7 @@ import { openDataDialog } from './views/dataDialog.js';
  *   ready: boolean,
  *   tabRole: TabRole,
  *   library: LibraryState,
+ *   stats: StatsState,
  * }} AppState
  */
 
@@ -94,6 +105,7 @@ let state = {
     tag: null,
     gameId: null,
   },
+  stats: { platform: null, genre: null, tag: null },
 };
 
 /** @type {Set<Listener>} */

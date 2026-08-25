@@ -1573,3 +1573,101 @@ button.pill-btn:hover {
 .readonly-tab .fab {
   display: none;
 }
+
+/* Dashboard de estadísticas (ticket 24), adaptado del prototipo variante B */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.kpi.st-backlog .num {
+  color: var(--st-backlog);
+}
+
+.kpi.st-playing .num {
+  color: var(--st-playing);
+}
+
+.kpi.st-finished .num {
+  color: var(--st-finished);
+}
+
+.kpi.st-abandoned .num {
+  color: var(--st-abandoned);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.hbar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hbar .hb {
+  display: grid;
+  grid-template-columns: minmax(88px, 130px) 1fr 36px;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  font-size: 0.86rem;
+}
+
+.hbar .hb > span:first-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hbar .n {
+  font-family: var(--mono);
+  text-align: right;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.top-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.top-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.top-row:hover {
+  background: var(--bg2);
+}
+
+.top-list li:last-child .top-row {
+  border-bottom: none;
+}
+
+.top-row .t-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stats-empty {
+  text-align: center;
+}
+

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, store } from '../src/app.js';
 import { importDoc, initLibrary, newLibrary } from '../src/data/library.js';
 import { findDuplicates } from '../src/domain/selectors.js';
+import { todayFrom } from '../src/domain/schema.js';
 import { ONLINE_UNAVAILABLE_REASON } from '../src/views/addSheet.js';
 import { qs, qsa } from '../src/lib/dom.js';
 
@@ -161,7 +162,7 @@ describe('botón fijo y hoja de alta', () => {
     const game = currentDoc().games[0];
     expect(game.title).toBe('Halo CE');
     expect(game.plays[0].status).toBe('backlog');
-    expect(game.plays[0].addedAt).toBe('2026-08-24');
+    expect(game.plays[0].addedAt).toBe(todayFrom(new Date()));
     expect(qs('.add-sheet')).toBeNull();
     expect(
       need(qs('[data-game-id]', shelfSection(root, 'Quiero jugar')))?.getAttribute('data-game-id')
