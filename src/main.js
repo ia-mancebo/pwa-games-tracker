@@ -7,6 +7,8 @@ import { startAutosave } from './data/filelink.js';
 import { acquireTabLock, onLockReleased } from './data/tablock.js';
 import { initCoverSeeding } from './data/covers.js';
 import { initNovedadesRetry } from './data/novedades.js';
+import { registerSW } from 'virtual:pwa-register';
+import { showOfflineToast, showUpdateToast } from './ui/toasts.js';
 
 const root = document.querySelector('#app');
 if (root) {
@@ -49,3 +51,16 @@ if (root) {
     // Sin autoguardado la app sigue operativa; el vuelco manual persiste.
   }
 }
+
+// Service worker (ticket 25, spec §11): prompt explícito; la recarga solo
+// ocurre tras pulsar Recargar, para no perder texto en edición.
+const updateSW = registerSW({
+  onNeedRefresh() {
+    showUpdateToast(() => void updateSW(true));
+  },
+  onOfflineReady() {
+    showOfflineToast();
+  },
+  onRegisteredSW() {},
+  onRegisterError() {},
+});

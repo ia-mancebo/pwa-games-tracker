@@ -10,7 +10,7 @@
     "strict": true,
     "skipLibCheck": true,
     "noUnusedLocals": false,
-    "types": ["vite/client"]
+    "types": ["vite/client", "vite-plugin-pwa/client"]
   },
   "include": ["src/**/*.js", "tests/**/*.js", "scripts/**/*.js", "vite.config.js", "vitest.config.js"]
 }
