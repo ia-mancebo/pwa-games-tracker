@@ -5,7 +5,7 @@
  */
 
 const DB_NAME = 'game-tracker';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STATE_KEY = 'doc';
 const META_KEY = 'app';
 
@@ -33,6 +33,8 @@ export function openDb() {
       const db = req.result;
       if (!db.objectStoreNames.contains('state')) db.createObjectStore('state');
       if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
+      // Instantánea de Novedades (ticket 23, spec §7.2); clave 'snapshot'.
+      if (!db.objectStoreNames.contains('novedades')) db.createObjectStore('novedades');
     });
     req.addEventListener('success', () => resolve(req.result));
     req.addEventListener('error', () => reject(req.error ?? new Error('No se pudo abrir IDB')));
@@ -59,7 +61,7 @@ export async function getMeta() {
   try {
     const tx = db.transaction('meta', 'readonly');
     const value = await asPromise(tx.objectStore('meta').get(META_KEY));
-    return (/** @type {Meta|null} */ (value)) ?? null;
+    return /** @type {Meta|null} */ (value) ?? null;
   } finally {
     db.close();
   }
@@ -73,7 +75,7 @@ export async function getState() {
   try {
     const tx = db.transaction('state', 'readonly');
     const value = await asPromise(tx.objectStore('state').get(STATE_KEY));
-    return (/** @type {import('../domain/schema.js').Doc|null} */ (value)) ?? null;
+    return /** @type {import('../domain/schema.js').Doc|null} */ (value) ?? null;
   } finally {
     db.close();
   }

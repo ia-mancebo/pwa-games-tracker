@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, store, TABS } from '../src/app.js';
 import { initLibrary, newLibrary, addGame, ratePlay } from '../src/data/library.js';
 import { qs, qsa } from '../src/lib/dom.js';
@@ -40,7 +40,7 @@ describe('createApp', () => {
     const root = mount();
     createApp(root);
     expect(qs('.welcome', root)).toBeTruthy();
-    expect(qs('main', root)?.textContent).not.toContain('Novedades sin datos');
+    expect(qs('main', root)?.textContent).not.toContain('Recién salidos');
     expect(qs('.nav', root)?.className).toContain('disabled');
     expect(qsa('.nav button[disabled]', root)).toHaveLength(3);
   });
@@ -61,7 +61,7 @@ describe('createApp', () => {
     const hrefBefore = window.location.href;
     btn(qs('[data-tab="novedades"]', root)).click();
     expect(store.get().tab).toBe('novedades');
-    expect(qs('main', root)?.textContent).toContain('Novedades sin datos');
+    await vi.waitFor(() => expect(qs('main', root)?.textContent).toContain('Actualizado:'));
     expect(window.location.href).toBe(hrefBefore);
   });
 

@@ -5,6 +5,7 @@ import { views } from './views/index.js';
 import * as welcome from './views/welcome.js';
 import { renderFilebar } from './ui/filebar.js';
 import { openDataDialog } from './views/dataDialog.js';
+import { autoRefreshIfNeeded } from './data/novedades.js';
 
 /**
  * Meta del espejo IndexedDB (spec §5.1). `exportFileName` y `persistAsked` son
@@ -61,6 +62,12 @@ import { openDataDialog } from './views/dataDialog.js';
  */
 
 /**
+ * Estado de la vista Novedades (ticket 23): sección abierta del drill-down y
+ * género filtrado. El tablón en sí vive en la instantánea IDB.
+ * @typedef {{ section: string|null, genre: string|null }} NovedadesState
+ */
+
+/**
  * Estado global de la app. Las vistas son client-side (sin rutas de URL).
  * @typedef {{
  *   tab: string,
@@ -71,6 +78,7 @@ import { openDataDialog } from './views/dataDialog.js';
  *   tabRole: TabRole,
  *   library: LibraryState,
  *   stats: StatsState,
+ *   novedades: NovedadesState,
  * }} AppState
  */
 
@@ -106,6 +114,7 @@ let state = {
     gameId: null,
   },
   stats: { platform: null, genre: null, tag: null },
+  novedades: { section: null, genre: null },
 };
 
 /** @type {Set<Listener>} */
@@ -158,34 +167,37 @@ function railWidgetsHtml() {
   const count = /** @param {import('./domain/schema.js').Status} status */ (status) =>
     games.filter((g) => gameStatus(g) === status).length;
   return html`<div class="widgets">
-      <div class="bw"><span>Jugando ahora</span><b>${count('playing')}</b></div>
-      <div class="bw"><span>Terminados</span><b>${count('finished')}</b></div>
-      <div class="bw"><span>Valoración media</span><b>${formatAvg(avgRatingOfGames(games))}</b></div>
-    </div>`;
+    <div class="bw"><span>Jugando ahora</span><b>${count('playing')}</b></div>
+    <div class="bw"><span>Terminados</span><b>${count('finished')}</b></div>
+    <div class="bw"><span>Valoración media</span><b>${formatAvg(avgRatingOfGames(games))}</b></div>
+  </div>`;
 }
 
 function railHtml() {
   const current = store.get().tab;
   const gated = isGated();
   return html`<aside class="rail">
-      <div class="logo" aria-hidden="true">GT</div>
-      <nav class="nav${gated ? ' disabled' : ''}" aria-label="Secciones">
-        ${TABS.map(
-          (t) =>
-            raw(html`<button
+    <div class="logo" aria-hidden="true">GT</div>
+    <nav class="nav${gated ? ' disabled' : ''}" aria-label="Secciones">
+      ${TABS.map((t) =>
+          raw(
+            html`<button
               type="button"
               data-tab="${t.id}"
               ${gated ? 'disabled' : ''}
               aria-current="${t.id === current ? 'true' : 'false'}"
             >
               ${t.label}
-            </button>`),
+            </button>`
+          )
         )}
-      </nav>
-      ${raw(railWidgetsHtml())}
-      <button type="button" class="chip rail-datos" data-open-data ${gated ? 'disabled' : ''}>Datos</button>
-      <span class="note">offline-first · datos locales</span>
-    </aside>`;
+    </nav>
+    ${raw(railWidgetsHtml())}
+    <button type="button" class="chip rail-datos" data-open-data ${gated ? 'disabled' : ''}>
+      Datos
+    </button>
+    <span class="note">offline-first · datos locales</span>
+  </aside>`;
 }
 
 /**
@@ -196,10 +208,13 @@ function railHtml() {
  */
 export function createApp(root) {
   root.innerHTML = '';
-  root.innerHTML = html`<div class="shell">${raw(railHtml())}<div class="content">
+  root.innerHTML = html`<div class="shell">
+    ${raw(railHtml())}
+    <div class="content">
       <div class="filebar-slot"></div>
       <main class="main"></main>
-    </div></div>`;
+    </div>
+  </div>`;
   const main = qs('main', root);
   if (!main) throw new Error('shell sin <main>');
 
@@ -228,6 +243,11 @@ export function createApp(root) {
       return;
     }
     store.set({ tab, library: { ...store.get().library, gameId: null } });
+    // Entrar en Novedades dispara el refresco automático silencioso
+    // (>12 h y con conexión; ticket 23, spec §7.3), fire-and-forget.
+    if (tab === 'novedades' && previous !== 'novedades') {
+      void autoRefreshIfNeeded().catch(() => {});
+    }
   });
 
   const renderCurrent = () => {

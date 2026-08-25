@@ -6,6 +6,7 @@ import { initLibrary } from './data/library.js';
 import { startAutosave } from './data/filelink.js';
 import { acquireTabLock, onLockReleased } from './data/tablock.js';
 import { initCoverSeeding } from './data/covers.js';
+import { initNovedadesRetry } from './data/novedades.js';
 
 const root = document.querySelector('#app');
 if (root) {
@@ -34,6 +35,12 @@ if (root) {
     }
   } catch {
     // Sin Web Locks la app funciona como pestaña única.
+  }
+  try {
+    // Reintento silencioso de Novedades al volver la red (ticket 23, spec §7.3).
+    initNovedadesRetry();
+  } catch {
+    // Sin listeners de red el refresco queda manual.
   }
   try {
     // Autoguardado + chequeos de foco/visibilidad (ticket 18).
