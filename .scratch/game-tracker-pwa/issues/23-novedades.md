@@ -1,23 +1,23 @@
-# 23 · Novedades
+﻿# 23 Â· Novedades
 
-**Status:** ready-for-agent
-**Blocked by:** 20 · Proxy Cloudflare Worker para IGDB · 22 · Carátulas offline (`covers-v1`) · 16 · Alta manual
+**Status:** resolved
+**Blocked by:** 20 Â· Proxy Cloudflare Worker para IGDB Â· 22 Â· CarÃ¡tulas offline (`covers-v1`) Â· 16 Â· Alta manual
 
 ## What to build
 
-El tablón completo, online y degradado:
+El tablÃ³n completo, online y degradado:
 
-- **Refresco**: automático al abrir la pestaña si la instantánea tiene >12 h y hay conexión; botón manual siempre; reintento automático silencioso al volver la red.
-- **Instantánea atómica** en su propio store: composición 12 recientes / 12 próximos / 6 populares / 6 esperados = 36 juegos, cada uno con los campos para poblar ficha y alta local (título, carátula, géneros, plataformas, descripción, fecha de lanzamiento). Las 36 carátulas se cachean además en `covers-v1`; las capturas quedan fuera (solo online).
-- **Sello permanente discreto** «Actualizado: fecha/hora» en cabecera + banner destacado no bloqueante cuando la instantánea supera 7 días.
-- **Modo degradado único** (sin conexión o fallo del servicio): tablón servido desde la instantánea con banda fina no bloqueante indicando el motivo («Sin conexión» / «No se pudo contactar con el servicio») + Reintentar. **Sin caché**: estado vacío explicativo («Novedades necesita conexión la primera vez…») con Reintentar.
-- **Layout**: tira de meses con scroll horizontal + baldas de tarjetas con badge de fecha; placas de sección despliegan su lista (portadas, filtro por género).
-- **Ficha de detalle externa** desde Novedades con fecha/interés y botón **«➕ Quiero jugarlo»**: crea la entrada local como Quiero jugar conservando descripción y galería — operación 100 % local.
+- **Refresco**: automÃ¡tico al abrir la pestaÃ±a si la instantÃ¡nea tiene >12 h y hay conexiÃ³n; botÃ³n manual siempre; reintento automÃ¡tico silencioso al volver la red.
+- **InstantÃ¡nea atÃ³mica** en su propio store: composiciÃ³n 12 recientes / 12 prÃ³ximos / 6 populares / 6 esperados = 36 juegos, cada uno con los campos para poblar ficha y alta local (tÃ­tulo, carÃ¡tula, gÃ©neros, plataformas, descripciÃ³n, fecha de lanzamiento). Las 36 carÃ¡tulas se cachean ademÃ¡s en `covers-v1`; las capturas quedan fuera (solo online).
+- **Sello permanente discreto** Â«Actualizado: fecha/horaÂ» en cabecera + banner destacado no bloqueante cuando la instantÃ¡nea supera 7 dÃ­as.
+- **Modo degradado Ãºnico** (sin conexiÃ³n o fallo del servicio): tablÃ³n servido desde la instantÃ¡nea con banda fina no bloqueante indicando el motivo (Â«Sin conexiÃ³nÂ» / Â«No se pudo contactar con el servicioÂ») + Reintentar. **Sin cachÃ©**: estado vacÃ­o explicativo (Â«Novedades necesita conexiÃ³n la primera vezâ€¦Â») con Reintentar.
+- **Layout**: tira de meses con scroll horizontal + baldas de tarjetas con badge de fecha; placas de secciÃ³n despliegan su lista (portadas, filtro por gÃ©nero).
+- **Ficha de detalle externa** desde Novedades con fecha/interÃ©s y botÃ³n **Â«âž• Quiero jugarloÂ»**: crea la entrada local como Quiero jugar conservando descripciÃ³n y galerÃ­a â€” operaciÃ³n 100 % local.
 
 ## Acceptance criteria
 
-- [ ] Primer refresco con conexión puebla el tablón 12/12/6/6 y guarda instantánea atómica + 36 carátulas.
-- [ ] Sin conexión, el tablón se sirve desde la instantánea con banda de motivo y Reintentar; todo el recorrido funciona offline.
-- [ ] Instantánea >7 días → banner visible sin bloquear; sello «Actualizado» siempre presente.
-- [ ] Refresco automático ocurre solo si >12 h y hay conexión; al volver la red hay reintento silencioso.
-- [ ] «➕ Quiero jugarlo» crea el juego local como Quiero jugar sin necesitar red, y aparece en Biblioteca.
+- [ ] Primer refresco con conexiÃ³n puebla el tablÃ³n 12/12/6/6 y guarda instantÃ¡nea atÃ³mica + 36 carÃ¡tulas.
+- [ ] Sin conexiÃ³n, el tablÃ³n se sirve desde la instantÃ¡nea con banda de motivo y Reintentar; todo el recorrido funciona offline.
+- [ ] InstantÃ¡nea >7 dÃ­as â†’ banner visible sin bloquear; sello Â«ActualizadoÂ» siempre presente.
+- [ ] Refresco automÃ¡tico ocurre solo si >12 h y hay conexiÃ³n; al volver la red hay reintento silencioso.
+- [ ] Â«âž• Quiero jugarloÂ» crea el juego local como Quiero jugar sin necesitar red, y aparece en Biblioteca.
