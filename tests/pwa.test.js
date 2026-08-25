@@ -141,7 +141,7 @@ describe('configuración PWA del build (vite.config)', () => {
   });
 
   it('el base coincide con el slug del repositorio que sirve Pages', async () => {
-    // Pages publica en https://ia-mancebo.github.io/pwa-games-tracker/: un base
+    // Pages publica en https://<user>.github.io/pwa-games-tracker/: un base
     // distinto al slug deja todos los assets en 404.
     const viteConfig = await Promise.resolve(config);
     expect(viteConfig.base).toBe('/pwa-games-tracker/');
