@@ -214,7 +214,8 @@ export async function saveNow({ force = false } = {}) {
     const name = file.name ?? meta.connectedFileName;
     const text = JSON.stringify(doc);
     const hash = await sha256Hex(text);
-    if (!force && meta.dirty) {
+    if (!force && meta.lastSavedFileHash != null) {
+      // Comprobación de hash justo antes de CADA vuelco (spec §5.5), limpio o no.
       let fileText;
       let fileHash;
       try {
@@ -225,9 +226,16 @@ export async function saveNow({ force = false } = {}) {
         setFileError(err);
         return { status: 'error', error: errorMessage(err) };
       }
-      // El archivo cambió fuera Y hay cambios sin volcar → conflicto, sin escribir.
       if (fileHash !== meta.lastSavedFileHash) {
-        return raiseConflict(fileText, fileHash);
+        // Cambió fuera: con cambios locales → conflicto; limpio → manda el archivo.
+        if (meta.dirty) return raiseConflict(fileText, fileHash);
+        try {
+          await importDoc(fileText, { hash: fileHash, fileName: name });
+        } catch (err) {
+          setFileError(err);
+          return { status: 'error', error: errorMessage(err) };
+        }
+        return { status: 'reloaded' };
       }
     }
     try {

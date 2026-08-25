@@ -496,6 +496,7 @@ async function wantToPlay(game) {
       ...(game.description ? { description: game.description } : {}),
       ...((game.genres ?? []).length > 0 ? { genres: game.genres } : {}),
       ...((game.platforms ?? []).length > 0 ? { platforms: game.platforms } : {}),
+      ...((game.screenshots ?? []).length > 0 ? { screenshots: game.screenshots } : {}),
     });
   } finally {
     adding = false;

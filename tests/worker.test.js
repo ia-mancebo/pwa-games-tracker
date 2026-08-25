@@ -37,13 +37,19 @@ const igdbGame = {
     { id: 130, name: 'Nintendo Switch' },
     { id: 6, name: 'PC (Microsoft Windows)' },
   ],
+  screenshots: [
+    { id: 1, image_id: 'sc1' },
+    { id: 2, image_id: 'sc2' },
+  ],
 };
 
 describe('searchQuery', () => {
   it('construye la query apicalypse completa', () => {
     const query = searchQuery('celeste');
     expect(query).toContain('search "celeste";');
-    expect(query).toContain('fields name,first_release_date,genres.name,platforms.name,cover.image_id,summary;');
+    expect(query).toContain(
+      'fields name,first_release_date,genres.name,platforms.name,cover.image_id,summary,screenshots.image_id;',
+    );
     expect(query).toContain('where version_parent = null;');
     expect(query).toContain('limit 12;');
   });
@@ -121,6 +127,10 @@ describe('toGame', () => {
         { id: 130, name: 'Nintendo Switch' },
         { id: 6, name: 'PC (Microsoft Windows)' },
       ],
+      screenshots: [
+        'https://images.igdb.com/igdb/image/upload/t_screenshot_big/sc1.jpg',
+        'https://images.igdb.com/igdb/image/upload/t_screenshot_big/sc2.jpg',
+      ],
     });
   });
 
@@ -139,6 +149,19 @@ describe('toGame', () => {
     expect(game.description).toBe('');
     expect(game.genres).toEqual([]);
     expect(game.platforms).toEqual([]);
+    expect(game.screenshots).toEqual([]);
+  });
+
+  it('screenshots: máximo 5 URLs y vacío si no vienen', () => {
+    const many = mapOrThrow({
+      id: 2,
+      name: 'X',
+      screenshots: Array.from({ length: 8 }, (_, i) => ({ image_id: `sc${i}` })),
+    });
+    expect(many.screenshots).toHaveLength(5);
+    expect(many.screenshots[0]).toBe('https://images.igdb.com/igdb/image/upload/t_screenshot_big/sc0.jpg');
+    const none = mapOrThrow({ id: 3, name: 'Y' });
+    expect(none.screenshots).toEqual([]);
   });
 
   it('trunca descripciones largas a ~600 caracteres con elipsis', () => {

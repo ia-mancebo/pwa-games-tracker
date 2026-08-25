@@ -120,18 +120,23 @@ export async function putMeta(meta, { strict = false } = {}) {
 }
 
 /**
- * Escritura atómica de doc+meta en UNA transacción (import: o queda todo o nada).
+ * Escritura atómica de doc+meta en UNA transacción: o queda todo o nada.
+ * `strict` (import, vuelco verificado) pide durabilidad estricta; el uso
+ * normal muta en modo relaxed (spec §5.1).
  * @param {import('../domain/schema.js').Doc} doc
  * @param {Meta} meta
+ * @param {{ strict?: boolean }} [options]
  * @returns {Promise<void>}
  */
-export async function putStateAndMeta(doc, meta) {
+export async function putStateAndMeta(doc, meta, { strict = true } = {}) {
   const db = await openDb();
   try {
-    const tx = db.transaction(['state', 'meta'], 'readwrite', { durability: 'strict' });
+    const tx = db.transaction(['state', 'meta'], 'readwrite', {
+      durability: strict ? 'strict' : 'relaxed',
+    });
     tx.objectStore('state').put(doc, STATE_KEY);
     tx.objectStore('meta').put(meta, META_KEY);
-    tx.commit();
+    if (strict) tx.commit();
     await done(tx);
   } finally {
     db.close();

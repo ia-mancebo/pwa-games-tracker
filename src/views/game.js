@@ -20,6 +20,7 @@ import {
   updatePlay,
 } from '../data/library.js';
 import { coverHtml } from '../ui/cover.js';
+import { statusPillHtml } from '../ui/pill.js';
 
 /**
  * Estado efímero de edición de la Ficha (qué formulario está abierto, qué
@@ -377,7 +378,7 @@ function heroHtml(game) {
   return html`<div class="d-hero">
     <span class="d-cover">${raw(coverHtml(game))}</span>
     <div class="d-head">
-      <span class="pill st-${status}">${STATUS_LABELS[status]}</span>
+      ${raw(statusPillHtml(status))}
       ${raw(titleHtml(game))}
       <div class="d-stars" role="group" aria-label="Valoración de la jugada más reciente">
         ${raw(
@@ -543,7 +544,7 @@ function playCardHtml(game, play) {
       );
   return html`<article class="play-card" data-play-card="${play.id}">
     <header class="p-head">
-      <span class="pill st-${play.status}">${STATUS_LABELS[play.status]}</span>
+      ${raw(statusPillHtml(play.status))}
       <span class="p-stars" role="group" aria-label="Valoración de esta jugada"
         >${raw(
           starPickerHtml({

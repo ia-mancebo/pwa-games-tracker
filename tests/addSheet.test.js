@@ -272,7 +272,7 @@ describe('aviso de duplicados (spec §4.5)', () => {
     expect(currentDoc().games.map((g) => g.title)).toContain('halo ce');
   });
 
-  it('reabrir con el mismo título vuelve a avisar; «Abrir ficha existente» cierra y abre el panel del Estado del juego', async () => {
+  it('reabrir con el mismo título vuelve a avisar; «Abrir ficha existente» abre la Ficha', async () => {
     await seed([gameJson('g1', 'Halo CE', { status: 'finished' })]);
     const root = mount();
     createApp(root);
@@ -287,9 +287,9 @@ describe('aviso de duplicados (spec §4.5)', () => {
 
     btn(qs('[data-dup-open]', sheet)).click();
     expect(qs('.add-sheet')).toBeNull();
-    expect(store.get().library.view).toBe('panel');
-    expect(store.get().library.panelStatus).toBe('finished');
-    expect(qs('.b-title', root)?.textContent).toBe('Halo CE');
+    expect(store.get().library.gameId).toBe('g1');
+    expect(store.get().tab).toBe('biblioteca');
+    expect(qs('.play-card', root)).toBeTruthy();
     expect(currentDoc().games).toHaveLength(1);
   });
 

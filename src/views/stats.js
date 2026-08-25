@@ -9,6 +9,7 @@ import { STATUS_LABELS } from '../domain/schema.js';
 import { computeStats, filterOptions } from '../domain/stats.js';
 import { formatAvg } from '../lib/format.js';
 import { coverHtml, starsHtml } from '../ui/cover.js';
+import { chipRowHtml } from '../ui/chips.js';
 import { openGame } from './game.js';
 
 /** Filas visibles por distribución (spec §8.7). */
@@ -20,26 +21,6 @@ const DIMENSIONS = [
   { key: 'genre', label: 'Género' },
   { key: 'tag', label: 'Etiqueta propia' },
 ];
-
-/**
- * Fila de chips de una dimensión con «Todas» al frente (valor null).
- * @param {{ key: 'platform'|'genre'|'tag', label: string }} dim
- * @param {string[]} values
- * @param {string|null} active
- * @returns {string}
- */
-function chipRowHtml(dim, values, active) {
-  return html`<div class="chip-row" role="group" aria-label="${dim.label}" data-dim="${dim.key}">
-    <button type="button" class="chip${active == null ? ' on' : ''}" data-f-${dim.key}="">Todas</button>
-    ${values.map((v) =>
-      raw(
-        html`<button type="button" class="chip${active === v ? ' on' : ''}" data-f-${dim.key}="${v}">
-          ${v}
-        </button>`,
-      ),
-    )}
-  </div>`;
-}
 
 /**
  * Barras horizontales del prototipo variante B: ancho relativo al máximo.
@@ -227,15 +208,18 @@ export function render(container, store) {
       <div class="filters">
         ${DIMENSIONS.map((dim) =>
           raw(
-            chipRowHtml(
-              dim,
-              dim.key === 'platform'
-                ? options.platforms
-                : dim.key === 'genre'
-                  ? options.genres
-                  : options.tags,
-              filters[dim.key],
-            ),
+            chipRowHtml({
+              dim: dim.key,
+              label: dim.label,
+              values:
+                dim.key === 'platform'
+                  ? options.platforms
+                  : dim.key === 'genre'
+                    ? options.genres
+                    : options.tags,
+              active: filters[dim.key],
+              allLabel: 'Todas',
+            }),
           ),
         )}
       </div>

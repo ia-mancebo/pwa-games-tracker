@@ -33,6 +33,7 @@ const SEARCH_RESULT = {
     { id: 6, name: 'PC (Microsoft Windows)' },
     { id: 130, name: 'Nintendo Switch' },
   ],
+  screenshots: ['https://images.igdb.com/igdb/image/upload/t_screenshot_big/sc1.jpg'],
 };
 
 /**
@@ -233,6 +234,7 @@ describe('camino online activo (servicio configurado + conexión)', () => {
     expect(game.description).toBe(SEARCH_RESULT.description);
     expect(game.genres).toEqual(SEARCH_RESULT.genres);
     expect(game.platforms).toEqual(SEARCH_RESULT.platforms);
+    expect(game.screenshots).toEqual(SEARCH_RESULT.screenshots);
     expect(game.plays[0].status).toBe('backlog');
     expect(game.plays[0].addedAt).toBe(todayFrom(new Date()));
     expect(qs('.add-sheet')).toBeNull();

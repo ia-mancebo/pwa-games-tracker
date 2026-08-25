@@ -13,6 +13,8 @@ import { chipsForDoc } from '../domain/selectors.js';
 import { debounce } from '../lib/debounce.js';
 import { formatAvg } from '../lib/format.js';
 import { coverHtml, starsHtml } from '../ui/cover.js';
+import { statusPillHtml } from '../ui/pill.js';
+import { chipRowHtml } from '../ui/chips.js';
 import { openAddSheet } from './addSheet.js';
 import { openGame, renderGame } from './game.js';
 
@@ -162,25 +164,6 @@ function searchBoxHtml(query) {
 }
 
 /**
- * Fila de chips de una dimensión. `data-f-<dim>` lleva el valor del chip.
- * @param {'genre'|'platform'|'tag'} dim
- * @param {string[]} values
- * @param {string|null} active
- * @returns {string}
- */
-function chipRowHtml(dim, values, active) {
-  return html`<div class="chip-row" role="group" aria-label="${DIM_LABELS[dim]}" data-dim="${dim}">
-    ${values.map((v) =>
-      raw(
-        html`<button type="button" class="chip${active === v ? ' on' : ''}" data-f-${dim}="${v}">
-          ${v}
-        </button>`
-      )
-    )}
-  </div>`;
-}
-
-/**
  * Tres filas de chips bajo el buscador; una fila no se pinta si está vacía
  * (la de etiquetas desaparece sin etiquetas propias).
  * @param {ReturnType<typeof chipsForDoc>} chips
@@ -189,9 +172,20 @@ function chipRowHtml(dim, values, active) {
  */
 function filtersHtml(chips, f) {
   return html`<div class="filters">
-    ${chips.genres.length > 0 ? raw(chipRowHtml('genre', chips.genres, f.genre)) : ''}${
-      chips.platforms.length > 0 ? raw(chipRowHtml('platform', chips.platforms, f.platform)) : ''
-    }${chips.tags.length > 0 ? raw(chipRowHtml('tag', chips.tags, f.tag)) : ''}
+    ${chips.genres.length > 0
+      ? raw(chipRowHtml({ dim: 'genre', label: DIM_LABELS.genre, values: chips.genres, active: f.genre }))
+      : ''}${chips.platforms.length > 0
+      ? raw(
+          chipRowHtml({
+            dim: 'platform',
+            label: DIM_LABELS.platform,
+            values: chips.platforms,
+            active: f.platform,
+          }),
+        )
+      : ''}${chips.tags.length > 0
+      ? raw(chipRowHtml({ dim: 'tag', label: DIM_LABELS.tag, values: chips.tags, active: f.tag }))
+      : ''}
   </div>`;
 }
 
@@ -260,7 +254,7 @@ function panelRowHtml(game, status) {
     </span>
     <span class="b-cell b-col-pf mono">${platforms}</span>
     <span class="b-cell b-col-stars">${raw(starsHtml(gameRating(game)))}</span>
-    <span class="b-cell"><span class="pill st-${status}">${STATUS_LABELS[status]}</span></span>
+    <span class="b-cell">${raw(statusPillHtml(status))}</span>
   </div>`;
 }
 

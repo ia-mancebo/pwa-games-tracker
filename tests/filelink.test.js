@@ -264,6 +264,19 @@ describe('saveNow (vuelco verificado, §5.4)', () => {
     expect(store.get().doc?.games.some((g) => g.title === 'Extra')).toBe(true);
   });
 
+  it('archivo cambió fuera + estado limpio → recarga del archivo, sin sobrescribir', async () => {
+    const handle = makeHandle(FILE_V2_TEXT);
+    await connectFile(FILE_V1_TEXT, handle);
+
+    const res = await saveNow();
+
+    expect(res.status).toBe('reloaded');
+    expect(handle.writes).toBe(0);
+    expect(store.get().doc?.games[0].title).toBe('Celeste');
+    expect(store.get().meta.dirty).toBe(false);
+    expect(store.get().meta.lastSavedFileHash).toBe(await sha256Hex(FILE_V2_TEXT));
+  });
+
   it('sin enlace activo es un no-op (skipped)', async () => {
     await connectFile(FILE_V1_TEXT, makeHandle(FILE_V1_TEXT));
     await addGame({ title: 'Hades II', today: TODAY });

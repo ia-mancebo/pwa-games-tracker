@@ -176,6 +176,20 @@ describe('mutaciones de dominio', () => {
     expect(doc.games[0].plays[0].status).toBe('finished');
   });
 
+  it('setGameStatus sugiere fechas: startedAt al ir a Jugando, finishedAt a Terminado', async () => {
+    await newLibrary(NOW);
+    let doc = await addGame({ title: 'Outer Wilds', today: '2026-01-01' });
+    const gameId = doc.games[0].id;
+    doc = await setGameStatus(gameId, 'playing', '2026-02-01');
+    expect(doc.games[0].plays[0].startedAt).toBe('2026-02-01');
+    expect(doc.games[0].plays[0].finishedAt).toBeUndefined();
+    doc = await setGameStatus(gameId, 'finished', '2026-03-15');
+    expect(doc.games[0].plays[0].finishedAt).toBe('2026-03-15');
+    // No pisa fechas ya presentes
+    doc = await setGameStatus(gameId, 'playing', '2026-04-01');
+    expect(doc.games[0].plays[0].startedAt).toBe('2026-02-01');
+  });
+
   it('deletePlay respeta el mínimo de una jugada', async () => {
     await newLibrary(NOW);
     const doc = await addGame({ title: 'Solo', today: TODAY });

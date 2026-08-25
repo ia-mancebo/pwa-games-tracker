@@ -31,6 +31,7 @@ export class IgdbError extends Error {
  *   description: string,
  *   genres: {id: number, name: string}[],
  *   platforms: {id: number, name: string}[],
+ *   screenshots?: string[],
  * }} IgdbGame
  */
 

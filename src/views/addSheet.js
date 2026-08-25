@@ -12,6 +12,8 @@ import { STATUSES, STATUS_LABELS, todayFrom } from '../domain/schema.js';
 import { findDuplicates, gameStatus } from '../domain/selectors.js';
 import { addGame } from '../data/library.js';
 import { store } from '../app.js';
+import { openGame } from './game.js';
+import { statusPillHtml } from '../ui/pill.js';
 import { coverHtml } from '../ui/cover.js';
 import { IGDB_SERVICE_ERROR, isConfigured, searchGames, setWorkerUrl } from '../services/igdb.js';
 
@@ -257,7 +259,7 @@ export function duplicateWarningHtml(duplicates) {
           raw(
             html`<li>
               <span class="dup-title">${game.title}</span>
-              <span class="pill st-${gameStatus(game)}">${STATUS_LABELS[gameStatus(game)]}</span>
+              ${raw(statusPillHtml(gameStatus(game)))}
             </li>`
           )
         )}
@@ -443,6 +445,7 @@ export function openAddSheet(opts = {}) {
       description: pending.description || undefined,
       genres: (pending.genres ?? []).length > 0 ? pending.genres : undefined,
       platforms: (pending.platforms ?? []).length > 0 ? pending.platforms : undefined,
+      screenshots: (pending.screenshots ?? []).length > 0 ? pending.screenshots : undefined,
       status,
       tagsRaw,
     };
@@ -534,13 +537,9 @@ export function openAddSheet(opts = {}) {
     }
     const dupOpen = e.target.closest('[data-dup-open]');
     if (dupOpen && state.duplicates && state.duplicates.length > 0) {
-      // La Ficha llega en el ticket 17: por ahora se abre el Panel del Estado
-      // del juego del primer duplicado.
-      const status = gameStatus(state.duplicates[0]);
       closeAddSheet();
-      store.set({
-        library: { ...store.get().library, view: 'panel', panelStatus: status },
-      });
+      openGame(store, state.duplicates[0].id);
+      store.set({ tab: 'biblioteca' });
       return;
     }
     if (e.target.closest('[data-result]')) {

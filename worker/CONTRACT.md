@@ -23,6 +23,7 @@ Game = {
   description: string         // summary truncado a ~600 caracteres (acabado en «…» si se cortó); "" si no hay
   genres: Genre[]             // puede ser []
   platforms: Genre[]          // puede ser []
+  screenshots: string[]       // máximo 5 URLs t_screenshot_big; galería solo online, puede ser []
 }
 ```
 

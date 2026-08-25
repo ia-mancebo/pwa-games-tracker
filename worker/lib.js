@@ -23,6 +23,7 @@
  * @property {string} description       Summary truncado a ~600 caracteres.
  * @property {Genre[]} genres
  * @property {Genre[]} platforms
+ * @property {string[]} screenshots     Máximo 5 URLs (galería solo online).
  */
 
 /**
@@ -38,16 +39,20 @@
  * @property {string | null} [summary]
  * @property {Genre[] | null} [genres]
  * @property {Genre[] | null} [platforms]
+ * @property {{ image_id?: string }[] | null} [screenshots]
  * @property {number} [date]                Solo filas de release_dates.
  * @property {IgdbGameLike | null} [game]   Solo filas de release_dates.
  */
 
 const COVER_BASE_URL = 'https://images.igdb.com/igdb/image/upload/t_cover_big';
+const SCREENSHOT_BASE_URL = 'https://images.igdb.com/igdb/image/upload/t_screenshot_big';
 const DESCRIPTION_LIMIT = 600;
+const SCREENSHOTS_LIMIT = 5;
 
-const GAME_FIELDS = 'name,first_release_date,genres.name,platforms.name,cover.image_id,summary';
+const GAME_FIELDS =
+  'name,first_release_date,genres.name,platforms.name,cover.image_id,summary,screenshots.image_id';
 const RELEASE_DATE_FIELDS =
-  'game.name,game.first_release_date,game.genres.name,game.platforms.name,game.cover.image_id,game.summary,date';
+  'game.name,game.first_release_date,game.genres.name,game.platforms.name,game.cover.image_id,game.summary,game.screenshots.image_id,date';
 
 const SEARCH_LIMIT = 12;
 // release_dates devuelve una fila por plataforma; 40 filas crudas bastan para
@@ -204,6 +209,18 @@ function toNamedList(list) {
 }
 
 /**
+ * @param {{ image_id?: string }[] | null | undefined} list
+ * @returns {string[]}
+ */
+function toScreenshotUrls(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((shot) => shot && shot.image_id != null)
+    .slice(0, SCREENSHOTS_LIMIT)
+    .map((shot) => `${SCREENSHOT_BASE_URL}/${shot.image_id}.jpg`);
+}
+
+/**
  * Mapea un payload de IGDB al Game del contrato. Acepta tanto la fila de
  * `games` como la fila anidada de `release_dates`, en cuyo caso la fecha
  * preferida es la del propio lanzamiento (`row.date`).
@@ -225,6 +242,7 @@ export function toGame(row) {
     description: truncateDescription(source.summary),
     genres: toNamedList(source.genres),
     platforms: toNamedList(source.platforms),
+    screenshots: toScreenshotUrls(source.screenshots),
   };
 }
 

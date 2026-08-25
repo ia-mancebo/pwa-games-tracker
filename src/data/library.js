@@ -7,7 +7,7 @@
 import { createDoc, createGame, createPlay } from '../domain/schema.js';
 import { validateDoc } from '../domain/validate.js';
 import { latestPlay } from '../domain/selectors.js';
-import { getState, getMeta, putState, putMeta, putStateAndMeta } from './db.js';
+import { getState, getMeta, putMeta, putStateAndMeta } from './db.js';
 import { store } from '../app.js';
 
 /** Error de biblioteca con código para la UI. */
@@ -113,8 +113,7 @@ export function mutate(fn, { now }) {
     if (!res.ok) throw new LibraryError(res.reason, res.code);
     const doc = res.doc;
     const meta = { ...store.get().meta, dirty: true, updatedAt: doc.updatedAt };
-    await putState(doc);
-    await putMeta(meta);
+    await putStateAndMeta(doc, meta, { strict: false });
     store.set({ doc, meta });
     return doc;
   };
@@ -216,16 +215,18 @@ export function deletePlay(gameId, playId) {
 
 /**
  * Cambia el Estado del juego: opera sobre la jugada más reciente; nunca crea
- * ni borra jugadas (spec §8.5).
+ * ni borra jugadas (spec §8.5). Al pasar a Jugando sugiere `startedAt` y al
+ * pasar a Terminado sugiere `finishedAt` (spec §4.3), solo si están vacíos.
  * @param {string} gameId
  * @param {import('../domain/schema.js').Status} status
  * @param {string} today
  */
 export function setGameStatus(gameId, status, today) {
   return mutate((doc) => {
-    const game = findGame(doc, gameId);
-    latestPlay(game).status = status;
-    void today;
+    const play = latestPlay(findGame(doc, gameId));
+    play.status = status;
+    if (status === 'playing' && play.startedAt == null) play.startedAt = today;
+    if (status === 'finished' && play.finishedAt == null) play.finishedAt = today;
   }, { now: new Date() });
 }
 
