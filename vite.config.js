@@ -1,5 +1,3 @@
-import { readFile, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
@@ -8,32 +6,14 @@ import { VitePWA } from 'vite-plugin-pwa';
 // derivan los assets, el scope y el start_url del manifest.
 const BASE = '/pwa-games-tracker/';
 
-/**
- * El manifest se emite con los src absolutos de los iconos ('/icons/…') tal
- * cual: el plugin PWA no los reescribe con `base`, así que servidos bajo un
- * subpath apuntarían a la raíz del dominio y darían 404 (instalabilidad rota,
- * spec §10). Reescribe el fichero ya escrito en disco; generateSW corre más
- * tarde (closeBundle), por lo que el precache y sus revisiones MD5 quedan
- * calculados sobre el contenido ya corregido.
- * @returns {import('vite').Plugin}
- */
-function manifestIconsUnderBase() {
-  /** @type {string} */
-  let outDir = 'dist';
-  return {
-    name: 'manifest-icons-under-base',
-    apply: 'build',
-    configResolved(config) {
-      outDir = config.build.outDir;
-    },
-    async writeBundle() {
-      const file = resolve(outDir, 'manifest.webmanifest');
-      const source = await readFile(file, 'utf8');
-      if (!source.includes('"/icons/')) return;
-      await writeFile(file, source.replaceAll('"/icons/', `"${BASE}icons/`));
-    },
-  };
-}
+// Los src de los iconos del manifest llevan el base incluido: el plugin PWA no
+// reescribe URLs del manifest con `base` y servido bajo un subpath apuntarían
+// a la raíz del dominio dando 404 (instalabilidad rota, spec §10). Además NO
+// debe reescribirse el manifest a posteriori sobre disco: vite-plugin-pwa
+// añade al precache una entrada propia con el MD5 del JSON que emite, y si el
+// fichero cambia después, generateSW (closeBundle) globbea otra revisión
+// distinta para la misma URL → add-to-cache-list-conflicting-entries y el
+// service worker no llega a instalarse.
 
 /**
  * Opciones PWA (ticket 25, spec §10–11). Exportadas para poder verificarlas
@@ -56,10 +36,20 @@ export const pwaOptions = {
     theme_color: '#151210',
     background_color: '#151210',
     icons: [
-      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
-      { src: '/icons/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
-      { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+      { src: `${BASE}icons/icon-192.png`, sizes: '192x192', type: 'image/png' },
+      { src: `${BASE}icons/icon-512.png`, sizes: '512x512', type: 'image/png' },
+      {
+        src: `${BASE}icons/icon-maskable-192.png`,
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
+      {
+        src: `${BASE}icons/icon-maskable-512.png`,
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
     ],
   },
   workbox: {
@@ -92,5 +82,5 @@ export default defineConfig({
     target: 'es2022',
     sourcemap: false,
   },
-  plugins: [[...VitePWA(pwaOptions), manifestIconsUnderBase()]],
+  plugins: [...VitePWA(pwaOptions)],
 });

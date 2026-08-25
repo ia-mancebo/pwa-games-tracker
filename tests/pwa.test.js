@@ -66,7 +66,7 @@ describe('configuración PWA del build (vite.config)', () => {
     expect(pwaOptions.includeAssets).toEqual(['favicon-64.png', 'robots.txt']);
   });
 
-  it('el manifest cumple §10: identidad, colores e iconos maskable separados', () => {
+  it('el manifest cumple §10: identidad, colores e iconos maskable separados', async () => {
     const manifest = /** @type {Record<string, any>} */ (pwaOptions.manifest ?? {});
     expect(manifest.name).toBe('Game Tracker');
     expect(manifest.short_name).toBe('GameTracker');
@@ -81,8 +81,11 @@ describe('configuración PWA del build (vite.config)', () => {
     expect(icons).toHaveLength(4);
     const purposes = icons.map((icon) => icon.purpose ?? 'any');
     expect(purposes).toEqual(['any', 'any', 'maskable', 'maskable']);
+    // Los src llevan el base incluido (el plugin no reescribe URLs del
+    // manifest); derivarlo de config evita desincronizarlo si cambia el slug.
+    const base = /** @type {string} */ ((await Promise.resolve(config)).base);
     for (const icon of icons) {
-      expect(icon.src.startsWith('/icons/')).toBe(true);
+      expect(icon.src.startsWith(`${base}icons/`)).toBe(true);
       expect(icon.type).toBe('image/png');
     }
     expect(icons.map((icon) => icon.sizes)).toEqual([
@@ -91,8 +94,8 @@ describe('configuración PWA del build (vite.config)', () => {
       '192x192',
       '512x512',
     ]);
-    expect(icons[2]?.src).toBe('/icons/icon-maskable-192.png');
-    expect(icons[3]?.src).toBe('/icons/icon-maskable-512.png');
+    expect(icons[2]?.src).toBe(`${base}icons/icon-maskable-192.png`);
+    expect(icons[3]?.src).toBe(`${base}icons/icon-maskable-512.png`);
   });
 
   it('workbox precachea woff2 con límite 2 MiB, navigateFallback y cleanupOutdatedCaches', () => {
@@ -131,7 +134,10 @@ describe('configuración PWA del build (vite.config)', () => {
     const viteConfig = await Promise.resolve(config);
     expect(viteConfig.build?.target).toBe('es2022');
     expect(Array.isArray(viteConfig.plugins)).toBe(true);
-    expect(viteConfig.plugins).toHaveLength(1);
+    const names = (viteConfig.plugins ?? [])
+      .flat()
+      .map((plugin) => /** @type {any} */ (plugin)?.name);
+    expect(names).toContain('vite-plugin-pwa');
   });
 
   it('el base coincide con el slug del repositorio que sirve Pages', async () => {
