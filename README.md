@@ -29,11 +29,14 @@ IGDB exige un token de OAuth de Twitch, y Twitch exige una aplicación registrad
 ## Paso 2 · Desplegar el proxy en Cloudflare (~30 min)
 
 1. Entra en <https://dash.cloudflare.com> → **Workers & Pages** → **Create application** → **Create Worker**, ponle nombre (p. ej. `game-tracker-igdb`) y despliega el código de ejemplo.
-2. **Edit code**: borra todo y pega el contenido íntegro de [`worker/worker.js`](./worker/worker.js) → **Deploy**.
-3. **Settings** → **Variables and Secrets**: añade dos variables tipo **Secret**:
+2. **Edit code**: borra todo y pega el contenido íntegro de [`worker/worker.js`](./worker/worker.js). Después añade un archivo nuevo junto a él (panel de archivos del editor, botón **+**), nómbralo exactamente `lib.js` y pega ahí el contenido íntegro de [`worker/lib.js`](./worker/lib.js). Si tu editor no permite archivos extra: pega primero TODO `lib.js` y debajo `worker.js` SIN su bloque de `import` (queda autocontenido).
+3. **Antes de pulsar Deploy**: al principio de `worker.js` sustituye el placeholder de `ALLOWED_ORIGIN` por tu origen real: `https://<tu-usuario>.github.io` — sin ruta ni barra final. Desplegar con el placeholder bloquea todas las peticiones desde tu app.
+4. Ahora sí → **Deploy**. Después: **Settings** → **Variables and Secrets** (el equivalente del `.env` en Cloudflare; no existe tal archivo en el dashboard). Añade DOS variables de tipo **Secret**, con estos nombres EXACTOS:
    - `CLIENT_ID` → el Client ID de Twitch.
    - `CLIENT_SECRET` → el Client Secret de Twitch.
-4. Apunta tu URL: `https://<nombre-worker>.<subdominio>.workers.dev`.
+
+   Detalles y errores típicos: [`worker/README.md`, paso 3](./worker/README.md#3--configurar-los-secretos-5-min).
+5. Apunta tu URL: `https://<nombre-worker>.<subdominio>.workers.dev`.
 
 Verifica desde un terminal (`curl.exe` viene con Windows):
 
@@ -44,6 +47,8 @@ curl.exe https://<nombre-worker>.<subdominio>.workers.dev/api/health
 curl.exe "https://<nombre-worker>.<subdominio>.workers.dev/api/search?q=zelda"
 # {"results":[{"igdbId":…,"title":"The Legend of Zelda",…}]}
 ```
+
+Ojo: curl ignora CORS, así que `/api/health` responde bien aunque el origen esté mal. La prueba definitiva es buscar desde tu app desplegada; si el navegador bloquea, revisa el paso 3 (`ALLOWED_ORIGIN`).
 
 Si `/api/search` responde, tienes búsqueda y Novedades. La guía completa con solución de problemas está en [`worker/README.md`](./worker/README.md).
 

@@ -18,7 +18,7 @@ import {
 // Origen autorizado a llamar al proxy. Sustituye el placeholder por tu URL real
 // (la de GitHub Pages, p. ej. 'https://mi-usuario.github.io') ANTES del Deploy:
 // si despliegas con el placeholder, el navegador bloqueará todas las peticiones.
-const ALLOWED_ORIGIN = 'https://ia-mancebo.github.io';
+const ALLOWED_ORIGIN = 'https://mi-usuario.github.io';
 
 const TWITCH_TOKEN_URL = 'https://id.twitch.tv/oauth2/token';
 const IGDB_API_BASE = 'https://api.igdb.com/v4';
