@@ -43,7 +43,7 @@ function bannerHtml() {
 export function renderFilebar(container, _store) {
   const { file, meta } = store.get();
   const ro = readOnly();
-  const banner = ro ? raw(bannerHtml()) : '';
+  const banner = ro ? bannerHtml() : '';
   if (!hasFsa()) {
     // Sin File System Access no hay .json enlazado, pero el espejo IndexedDB
     // guarda cada cambio al momento (library.mutate): la pastilla informa,

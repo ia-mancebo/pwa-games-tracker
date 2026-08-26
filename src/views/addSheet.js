@@ -7,7 +7,7 @@
  * camino único {@link submitManual}, con el aviso de duplicados de la spec
  * §4.5 (abrir ficha existente o crear otro).
  */
-import { html, qs, qsa, raw } from '../lib/dom.js';
+import { html, qs, qsa } from '../lib/dom.js';
 import { debounce } from '../lib/debounce.js';
 import { STATUSES, STATUS_LABELS, todayFrom } from '../domain/schema.js';
 import { findDuplicates, gameStatus } from '../domain/selectors.js';
@@ -16,7 +16,7 @@ import { store } from '../app.js';
 import { openGame } from './game.js';
 import { statusPillHtml } from '../ui/pill.js';
 import { coverHtml } from '../ui/cover.js';
-import { IGDB_SERVICE_ERROR, isConfigured, searchGames } from '../services/igdb.js';
+import { IGDB_SERVICE_ERROR, igdb } from '../services/igdb.js';
 
 /** Motivo del camino online sin servicio configurado. */
 export const ONLINE_UNAVAILABLE_REASON =
@@ -164,10 +164,10 @@ function resultItemHtml(result, index) {
   const sub = [year, platforms].filter(Boolean).join(' · ');
   return html`<li>
     <button type="button" class="add-result" data-result="${index}">
-      ${raw(coverHtml(fakeGame))}
+      ${coverHtml(fakeGame)}
       <span class="r-meta"
         ><span class="r-title">${result.title}</span>${sub
-          ? raw(html`<span class="r-sub">${sub}</span>`)
+          ? html`<span class="r-sub">${sub}</span>`
           : ''}</span
       >
     </button>
@@ -191,15 +191,15 @@ function previewHtml(result) {
   const platforms = (result.platforms ?? []).map((p) => p.name).join(', ');
   const sub = [year, platforms].filter(Boolean).join(' · ');
   const genres = (result.genres ?? []).map((g) =>
-    raw(html`<span class="chip static">${g.name}</span>`)
+    html`<span class="chip static">${g.name}</span>`
   );
   return html`<div class="add-preview">
-    ${raw(coverHtml(fakeGame))}
+    ${coverHtml(fakeGame)}
     <div class="add-preview-info">
       <h3 class="add-preview-title">${result.title}</h3>
-      ${sub ? raw(html`<p class="r-sub">${sub}</p>`) : ''}
-      ${genres.length > 0 ? raw(html`<div class="add-preview-genres">${genres}</div>`) : ''}
-      ${result.description ? raw(html`<p class="add-preview-desc">${result.description}</p>`) : ''}
+      ${sub ? html`<p class="r-sub">${sub}</p>` : ''}
+      ${genres.length > 0 ? html`<div class="add-preview-genres">${genres}</div>` : ''}
+      ${result.description ? html`<p class="add-preview-desc">${result.description}</p>` : ''}
     </div>
     <div class="add-preview-actions">
       <button type="button" class="chip" data-preview-back>← Volver a resultados</button>
@@ -228,7 +228,7 @@ function onlineResultsHtml(online, pending) {
     </p>`;
   }
   return html`<ul class="add-results-list">
-    ${online.results.map((r, i) => raw(resultItemHtml(r, i)))}
+    ${online.results.map((r, i) => resultItemHtml(r, i))}
   </ul>`;
 }
 
@@ -270,12 +270,10 @@ export function duplicateWarningHtml(duplicates) {
       ${duplicates
         .slice(0, MAX_DUP_LIST)
         .map((game) =>
-          raw(
-            html`<li>
+          html`<li>
               <span class="dup-title">${game.title}</span>
-              ${raw(statusPillHtml(gameStatus(game)))}
+              ${statusPillHtml(gameStatus(game))}
             </li>`
-          )
         )}
     </ul>
     <div class="dup-actions">
@@ -334,18 +332,18 @@ function sheetHtml(state, { onlineReady, configured }) {
             autocomplete="off"
           />
           <div class="add-online-results" data-online-results>
-            ${raw(onlineResultsHtml(state.online, state.pending))}
+            ${onlineResultsHtml(state.online, state.pending)}
           </div>
-          <div class="add-feedback" data-add-feedback>${raw(feedbackHtml(state))}</div>
+          <div class="add-feedback" data-add-feedback>${feedbackHtml(state)}</div>
         </div>`
-    : html`<div data-online-block>${raw(disabledOnlineHtml(configured))}</div>`;
+    : html`<div data-online-block>${disabledOnlineHtml(configured)}</div>`;
   return html`<div class="add-backdrop" data-close-add></div>
     <section class="add-sheet" role="dialog" aria-modal="true" aria-labelledby="add-sheet-title">
       <header class="add-head">
         <h2 id="add-sheet-title">Añadir juego</h2>
         <button type="button" class="chip" data-close-add aria-label="Cerrar">✕</button>
       </header>
-      ${raw(onlineBlock)}
+      ${onlineBlock}
       <form class="add-form" data-manual-pane${!onlineReady || state.path === 'manual' ? '' : ' hidden'}>
         <label class="field">
           <span class="lbl">Título</span>
@@ -353,13 +351,13 @@ function sheetHtml(state, { onlineReady, configured }) {
         </label>
         <fieldset class="field">
           <legend class="lbl">Estado inicial</legend>
-          <div class="status-chips">${STATUSES.map((st) => raw(statusChipHtml(st)))}</div>
+          <div class="status-chips">${STATUSES.map((st) => statusChipHtml(st))}</div>
         </fieldset>
         <label class="field">
           <span class="lbl">Etiquetas propias <small>(separadas por comas)</small></span>
           <input type="text" name="tags" placeholder="rol, difícil, prestado…" />
         </label>
-        <div class="add-feedback" data-add-feedback>${raw(feedbackHtml(state))}</div>
+        <div class="add-feedback" data-add-feedback>${feedbackHtml(state)}</div>
         <footer class="add-foot">
           <button type="button" class="chip" data-close-add>Cancelar</button>
           <button type="submit" class="btn-primary" data-save-add>Añadir a la biblioteca</button>
@@ -380,7 +378,7 @@ export function openAddSheet(opts = {}) {
   closeAddSheet();
   const epoch = epochCounter;
   const host = opts.host ?? document.body;
-  const configured = isConfigured();
+  const configured = igdb.isConfigured();
   const onlineReady = configured && globalThis.navigator.onLine;
   /** @type {SheetState} */
   const state = {
@@ -501,7 +499,7 @@ export function openAddSheet(opts = {}) {
     state.online = { status: 'loading', results: [], error: null };
     paintOnline();
     try {
-      const found = await searchGames(query);
+      const found = await igdb.searchGames(query);
       if (!layer || epoch !== epochCounter || mySeq !== seq) return;
       state.online = { status: 'done', results: found.slice(0, MAX_RESULTS), error: null };
     } catch (error) {

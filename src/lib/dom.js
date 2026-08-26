@@ -1,13 +1,21 @@
-const RAW_KEY = '__gt_raw__';
-
 /**
- * Cadena de HTML de confianza, no escapada por `html`.
- * @typedef {{ __gt_raw__: true, value: string }} RawValue
+ * Marcado HTML de confianza.
+ *
+ * En ejecución es una subclase de String: hereda .length/.trim()/.includes()
+ * y se coacciona a primitivo en concatenaciones, plantillas y asignaciones a
+ * innerHTML. `stringify` lo reconoce e inyecta sin escapar; cualquier átomo
+ * simple (string, number) se escapa siempre, venga de donde venga.
+ *
+ * El tipo declarado de html/raw es `string` a propósito: así ningún call site
+ * necesita anotaciones nuevas. La contrapartida (documentada en
+ * docs/adr/0001) es que comparaciones de identidad contra primitivos sobre
+ * una salida de html son siempre falsas; para un primitivo puro, String(x).
  */
+class Markup extends String {}
 
 /**
  * Valor simple interpolable en una plantilla `html`.
- * @typedef {string | number | boolean | null | undefined | RawValue} Atom
+ * @typedef {string | number | boolean | null | undefined} Atom
  */
 
 /**
@@ -17,6 +25,7 @@ const RAW_KEY = '__gt_raw__';
 
 /**
  * Escapa un valor para inserción segura como texto/atributo HTML.
+ * Recibe incluso marcado de confianza: esc() escapa SIEMPRE.
  * @param {unknown} value
  * @returns {string}
  */
@@ -30,32 +39,31 @@ export function esc(value) {
 }
 
 /**
- * Marca una cadena como HTML de confianza: `html` la inyecta sin escapar.
+ * Marca texto ajeno como HTML de confianza: `html` lo inyecta sin escapar.
+ * Reservado para literales genuinos fuera del sistema de plantillas;
+ * los resultados de `html` ya llegan marcados por sí solos.
  * @param {string} value
- * @returns {RawValue}
+ * @returns {string}
  */
 export function raw(value) {
-  return /** @type {RawValue} */ ({ [RAW_KEY]: true, value });
+  return /** @type {string} */ (new Markup(value));
 }
 
 /**
+ * Los valores marcados atraviesan sin escapar; el resto se escapa.
  * @param {Interpolable} value
  * @returns {string}
  */
 function stringify(value) {
   if (value == null || typeof value === 'boolean') return '';
-  if (typeof value === 'object' && !Array.isArray(value)) {
-    const candidate = /** @type {Partial<RawValue>} */ (value);
-    if (candidate.__gt_raw__ === true) return candidate.value ?? '';
-  }
+  if (value instanceof Markup) return /** @type {string} */ (value.valueOf());
   return esc(value);
 }
 
 /**
- * Tagged template que devuelve un STRING con cada valor interpolado auto-escapado.
- * Los arrays se concatenan; null/undefined/boolean se vuelven cadena vacía.
- * Usa {@link raw} para inyectar marcado de confianza; un resultado de `html`
- * anidado cuenta como texto ajeno y debe envolverse con raw() al componer.
+ * Tagged template: cada valor interpolado simple se auto-escapa; arrays se
+ * concatenan; null/undefined/boolean se vuelven cadena vacía. Los resultados
+ * de `html` anidados componen sin escaparse ni envoltura alguna.
  * @param {TemplateStringsArray} strings
  * @param {...Interpolable} values
  * @returns {string}
@@ -69,7 +77,7 @@ export function html(strings, ...values) {
       out += Array.isArray(value) ? value.map(stringify).join('') : stringify(value);
     }
   });
-  return out;
+  return /** @type {string} */ (new Markup(out));
 }
 
 /**

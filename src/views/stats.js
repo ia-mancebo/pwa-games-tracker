@@ -4,7 +4,7 @@
  * KPIs, distribuciones, terminados en el tiempo y Top 5 valorado. Único
  * elemento clicable: cada fila del Top 5 abre la Ficha en Biblioteca.
  */
-import { html, raw } from '../lib/dom.js';
+import { html } from '../lib/dom.js';
 import { STATUS_LABELS } from '../domain/schema.js';
 import { computeStats, filterOptions } from '../domain/stats.js';
 import { formatAvg } from '../lib/format.js';
@@ -30,15 +30,13 @@ const DIMENSIONS = [
 function hbarHtml(rows) {
   const max = Math.max(1, ...rows.map((r) => r.count));
   return html`<div class="hbar">${rows.map((r) =>
-    raw(
-      html`<div class="hb">
+    html`<div class="hb">
         <span title="${r.name}">${r.name}</span>
         <span class="bar"
           ><i style="width:${r.count === 0 ? 0 : Math.max(4, Math.round((r.count / max) * 100))}%"></i
         ></span>
         <span class="n">${r.count}</span>
       </div>`,
-    ),
   )}</div>`;
 }
 
@@ -76,19 +74,15 @@ function topSectionHtml(top) {
     ${
       top.length === 0
         ? '<p class="d-meta">Sin valoraciones todavía.</p>'
-        : raw(
-            html`<ol class="top-list">${top.map((t) =>
-              raw(
-                html`<li>
-                  <button type="button" class="top-row" data-game-id="${t.game.id}">
-                    ${raw(coverHtml(t.game, { mini: true }))}
-                    <span class="t-title">${t.game.title}</span>
-                    ${raw(starsHtml(t.rating))}
-                  </button>
-                </li>`,
-              ),
-            )}</ol>`,
-          )
+        : html`<ol class="top-list">${top.map((t) =>
+              html`<li>
+                <button type="button" class="top-row" data-game-id="${t.game.id}">
+                  ${coverHtml(t.game, { mini: true })}
+                  <span class="t-title">${t.game.title}</span>
+                  ${starsHtml(t.rating)}
+                </button>
+              </li>`,
+            )}</ol>`
     }
   </section>`;
 }
@@ -114,24 +108,24 @@ function bodyHtml(doc, stats) {
   const months = stats.finishedByMonth.map((m) => ({ name: m.label, count: m.count }));
   return html`<div class="kpi-grid">
       ${[
-        raw(kpiHtml('total', stats.total, 'Juegos')),
-        raw(kpiHtml('backlog', stats.counts.backlog, STATUS_LABELS.backlog, 'st-backlog')),
-        raw(kpiHtml('playing', stats.counts.playing, STATUS_LABELS.playing, 'st-playing')),
-        raw(kpiHtml('finished', stats.counts.finished, STATUS_LABELS.finished, 'st-finished')),
-        raw(kpiHtml('abandoned', stats.counts.abandoned, STATUS_LABELS.abandoned, 'st-abandoned')),
-        raw(kpiHtml('avg', formatAvg(stats.avgRating), 'Media ★')),
+        kpiHtml('total', stats.total, 'Juegos'),
+        kpiHtml('backlog', stats.counts.backlog, STATUS_LABELS.backlog, 'st-backlog'),
+        kpiHtml('playing', stats.counts.playing, STATUS_LABELS.playing, 'st-playing'),
+        kpiHtml('finished', stats.counts.finished, STATUS_LABELS.finished, 'st-finished'),
+        kpiHtml('abandoned', stats.counts.abandoned, STATUS_LABELS.abandoned, 'st-abandoned'),
+        kpiHtml('avg', formatAvg(stats.avgRating), 'Media ★'),
       ]}
     </div>
     <div class="stats-grid">
-      <section class="cardbox"><h3>Por plataforma</h3>${raw(distBodyHtml(stats.byPlatform))}</section>
-      <section class="cardbox"><h3>Por género</h3>${raw(distBodyHtml(stats.byGenre))}</section>
+      <section class="cardbox"><h3>Por plataforma</h3>${distBodyHtml(stats.byPlatform)}</section>
+      <section class="cardbox"><h3>Por género</h3>${distBodyHtml(stats.byGenre)}</section>
       <section class="cardbox"
-        ><h3>Etiquetas propias</h3>${raw(distBodyHtml(stats.byTag))}</section
+        ><h3>Etiquetas propias</h3>${distBodyHtml(stats.byTag)}</section
       >
       <section class="cardbox"
-        ><h3>Terminados en el tiempo</h3>${raw(distBodyHtml(months))}</section
+        ><h3>Terminados en el tiempo</h3>${distBodyHtml(months)}</section
       >
-      ${raw(topSectionHtml(stats.top5))}
+      ${topSectionHtml(stats.top5)}
     </div>`;
 }
 
@@ -207,8 +201,7 @@ export function render(container, store) {
     <div class="toolbar">
       <div class="filters">
         ${DIMENSIONS.map((dim) =>
-          raw(
-            chipRowHtml({
+          chipRowHtml({
               dim: dim.key,
               label: dim.label,
               values:
@@ -220,11 +213,10 @@ export function render(container, store) {
               active: filters[dim.key],
               allLabel: 'Todas',
             }),
-          ),
         )}
       </div>
     </div>
-    ${raw(bodyHtml(doc, stats))}
+    ${bodyHtml(doc, stats)}
   </div>`;
   wire(container, store);
 }

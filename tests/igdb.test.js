@@ -1,31 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { store } from '../src/app.js';
-import {
-  IgdbError,
-  fetchNovedades,
-  getWorkerUrl,
-  isConfigured,
-  searchGames,
-} from '../src/services/igdb.js';
+import { IgdbError, createDataSource } from '../src/services/igdb.js';
 
 const WORKER_URL = 'https://gt-proxy.example.workers.dev';
 
-/**
- * Doc mínimo con (o sin) Conexión para alimentar las lecturas del cliente;
- * va directo al store: aquí se prueba la lectura, no la persistencia.
- * @param {string} url
- */
-function seedWorkerUrl(url) {
-  store.set({
-    doc: {
-      schema: 'game-tracker',
-      version: 1,
-      updatedAt: '2026-08-25T00:00:00.000Z',
-      games: [],
-      ...(url.trim() === '' ? {} : { connection: { workerUrl: url } }),
-    },
-  });
-}
+/** Adapter de pruebas: URL fija sin tocar estado global (segundo adapter del seam). */
+const testClient = () => createDataSource(() => WORKER_URL);
 
 /** @type {import('vitest').Mock} */
 let fetchMock;
@@ -58,31 +37,33 @@ function contractGame(overrides = {}) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  store.set({ doc: null });
 });
 
-describe('configuración del Worker (Conexión del doc)', () => {
-  it('sin biblioteca cargada devuelve cadena vacía y no está configurado', () => {
-    expect(getWorkerUrl()).toBe('');
-    expect(isConfigured()).toBe(false);
+describe('configuración de la Conexión (entra por la interface)', () => {
+  it('normaliza la URL: recorta espacios y barra final', () => {
+    const client = createDataSource(() => `  ${WORKER_URL}/  `);
+    expect(client.workerUrl()).toBe(WORKER_URL);
+    expect(client.isConfigured()).toBe(true);
   });
 
-  it('con doc sin conexión sigue igual de vacío', () => {
-    seedWorkerUrl('');
-    expect(getWorkerUrl()).toBe('');
-    expect(isConfigured()).toBe(false);
-  });
-
-  it('lee la URL de doc.connection recortando espacios y barra final', () => {
-    seedWorkerUrl(`  ${WORKER_URL}/  `);
-    expect(getWorkerUrl()).toBe(WORKER_URL);
-    expect(isConfigured()).toBe(true);
+  it('sin conexión (cadena vacía) no está configurado y workerUrl es vacía', () => {
+    const client = createDataSource(() => '');
+    expect(client.workerUrl()).toBe('');
+    expect(client.isConfigured()).toBe(false);
   });
 
   it('una cadena que no es URL http(s) no cuenta como configurada', () => {
-    seedWorkerUrl('notaurl');
-    expect(getWorkerUrl()).toBe('notaurl');
-    expect(isConfigured()).toBe(false);
+    const client = createDataSource(() => 'notaurl');
+    expect(client.workerUrl()).toBe('notaurl');
+    expect(client.isConfigured()).toBe(false);
+  });
+
+  it('el factory acepta cualquier lector: mismo cliente, distinta fuente', () => {
+    let url = WORKER_URL;
+    const client = createDataSource(() => url);
+    expect(client.isConfigured()).toBe(true);
+    url = '';
+    expect(client.isConfigured()).toBe(false);
   });
 });
 
@@ -91,9 +72,8 @@ describe('searchGames', () => {
     const results = [contractGame(), contractGame({ igdbId: 1020, title: 'Elden Ring' })];
     fetchMock = vi.fn(async () => jsonRes({ results }));
     vi.stubGlobal('fetch', fetchMock);
-    seedWorkerUrl(WORKER_URL);
 
-    await expect(searchGames('celeste 2 & co')).resolves.toEqual(results);
+    await expect(testClient().searchGames('celeste 2 & co')).resolves.toEqual(results);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
       'https://gt-proxy.example.workers.dev/api/search?q=celeste%202%20%26%20co'
@@ -103,9 +83,8 @@ describe('searchGames', () => {
   it('HTTP 500 lanza IgdbError con el mensaje de servicio', async () => {
     fetchMock = vi.fn(async () => jsonRes({ error: 'Error interno del Worker.' }, { ok: false, status: 500 }));
     vi.stubGlobal('fetch', fetchMock);
-    seedWorkerUrl(WORKER_URL);
 
-    await expect(searchGames('x')).rejects.toMatchObject({
+    await expect(testClient().searchGames('x')).rejects.toMatchObject({
       name: 'IgdbError',
       message: 'No se pudo contactar con el servicio',
     });
@@ -116,10 +95,9 @@ describe('searchGames', () => {
       throw new TypeError('Failed to fetch');
     });
     vi.stubGlobal('fetch', fetchMock);
-    seedWorkerUrl(WORKER_URL);
 
-    await expect(searchGames('x')).rejects.toBeInstanceOf(IgdbError);
-    await expect(searchGames('x')).rejects.toMatchObject({
+    await expect(testClient().searchGames('x')).rejects.toBeInstanceOf(IgdbError);
+    await expect(testClient().searchGames('x')).rejects.toMatchObject({
       message: 'No se pudo contactar con el servicio',
     });
   });
@@ -127,16 +105,15 @@ describe('searchGames', () => {
   it('JSON malformado (sin results array) lanza IgdbError', async () => {
     fetchMock = vi.fn(async () => jsonRes({ unexpected: true }));
     vi.stubGlobal('fetch', fetchMock);
-    seedWorkerUrl(WORKER_URL);
 
-    await expect(searchGames('x')).rejects.toBeInstanceOf(IgdbError);
+    await expect(testClient().searchGames('x')).rejects.toBeInstanceOf(IgdbError);
   });
 
   it('sin servicio configurado lanza IgdbError sin llegar a llamar a fetch', async () => {
     fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(searchGames('x')).rejects.toBeInstanceOf(IgdbError);
+    await expect(createDataSource(() => '').searchGames('x')).rejects.toBeInstanceOf(IgdbError);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -153,9 +130,8 @@ describe('searchGames', () => {
           })
       );
       vi.stubGlobal('fetch', fetchMock);
-      seedWorkerUrl(WORKER_URL);
 
-      const pending = searchGames('x');
+      const pending = testClient().searchGames('x');
       const expectation = expect(pending).rejects.toMatchObject({
         name: 'IgdbError',
         message: 'No se pudo contactar con el servicio',
@@ -179,18 +155,16 @@ describe('fetchNovedades', () => {
     };
     fetchMock = vi.fn(async () => jsonRes(body));
     vi.stubGlobal('fetch', fetchMock);
-    seedWorkerUrl(WORKER_URL);
 
-    await expect(fetchNovedades()).resolves.toEqual(body);
+    await expect(testClient().fetchNovedades()).resolves.toEqual(body);
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://gt-proxy.example.workers.dev/api/novedades');
   });
 
   it('cuerpo sin las secciones esperadas lanza IgdbError', async () => {
     fetchMock = vi.fn(async () => jsonRes({ recientes: [] }));
     vi.stubGlobal('fetch', fetchMock);
-    seedWorkerUrl(WORKER_URL);
 
-    await expect(fetchNovedades()).rejects.toMatchObject({
+    await expect(testClient().fetchNovedades()).rejects.toMatchObject({
       name: 'IgdbError',
       message: 'No se pudo contactar con el servicio',
     });

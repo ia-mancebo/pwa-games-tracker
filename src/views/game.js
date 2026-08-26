@@ -215,7 +215,7 @@ function sharedBodyHtml(game, name) {
       const genres = game.genres ?? [];
       if (genres.length === 0) return '<p class="d-meta">—</p>';
       return html`<div class="d-status"
-        >${genres.map((g) => raw(html`<span class="chip static">${g.name}</span>`))}</div
+        >${genres.map((g) => html`<span class="chip static">${g.name}</span>`)}</div
       >`;
     }
     case 'platforms': {
@@ -262,16 +262,14 @@ function fieldFormHtml(name, kind, value) {
   const label = SHARED_FIELDS[name].label;
   const control =
     kind === 'textarea'
-      ? raw(html`<textarea rows="4" data-field-input aria-label="${label}">${value}</textarea>`)
-      : raw(
-          html`<input
+      ? html`<textarea rows="4" data-field-input aria-label="${label}">${value}</textarea>`
+      : html`<input
             type="text"
             data-field-input
             value="${value}"
             aria-label="${label}"
             placeholder="${label}…"
-          />`
-        );
+          />`;
   return html`<div class="inline-form" data-field-form="${name}">
     ${control}
     <span class="inline-actions">
@@ -294,19 +292,17 @@ function sharedSecHtml(game, name) {
   const editing = ui.field === name;
   const inner = editing
     ? fieldFormHtml(name, SHARED_FIELDS[name].kind, fieldValueText(game, name))
-    : html`<div class="d-body">${raw(sharedBodyHtml(game, name))}</div>
+    : html`<div class="d-body">${sharedBodyHtml(game, name)}</div>
         ${
           game.igdbId == null
-            ? raw(
-                html`<button type="button" class="chip chip-xs" data-edit-field="${name}"
+            ? html`<button type="button" class="chip chip-xs" data-edit-field="${name}"
                   >Editar</button
                 >`
-              )
             : ''
         }`;
   return html`<section class="d-sec" data-sec="${name}">
     <h3>${SHARED_FIELDS[name].label}</h3>
-    ${raw(inner)}
+    ${inner}
   </section>`;
 }
 
@@ -318,26 +314,22 @@ function sharedSecHtml(game, name) {
  */
 function starPickerHtml({ rating, rateAttr, clearAttr, playId, small }) {
   const cls = small ? 'star sm' : 'star';
-  const idAttr = playId != null ? raw(html` data-play-id="${playId}"`) : '';
+  const idAttr = playId != null ? html` data-play-id="${playId}"` : '';
   const stars = [1, 2, 3, 4, 5].map((i) =>
-    raw(
-      html`<button
+    html`<button
         type="button"
         class="${cls}${rating != null && i <= rating ? ' on' : ''}"
         data-${rateAttr}="${i}"
         ${idAttr}
         aria-label="Valorar con ${i}">★</button
       >`
-    )
   );
   const clear =
     rating != null
       ? [
-          raw(
-            html`<button type="button" class="chip chip-xs" data-${clearAttr} ${idAttr}
+          html`<button type="button" class="chip chip-xs" data-${clearAttr} ${idAttr}
               >quitar</button
-            >`
-          ),
+            >`,
         ]
       : [];
   return html`${stars}${clear}`;
@@ -376,18 +368,16 @@ function heroHtml(game) {
   const status = gameStatus(game);
   const latest = latestPlay(game);
   return html`<div class="d-hero">
-    <span class="d-cover">${raw(coverHtml(game))}</span>
+    <span class="d-cover">${coverHtml(game)}</span>
     <div class="d-head">
-      ${raw(statusPillHtml(status))}
-      ${raw(titleHtml(game))}
+      ${statusPillHtml(status)}
+      ${titleHtml(game)}
       <div class="d-stars" role="group" aria-label="Valoración de la jugada más reciente">
-        ${raw(
-          starPickerHtml({
+        ${starPickerHtml({
             rating: latest.rating ?? null,
             rateAttr: 'hero-rate',
             clearAttr: 'hero-rate-clear',
-          })
-        )}
+          })}
       </div>
       <p class="d-meta">Edita la valoración de la jugada más reciente (${latest.addedAt}).</p>
     </div>
@@ -410,8 +400,7 @@ function tagsEditorHtml(game) {
           ? raw('<span class="d-meta">Sin etiquetas todavía.</span>')
           : tags.map(
               (tag) =>
-                raw(
-                  html`<span class="tag-mini own">#${tag}
+                html`<span class="tag-mini own">#${tag}
                     <button
                       type="button"
                       class="tag-x"
@@ -420,7 +409,6 @@ function tagsEditorHtml(game) {
                       >×</button
                     ></span
                   >`
-                )
             )
       }
       <input
@@ -445,26 +433,19 @@ function platformSelectHtml(game, play) {
   const options = game.platforms ?? [];
   const own = play.platform != null && play.platform.id === null ? play.platform : null;
   const opts = [
-    raw(
-      html`<option value="" ${play.platform == null ? 'selected' : ''}>Sin plataforma</option>`
-    ),
+    html`<option value="" ${play.platform == null ? 'selected' : ''}>Sin plataforma</option>`,
     ...options.map((o) =>
-      raw(
-        html`<option value="${o.id}" ${play.platform?.id === o.id ? 'selected' : ''}
+      html`<option value="${o.id}" ${play.platform?.id === o.id ? 'selected' : ''}
           >${o.name}</option
         >`
-      )
     ),
-    raw(
-      html`<option value="__own__" ${own != null ? 'selected' : ''}
+    html`<option value="__own__" ${own != null ? 'selected' : ''}
         >${own != null ? `Propia: ${own.name}` : 'Otra (propia)…'}</option
-      >`
-    ),
+      >`,
   ];
   const customInput =
     ui.customPlatform === play.id || own != null
-      ? raw(
-          html`<input
+      ? html`<input
             type="text"
             data-platform-name
             data-play-id="${play.id}"
@@ -472,7 +453,6 @@ function platformSelectHtml(game, play) {
             placeholder="Nombre de tu plataforma (p. ej. emulador)…"
             aria-label="Nombre de la plataforma propia"
           />`
-        )
       : '';
   return html`<label class="p-pf">
     <span class="lbl">Plataforma efectiva</span>
@@ -523,43 +503,37 @@ function playCardHtml(game, play) {
     >
   </label>`;
   const foot = confirming
-    ? raw(
-        html`<span class="p-confirm">¿Seguro?</span>
+    ? html`<span class="p-confirm">¿Seguro?</span>
           <button type="button" class="chip danger" data-del-play-yes data-play-id="${play.id}"
             >Sí</button
           >
           <button type="button" class="chip" data-del-play-no data-play-id="${play.id}"
             >No</button
           >`
-      )
-    : raw(
-        html`<button
+    : html`<button
           type="button"
           class="chip danger"
           data-del-play
           data-play-id="${play.id}"
           ${isLast ? raw(' disabled title="Un juego necesita al menos una jugada"') : ''}
           >Borrar jugada</button
-        >`
-      );
+        >`;
   return html`<article class="play-card" data-play-card="${play.id}">
     <header class="p-head">
-      ${raw(statusPillHtml(play.status))}
+      ${statusPillHtml(play.status)}
       <span class="p-stars" role="group" aria-label="Valoración de esta jugada"
-        >${raw(
-          starPickerHtml({
+        >${starPickerHtml({
             rating: play.rating ?? null,
             rateAttr: 'play-rate',
             clearAttr: 'play-rate-clear',
             playId: play.id,
             small: true,
-          })
-        )}</span
+          })}</span
       >
     </header>
-    ${raw(dates)}
-    ${raw(platformSelectHtml(game, play))}
-    ${raw(notes)}
+    ${dates}
+    ${platformSelectHtml(game, play)}
+    ${notes}
     <footer class="p-foot">${foot}</footer>
   </article>`;
 }
@@ -574,7 +548,7 @@ function galleryHtml(shots) {
     <h3>Galería</h3>
     <div class="d-gallery"
       >${shots.map(
-        (url) => raw(html`<span class="d-shot"><img loading="lazy" src="${url}" alt="" /></span>`)
+        (url) => html`<span class="d-shot"><img loading="lazy" src="${url}" alt="" /></span>`
       )}</div
     >
   </section>`;
@@ -597,39 +571,37 @@ function fichaHtml(game) {
   return html`<div class="fade ficha">
     <div class="toolbar">
       <button type="button" class="chip" data-back-ficha>← Volver</button>
-      ${ui.error ? raw(html`<p class="form-error" role="alert">${ui.error}</p>`) : ''}
+      ${ui.error ? html`<p class="form-error" role="alert">${ui.error}</p>` : ''}
     </div>
-    ${raw(heroHtml(game))}
+    ${heroHtml(game)}
     ${SHARED_NAMES.filter((name) => sharedSectionVisible(game, name)).map((name) =>
-      raw(sharedSecHtml(game, name))
+      sharedSecHtml(game, name)
     )}
-    ${raw(tagsEditorHtml(game))}
+    ${tagsEditorHtml(game)}
     <section class="d-sec" data-sec="status">
       <h3>Estado</h3>
       <div class="d-status"
         >${STATUSES.map(
           (st) =>
-            raw(
-              html`<button
+            html`<button
                 type="button"
                 class="chip${st === gameStatus(game) ? ' on' : ''}"
                 data-set-status="${st}"
                 >${STATUS_LABELS[st]}</button
               >`
-            )
         )}</div
       >
     </section>
-    ${shots.length > 0 ? raw(galleryHtml(shots)) : ''}
+    ${shots.length > 0 ? galleryHtml(shots) : ''}
     <section class="d-sec" data-sec="plays">
       <h3>Jugadas (${game.plays.length})</h3>
       ${
         ui.playError
-          ? raw(html`<p class="form-error" role="alert" data-play-error>${ui.playError}</p>`)
+          ? html`<p class="form-error" role="alert" data-play-error>${ui.playError}</p>`
           : ''
       }
       <div class="plays"
-        >${playsNewestFirst(game).map((play) => raw(playCardHtml(game, play)))}</div
+        >${playsNewestFirst(game).map((play) => playCardHtml(game, play))}</div
       >
       <button type="button" class="chip" data-add-play>➕ Añadir jugada</button>
     </section>
@@ -637,8 +609,7 @@ function fichaHtml(game) {
       <h3>Zona de riesgo</h3>
       ${
         ui.confirmGame
-          ? raw(
-              html`<p class="danger-msg"
+          ? html`<p class="danger-msg"
                   >Se borrarán el juego y todas sus jugadas. Sin deshacer.</p
                 >
                 <span class="inline-actions">
@@ -647,8 +618,7 @@ function fichaHtml(game) {
                   >
                   <button type="button" class="chip" data-del-game-no>Cancelar</button>
                 </span>`
-            )
-          : raw(html`<button type="button" class="chip danger" data-del-game>Borrar juego</button>`)
+          : html`<button type="button" class="chip danger" data-del-game>Borrar juego</button>`
       }
     </section>
   </div>`;

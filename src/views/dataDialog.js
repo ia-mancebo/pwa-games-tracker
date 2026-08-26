@@ -12,7 +12,7 @@ import { listBackups, readBackup } from '../data/opfs.js';
 import { persistenceStatusLine, requestPersistOnce } from '../data/persist.js';
 import { assertWritable } from '../data/tablock.js';
 import { sha256Hex } from '../services/hash.js';
-import { getWorkerUrl, isConfigured } from '../services/igdb.js';
+import { igdb } from '../services/igdb.js';
 import { saveWorkerUrl } from '../data/library.js';
 
 /** @typedef {import('../data/opfs.js').BackupInfo} BackupInfo */
@@ -238,7 +238,7 @@ async function doSaveWorkerUrl(input) {
   }
   try {
     const saved = await saveWorkerUrl(value);
-    if (saved !== '' && !isConfigured()) {
+    if (saved !== '' && !igdb.isConfigured()) {
       await saveWorkerUrl('');
       paint({ note: '', error: 'URL no válida — pega la https://… del Worker' });
       return;
@@ -308,7 +308,7 @@ function sheetHtml() {
           Elegir un .json es una decisión deliberada: tras validar, su contenido SUSTITUYE la biblioteca local. Sin
           lógica de conflicto.
         </p>
-        <p class="datos-status mono">${raw(connectionStatusHtml())}</p>
+        <p class="datos-status mono">${connectionStatusHtml()}</p>
         <button type="button" class="btn-primary" data-conectar>Conectar o importar .json…</button>
       </section>
 
@@ -342,22 +342,22 @@ function sheetHtml() {
           id="datos-worker-input"
           class="datos-name mono"
           type="text"
-          value="${getWorkerUrl()}"
+          value="${igdb.workerUrl()}"
           placeholder="https://tu-worker.workers.dev"
           data-worker-url
         />
         <button type="button" class="chip" data-save-worker>Guardar conexión</button>
       </section>
 
-      ${raw(backupsSectionHtml())}
+      ${backupsSectionHtml()}
 
       <section class="datos-sec">
         <h3>Almacenamiento</h3>
         <p class="datos-hint" data-persist-status>${view.persist ?? ''}</p>
       </section>
 
-      ${view.note ? raw(html`<p class="datos-note">${view.note}</p>`) : ''}
-      ${view.error ? raw(html`<p class="form-error" role="alert">${view.error}</p>`) : ''}
+      ${view.note ? html`<p class="datos-note">${view.note}</p>` : ''}
+      ${view.error ? html`<p class="form-error" role="alert">${view.error}</p>` : ''}
     </div>`;
 }
 

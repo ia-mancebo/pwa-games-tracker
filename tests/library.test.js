@@ -505,26 +505,26 @@ describe('búsqueda y filtros (ticket 15)', () => {
 
 describe('coverHtml', () => {
   it('con coverUrl pinta una imagen lazy; sin ella, placeholder con iniciales estables', () => {
-    const withCover = coverHtml({
+    const withCover = String(coverHtml({
       id: 'x1',
       title: 'Hades',
       coverUrl: 'https://images.example/t_cover_big/abc.jpg',
       plays: [],
-    });
+    }));
     expect(withCover).toContain('<img loading="lazy" src="https://images.example/t_cover_big/abc.jpg"');
 
-    const a = coverHtml({ id: 'x1', title: 'Final Fantasy Tactics', plays: [] });
-    const b = coverHtml({ id: 'x1', title: 'Final Fantasy Tactics', plays: [] });
+    const a = String(coverHtml({ id: 'x1', title: 'Final Fantasy Tactics', plays: [] }));
+    const b = String(coverHtml({ id: 'x1', title: 'Final Fantasy Tactics', plays: [] }));
     expect(a).toContain('<b>FF</b>');
     expect(a).toBe(b);
     expect(a).toMatch(/--c1:hsl\(\d+ 46% 40%\)/);
 
-    const other = coverHtml({ id: 'x2', title: 'Celeste', plays: [] });
+    const other = String(coverHtml({ id: 'x2', title: 'Celeste', plays: [] }));
     expect(other).not.toBe(a);
   });
 
   it('la variante mini añade la clase mini', () => {
-    const mini = coverHtml({ id: 'x1', title: 'Hades', plays: [] }, { mini: true });
+    const mini = String(coverHtml({ id: 'x1', title: 'Hades', plays: [] }, { mini: true }));
     expect(mini).toContain('cover mini');
   });
 });

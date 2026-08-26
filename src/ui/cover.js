@@ -34,7 +34,7 @@ export function titleInitials(title) {
 
 /**
  * Marcado de la portada. La variante `mini` (46 px) se usa en filas del Panel.
- * Devuelve STRING con marcado de confianza: componer con raw() dentro de html`.
+ * Devuelve marcado de confianza: componer directamente dentro de html`.
  * @param {import('../domain/schema.js').Game} game
  * @param {{ mini?: boolean }} [opts]
  * @returns {string}

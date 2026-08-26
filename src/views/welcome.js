@@ -3,7 +3,7 @@
  * válido o empezar una biblioteca nueva. createApp solo la renderiza cuando
  * `ready && !doc`; con biblioteca cargada esta vista nunca aparece.
  */
-import { html, qs, raw } from '../lib/dom.js';
+import { html, qs } from '../lib/dom.js';
 import { store } from '../app.js';
 import { importDoc, newLibrary } from '../data/library.js';
 import { markConnected } from '../data/filelink.js';
@@ -103,10 +103,10 @@ export function render(container, _store) {
         <p>Empieza de cero; el primer vuelco/export creará el archivo más adelante.</p>
       </button>
     </div>
-    ${importError ? raw(html`<p class="form-error" role="alert">${importError}</p>`) : ''}
+    ${importError ? html`<p class="form-error" role="alert">${importError}</p>` : ''}
     ${fsa
       ? ''
-      : raw(html`<input type="file" accept=".json,application/json" hidden data-import-input />`)}
+      : html`<input type="file" accept=".json,application/json" hidden data-import-input />`}
   </div>`;
   wire(container, fsa);
 }

@@ -4,7 +4,7 @@
  * carátulas en covers-v1 y los refrescos automáticos silenciosos (al abrir la
  * pestaña con >12 h, y reintento cuando vuelve la red tras un fallo).
  */
-import { fetchNovedades, isConfigured } from '../services/igdb.js';
+import { igdb } from '../services/igdb.js';
 import { getSnapshot, saveSnapshot } from './snapshot.js';
 import { seedCovers } from './covers.js';
 
@@ -40,7 +40,7 @@ function collectCoverUrls(data) {
  * @returns {Promise<{ status: RefreshStatus }>}
  */
 export async function refreshNovedades() {
-  if (!isConfigured()) {
+  if (!igdb.isConfigured()) {
     lastAttemptFailed = false;
     return { status: 'unconfigured' };
   }
@@ -49,7 +49,7 @@ export async function refreshNovedades() {
     return { status: 'offline' };
   }
   try {
-    const data = await fetchNovedades();
+    const data = await igdb.fetchNovedades();
     await saveSnapshot(data);
     // Siembra fire-and-forget: nunca bloquea ni decide el estado del refresco.
     void seedCovers(collectCoverUrls(data));
@@ -83,7 +83,7 @@ export async function autoRefreshIfNeeded() {
  */
 export function initNovedadesRetry() {
   const onOnline = () => {
-    if (!lastAttemptFailed || !isConfigured()) return;
+    if (!lastAttemptFailed || !igdb.isConfigured()) return;
     void refreshNovedades().catch(() => {});
   };
   window.addEventListener('online', onOnline);

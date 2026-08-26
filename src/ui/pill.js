@@ -1,6 +1,7 @@
 /**
  * Píldora de Estado (color + fondo al 13 % + borde al 45 %, spec §9).
  */
+import { html } from '../lib/dom.js';
 import { STATUS_LABELS } from '../domain/schema.js';
 
 /**
@@ -8,5 +9,5 @@ import { STATUS_LABELS } from '../domain/schema.js';
  * @returns {string}
  */
 export function statusPillHtml(status) {
-  return `<span class="pill st-${status}">${STATUS_LABELS[status]}</span>`;
+  return html`<span class="pill st-${status}">${STATUS_LABELS[status]}</span>`;
 }

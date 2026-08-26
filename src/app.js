@@ -1,4 +1,4 @@
-import { html, qs, qsa, raw } from './lib/dom.js';
+import { html, qs, qsa } from './lib/dom.js';
 import { formatAvg } from './lib/format.js';
 import { avgRatingOfGames, gameStatus } from './domain/selectors.js';
 import { views } from './views/index.js';
@@ -180,8 +180,7 @@ function railHtml() {
     <div class="logo" aria-hidden="true">GT</div>
     <nav class="nav${gated ? ' disabled' : ''}" aria-label="Secciones">
       ${TABS.map((t) =>
-          raw(
-            html`<button
+          html`<button
               type="button"
               data-tab="${t.id}"
               ${gated ? 'disabled' : ''}
@@ -189,10 +188,9 @@ function railHtml() {
             >
               ${t.label}
             </button>`
-          )
         )}
     </nav>
-    ${raw(railWidgetsHtml())}
+    ${railWidgetsHtml()}
     <button type="button" class="chip rail-datos" data-open-data ${gated ? 'disabled' : ''}>
       Datos
     </button>
@@ -209,7 +207,7 @@ function railHtml() {
 export function createApp(root) {
   root.innerHTML = '';
   root.innerHTML = html`<div class="shell">
-    ${raw(railHtml())}
+    ${railHtml()}
     <div class="content">
       <div class="filebar-slot"></div>
       <main class="main"></main>

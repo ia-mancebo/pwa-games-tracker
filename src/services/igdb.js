@@ -1,9 +1,9 @@
 /**
  * Cliente del proxy Cloudflare Worker para IGDB (ticket 21, spec §6 y
- * worker/CONTRACT.md). La URL base es la Conexión del doc (CONTEXT.md):
- * doc.connection.workerUrl, que viaja dentro del .json del usuario; cualquier
- * fallo de red/HTTP/respuesta se degrada al mensaje único de la spec §7.3.
- * Novedades usa el mismo cliente desde el ticket 23.
+ * worker/CONTRACT.md). La Conexión entra por la interface: el módulo no lee
+ * el store; quien construye un cliente decide de dónde sale la URL base.
+ * Cualquier fallo de red/HTTP/respuesta se degrada al mensaje único de la
+ * spec §7.3. Novedades usa el mismo cliente desde el ticket 23.
  */
 import { normalizeWorkerUrl } from '../domain/schema.js';
 import { store } from '../app.js';
@@ -38,62 +38,6 @@ export class IgdbError extends Error {
  */
 
 /**
- * URL base configurada en la Conexión del doc, sin espacios ni barra final;
- * '' si no hay biblioteca cargada o no hay conexión guardada.
- * @returns {string}
- */
-export function getWorkerUrl() {
-  const stored = store.get().doc?.connection?.workerUrl;
-  return typeof stored === 'string' ? normalizeWorkerUrl(stored) : '';
-}
-
-/**
- * @returns {boolean} true solo con URL http(s) no vacía.
- */
-export function isConfigured() {
-  try {
-    const parsed = new URL(getWorkerUrl());
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
-  } catch {
-    return false;
-  }
-}
-
-/**
- * GET JSON contra el Worker con timeout de 10 s; todo fallo → IgdbError.
- * @param {string} path Ruta con query incluida («/api/search?q=…»).
- * @returns {Promise<unknown>}
- */
-async function requestJson(path) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  try {
-    const res = await fetch(`${getWorkerUrl()}${path}`, { signal: controller.signal });
-    if (!res.ok) throw new IgdbError();
-    return await res.json();
-  } catch (error) {
-    if (error instanceof IgdbError) throw error;
-    throw new IgdbError();
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/**
- * Búsqueda por título contra el proxy (hasta 12 resultados del Worker).
- * @param {string} query
- * @returns {Promise<IgdbGame[]>}
- */
-export async function searchGames(query) {
-  if (!isConfigured()) throw new IgdbError();
-  const body = await requestJson(`/api/search?q=${encodeURIComponent(query)}`);
-  if (!body || typeof body !== 'object' || !Array.isArray(/** @type {any} */ (body).results)) {
-    throw new IgdbError();
-  }
-  return /** @type {{results: IgdbGame[]}} */ (body).results;
-}
-
-/**
  * Instantánea completa del tablón Novedades (ticket 23, spec §7.2).
  * @typedef {{
  *   recientes: IgdbGame[],
@@ -105,16 +49,104 @@ export async function searchGames(query) {
  */
 
 /**
- * @returns {Promise<NovedadesSnapshot>}
+ * Cliente de la Fuente de datos. Dos adapters justifican el seam: en
+ * producción `igdb` lee la URL base de la Conexión del doc; en pruebas se
+ * construye uno propio con una URL fija — sin tocar estado global.
+ *
+ * @typedef {{
+ *   workerUrl(): string,
+ *   isConfigured(): boolean,
+ *   searchGames(query: string): Promise<IgdbGame[]>,
+ *   fetchNovedades(): Promise<NovedadesSnapshot>,
+ * }} DataSource
  */
-export async function fetchNovedades() {
-  if (!isConfigured()) throw new IgdbError();
-  const body = await requestJson('/api/novedades');
-  const snapshot = /** @type {Record<string, unknown>} */ (
-    body && typeof body === 'object' ? body : null
-  );
-  if (!snapshot || NOVEDADES_SECTIONS.some((key) => !Array.isArray(snapshot[key]))) {
-    throw new IgdbError();
+
+/**
+ * @param {() => string} readConnection URL base sin normalizar; '' si no hay conexión.
+ * @returns {DataSource}
+ */
+export function createDataSource(readConnection) {
+  /**
+   * URL base normalizada (sin espacios ni barra final); '' si no hay conexión.
+   * @returns {string}
+   */
+  function workerUrl() {
+    const stored = readConnection();
+    return typeof stored === 'string' ? normalizeWorkerUrl(stored) : '';
   }
-  return /** @type {NovedadesSnapshot} */ (snapshot);
+
+  /**
+   * @returns {boolean} true solo con URL http(s) no vacía.
+   */
+  function isConfigured() {
+    try {
+      const parsed = new URL(workerUrl());
+      return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * GET JSON contra el Worker con timeout de 10 s; todo fallo → IgdbError.
+   * @param {string} path Ruta con query incluida («/api/search?q=…»).
+   * @returns {Promise<unknown>}
+   */
+  async function requestJson(path) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      const res = await fetch(`${workerUrl()}${path}`, { signal: controller.signal });
+      if (!res.ok) throw new IgdbError();
+      return await res.json();
+    } catch (error) {
+      if (error instanceof IgdbError) throw error;
+      throw new IgdbError();
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  return {
+    workerUrl,
+    isConfigured,
+
+    /**
+     * Búsqueda por título contra el proxy (hasta 12 resultados del Worker).
+     * @param {string} query
+     * @returns {Promise<IgdbGame[]>}
+     */
+    async searchGames(query) {
+      if (!isConfigured()) throw new IgdbError();
+      const body = await requestJson(`/api/search?q=${encodeURIComponent(query)}`);
+      if (!body || typeof body !== 'object' || !Array.isArray(/** @type {any} */ (body).results)) {
+        throw new IgdbError();
+      }
+      return /** @type {{results: IgdbGame[]}} */ (body).results;
+    },
+
+    /**
+     * @returns {Promise<NovedadesSnapshot>}
+     */
+    async fetchNovedades() {
+      if (!isConfigured()) throw new IgdbError();
+      const body = await requestJson('/api/novedades');
+      const snapshot = /** @type {Record<string, unknown>} */ (
+        body && typeof body === 'object' ? body : null
+      );
+      if (!snapshot || NOVEDADES_SECTIONS.some((key) => !Array.isArray(snapshot[key]))) {
+        throw new IgdbError();
+      }
+      return /** @type {NovedadesSnapshot} */ (snapshot);
+    },
+  };
 }
+
+/**
+ * Adapter de producción: lee la Conexión del doc del usuario (viaja en su
+ * .json; CONTEXT.md).
+ */
+export const igdb = createDataSource(() => {
+  const stored = store.get().doc?.connection?.workerUrl;
+  return typeof stored === 'string' ? stored : '';
+});

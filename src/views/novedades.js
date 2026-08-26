@@ -11,7 +11,7 @@ import { coverHtml } from '../ui/cover.js';
 import { addGame } from '../data/library.js';
 import { getSnapshot } from '../data/snapshot.js';
 import { refreshNovedades } from '../data/novedades.js';
-import { IGDB_SERVICE_ERROR, isConfigured } from '../services/igdb.js';
+import { IGDB_SERVICE_ERROR, igdb } from '../services/igdb.js';
 import { store } from '../app.js';
 
 /** Composición fija del tablón (spec §7.2). @type {{key: SectionKey, label: string}[]} */
@@ -129,8 +129,8 @@ function newsCardHtml(section, index, game) {
     data-ndetail="${section}:${index}"
     title="${game.title}"
   >
-    ${raw(coverHtml(fakeSchemaGame(game)))}
-    ${badge ? raw(html`<span class="badge mono">${badge}</span>`) : ''}
+    ${coverHtml(fakeSchemaGame(game))}
+    ${badge ? html`<span class="badge mono">${badge}</span>` : ''}
     <span class="cap"><span>${game.title}</span></span>
   </button>`;
 }
@@ -149,7 +149,7 @@ function shelfHtml(key, label, games) {
       <span>${games.length} títulos</span>
     </button>
     <div class="row" data-section-row="${key}">
-      ${games.map((g, i) => raw(newsCardHtml(key, i, g)))}
+      ${games.map((g, i) => newsCardHtml(key, i, g))}
       ${games.length === 0 ? raw('<p class="row-empty">Sin títulos.</p>') : ''}
     </div>
   </section>`;
@@ -174,11 +174,9 @@ function monthStripHtml(games) {
         month: 'short',
         timeZone: 'UTC',
       });
-      return raw(
-        html`<span class="chip"
+      return html`<span class="chip"
           ><strong>${name} ${ym.slice(0, 4)}</strong>&nbsp;· ${counts.get(ym)}</span
-        >`
-      );
+        >`;
     })}
   </div>`;
 }
@@ -191,7 +189,7 @@ function monthStripHtml(games) {
 function bannerHtml(which) {
   const retry =
     which.kind === 'offline' || which.kind === 'service-error'
-      ? raw(html`<button type="button" class="chip" data-retry>Reintentar</button>`)
+      ? html`<button type="button" class="chip" data-retry>Reintentar</button>`
       : '';
   const text =
     which.kind === 'offline'
@@ -231,7 +229,7 @@ function unconfiguredEmptyHtml() {
  * @returns {string}
  */
 function headHtml(snap) {
-  const configured = isConfigured();
+  const configured = igdb.isConfigured();
   const stamp = snap ? formatStamp(snap.savedAt) : '—';
   return html`<header class="view-head nov-head">
     <div>
@@ -276,23 +274,19 @@ function drillDownHtml(sectionKey, genre) {
     </div>
     ${
       genres.length > 0
-        ? raw(
-            html`<div class="toolbar">
+        ? html`<div class="toolbar">
               <div class="chip-row">
                 ${genres.map((name) =>
-                  raw(
-                    html`<button
-                      type="button"
-                      class="chip-xs chip${genre === name ? ' on' : ''}"
-                      data-ngenre="${name}"
-                    >
-                      ${name}
-                    </button>`
-                  )
+                  html`<button
+                    type="button"
+                    class="chip-xs chip${genre === name ? ' on' : ''}"
+                    data-ngenre="${name}"
+                  >
+                    ${name}
+                  </button>`
                 )}
               </div>
             </div>`
-          )
         : ''
     }
     <div class="cardbox tight n-table">
@@ -301,9 +295,8 @@ function drillDownHtml(sectionKey, genre) {
       </div>
       ${rows.length === 0 ? raw('<p class="empty">Nada con ese género.</p>') : ''}
       ${rows.map(({ game, i }) =>
-        raw(
-          html`<div class="b-row" data-ndetail="${sectionKey}:${i}">
-            ${raw(coverHtml(fakeSchemaGame(game), { mini: true }))}
+        html`<div class="b-row" data-ndetail="${sectionKey}:${i}">
+            ${coverHtml(fakeSchemaGame(game), { mini: true })}
             <span class="b-cell">
               <span class="b-title">${game.title}</span>
               <span class="b-sub">${(game.genres ?? []).map((x) => x.name).join(', ')}</span>
@@ -313,7 +306,6 @@ function drillDownHtml(sectionKey, genre) {
             >
             <span class="b-cell n-date mono">${formatFullDate(game.releaseDate)}</span>
           </div>`
-        )
       )}
     </div>`;
 }
@@ -332,12 +324,12 @@ function boardHtml() {
   if (nv.section && snap) {
     const sectionKey = /** @type {SectionKey} */ (nv.section);
     return html`<div class="fade" data-nov>
-      ${raw(head)}${raw(drillDownHtml(sectionKey, nv.genre))}
+      ${head}${drillDownHtml(sectionKey, nv.genre)}
     </div>`;
   }
   let out = `<div class="fade" data-nov>${head}`;
   if (!snap) {
-    out += isConfigured()
+    out += igdb.isConfigured()
       ? firstTimeEmptyHtml()
       : bannerHtml({ kind: 'unconfigured' }) + unconfiguredEmptyHtml();
     return out + '</div>';
@@ -345,7 +337,7 @@ function boardHtml() {
   if (lastStatus === 'service-error') out += bannerHtml({ kind: 'service-error' });
   else if (!navigator.onLine) out += bannerHtml({ kind: 'offline' });
   else if (isStale(snap)) out += bannerHtml({ kind: 'stale' });
-  else if (!isConfigured()) out += bannerHtml({ kind: 'unconfigured' });
+  else if (!igdb.isConfigured()) out += bannerHtml({ kind: 'unconfigured' });
   out += monthStripHtml([...snap.recientes, ...snap.proximos]);
   for (const sec of SECTIONS) {
     out += shelfHtml(sec.key, sec.label, snap[sec.key] ?? []);
@@ -427,22 +419,20 @@ function paintDetail() {
         <button type="button" class="chip" data-close-detail aria-label="Cerrar">✕</button>
       </header>
       <div class="d-hero">
-        <div class="d-cover">${raw(coverHtml(fakeSchemaGame(game)))}</div>
+        <div class="d-cover">${coverHtml(fakeSchemaGame(game))}</div>
         <div class="d-head">
           <h3 class="d-title">${game.title}</h3>
-          ${raw(releaseTextHtml(game))}
+          ${releaseTextHtml(game)}
         </div>
       </div>
       ${
         genres.length > 0
-          ? raw(
-              html`<div class="d-sec">
+          ? html`<div class="d-sec">
                 <h3>Géneros</h3>
                 <div class="d-status">
-                  ${genres.map((name) => raw(html`<span class="chip static chip-xs">${name}</span>`))}
+                  ${genres.map((name) => html`<span class="chip static chip-xs">${name}</span>`)}
                 </div>
               </div>`
-            )
           : ''
       }
       ${
@@ -465,14 +455,12 @@ function paintDetail() {
         ${
           inLibrary
             ? raw('<button type="button" class="chip static" disabled>Ya en tu biblioteca</button>')
-            : raw(
-                html`<button type="button" class="btn-primary" data-want-play>
+            : html`<button type="button" class="btn-primary" data-want-play>
                     ➕ Quiero jugarlo
                   </button>
                   <p class="d-meta" style="margin-top:10px">
                     Se añade a tu biblioteca como «Quiero jugar», sin conexión.
                   </p>`
-              )
         }
       </div>
     </section>`;

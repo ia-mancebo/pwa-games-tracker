@@ -173,18 +173,16 @@ function searchBoxHtml(query) {
 function filtersHtml(chips, f) {
   return html`<div class="filters">
     ${chips.genres.length > 0
-      ? raw(chipRowHtml({ dim: 'genre', label: DIM_LABELS.genre, values: chips.genres, active: f.genre }))
+      ? chipRowHtml({ dim: 'genre', label: DIM_LABELS.genre, values: chips.genres, active: f.genre })
       : ''}${chips.platforms.length > 0
-      ? raw(
-          chipRowHtml({
+      ? chipRowHtml({
             dim: 'platform',
             label: DIM_LABELS.platform,
             values: chips.platforms,
             active: f.platform,
-          }),
-        )
+          })
       : ''}${chips.tags.length > 0
-      ? raw(chipRowHtml({ dim: 'tag', label: DIM_LABELS.tag, values: chips.tags, active: f.tag }))
+      ? chipRowHtml({ dim: 'tag', label: DIM_LABELS.tag, values: chips.tags, active: f.tag })
       : ''}
   </div>`;
 }
@@ -196,7 +194,7 @@ function filtersHtml(chips, f) {
  */
 function coverCardHtml(game) {
   return html`<button type="button" class="card" data-game-id="${game.id}" title="${game.title}">
-    ${raw(coverHtml(game))}<span class="cap">${raw(starsHtml(gameRating(game)))}</span>
+    ${coverHtml(game)}<span class="cap">${starsHtml(gameRating(game))}</span>
   </button>`;
 }
 
@@ -229,7 +227,7 @@ function shelfHtml(shelf) {
       <span>${shelf.count} · ★ ${formatAvg(shelf.avgRating)}</span>
     </button>
     <div class="row">
-      ${visible.map((game) => raw(coverCardHtml(game)))} ${rest > 0 ? raw(moreCardHtml(shelf)) : ''}
+      ${visible.map((game) => coverCardHtml(game))} ${rest > 0 ? moreCardHtml(shelf) : ''}
       ${shelf.count === 0 ? raw('<p class="row-empty">Sin juegos todavía.</p>') : ''}
     </div>
   </section>`;
@@ -247,14 +245,14 @@ function panelRowHtml(game, status) {
   const platforms = (game.platforms ?? []).map((p) => p.name).join(', ');
   const tags = game.tags ?? [];
   return html`<div class="b-row" data-game-id="${game.id}">
-    ${raw(coverHtml(game, { mini: true }))}
+    ${coverHtml(game, { mini: true })}
     <span class="b-cell">
       <span class="b-title">${game.title}</span>
-      ${tags.map((tag) => raw(html`<span class="tag-mini own">#${tag}</span>`))}
+      ${tags.map((tag) => html`<span class="tag-mini own">#${tag}</span>`)}
     </span>
     <span class="b-cell b-col-pf mono">${platforms}</span>
-    <span class="b-cell b-col-stars">${raw(starsHtml(gameRating(game)))}</span>
-    <span class="b-cell">${raw(statusPillHtml(status))}</span>
+    <span class="b-cell b-col-stars">${starsHtml(gameRating(game))}</span>
+    <span class="b-cell">${statusPillHtml(status)}</span>
   </div>`;
 }
 
@@ -280,26 +278,24 @@ function panelHtml(doc, lib) {
     <div class="toolbar">
       <button type="button" class="chip" data-back-shelves>← Estantería</button>
       <strong>${status != null ? STATUS_LABELS[status] : ''}</strong>
-      ${raw(searchBoxHtml(f.query))} ${raw(filtersHtml(chipsForDoc(doc), f))}
+      ${searchBoxHtml(f.query)} ${filtersHtml(chipsForDoc(doc), f)}
     </div>
     <div class="cardbox tight">
       <div class="b-thead">
         <span></span><span>Juego</span><span class="b-col-pf">Plataformas</span
         ><span class="b-col-stars">Valoración</span><span>Estado</span>
       </div>
-      ${status != null ? visible.map((g) => raw(panelRowHtml(g, status))) : ''}
+      ${status != null ? visible.map((g) => panelRowHtml(g, status)) : ''}
       ${empty ? raw(empty) : ''}
       ${
         remaining > 0
-          ? raw(
-              html`<div class="panel-more">
+          ? html`<div class="panel-more">
                 <button type="button" class="chip" data-load-more>Cargar más</button>
               </div>`
-            )
           : ''
       }
     </div>
-    ${raw(fabHtml())}
+    ${fabHtml()}
   </div>`;
 }
 
@@ -321,14 +317,14 @@ function shelvesHtml(doc, lib) {
       <p class="sub">Tu estantería: una balda por Estado del juego.</p>
     </header>
     <div class="toolbar">
-      ${raw(searchBoxHtml(f.query))} ${raw(filtersHtml(chipsForDoc(doc), f))}
+      ${searchBoxHtml(f.query)} ${filtersHtml(chipsForDoc(doc), f)}
     </div>
     ${
       shelves.length > 0
-        ? raw(html`<div class="shelves">${shelves.map((s) => raw(shelfHtml(s)))}</div>`)
+        ? html`<div class="shelves">${shelves.map((s) => shelfHtml(s))}</div>`
         : raw(NO_RESULTS)
     }
-    ${raw(fabHtml())}
+    ${fabHtml()}
   </div>`;
 }
 

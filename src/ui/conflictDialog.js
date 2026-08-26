@@ -3,7 +3,7 @@
  * con la fecha de ambas versiones; jamás sobrescribe en silencio. Reutiliza el
  * patrón .add-layer/.add-backdrop/.add-sheet de la hoja de Alta.
  */
-import { html, qs, qsa, raw } from '../lib/dom.js';
+import { html, qs, qsa } from '../lib/dom.js';
 import { store } from '../app.js';
 import { resolveConflict } from '../data/filelink.js';
 
@@ -50,16 +50,16 @@ function paint(fileDoc, { armed = false, note = '', error = '' } = {}) {
   if (!layerEl) return;
   const localUpdatedAt = store.get().doc?.updatedAt ?? null;
   const actions = armed
-    ? raw(html`<div class="conflict-confirm">
+    ? html`<div class="conflict-confirm">
         <p class="p-confirm">¿Seguro? Se descartarán tus cambios locales.</p>
         <button type="button" class="chip danger" data-confirm="yes">Sí, usar el archivo</button>
         <button type="button" class="chip" data-confirm="no">No, volver</button>
-      </div>`)
-    : raw(html`<div class="conflict-actions">
+      </div>`
+    : html`<div class="conflict-actions">
         <button type="button" class="chip danger" data-choice="file">Usar la versión del archivo</button>
         <button type="button" class="btn-primary" data-choice="local">Mantener mis cambios</button>
         <button type="button" class="chip" data-choice="download">Descargar copia local</button>
-      </div>`);
+      </div>`;
   layerEl.innerHTML = html`<div class="add-backdrop" data-close></div>
     <div class="add-sheet conflict-sheet fade" role="dialog" aria-modal="true" aria-labelledby="conflict-title">
       <header class="add-head">
@@ -81,8 +81,8 @@ function paint(fileDoc, { armed = false, note = '', error = '' } = {}) {
         </div>
       </div>
       ${actions}
-      ${note ? raw(html`<p class="conflict-note">${note}</p>`) : ''}
-      ${error ? raw(html`<p class="form-error" role="alert">${error}</p>`) : ''}
+      ${note ? html`<p class="conflict-note">${note}</p>` : ''}
+      ${error ? html`<p class="form-error" role="alert">${error}</p>` : ''}
     </div>`;
   wire(layerEl, fileDoc);
 }
