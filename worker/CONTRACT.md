@@ -5,8 +5,8 @@ Este documento fija el contrato entre el Cloudflare Worker (ticket 20) y los cli
 ## Generalidades
 
 - **Base URL**: `https://<worker>.<cuenta>.workers.dev` (la URL exacta sale del dashboard de Cloudflare tras el deploy; ver `worker/README.md`).
-- **Métodos**: solo `GET`. `OPTIONS` responde preflight con `204`.
-- **CORS**: todas las respuestas llevan `Access-Control-Allow-Origin: <origen autorizado>` (constante `ALLOWED_ORIGIN` en `worker.js`). El repo se entrega con un placeholder que DEBE sustituirse por el origen real de GitHub Pages antes del Deploy; con el placeholder, el navegador bloquea todas las peticiones.
+- **Métodos**: solo `GET`. `OPTIONS` responde preflight con `204` (solo desde un origen autorizado).
+- **Admisión (CORS)**: toda petición debe venir de un **origen autorizado** (cabecera `Origin`), configurado como la secret `ALLOWED_ORIGINS` del Worker (`worker/admit.js`). Sin ese origen —o sin cabecera— responde `403 {"error":"Origen no autorizado."}` incluso fuera del navegador (curl, scripts, otro sitio web). Solo `/api/health` está exenta. Las respuestas llevan `Access-Control-Allow-Origin` como eco del `Origin` admitido de ESA petición, añadido tras servir desde caché. Si `ALLOWED_ORIGINS` no existe o queda vacía, se rechaza todo salvo health (fail-closed).
 - **Content-Type**: `application/json` en todos los cuerpos.
 - **Errores**: siempre `{ "error": string }` con el código HTTP adecuado. Nunca incluyen secretos ni trazas.
 
@@ -103,6 +103,7 @@ Instantánea completa del tablón Novedades: composición fija **12 recientes / 
 | Código | Cuándo | Cuerpo |
 |---|---|---|
 | `400` | `/api/search` sin `q` (o solo espacios) | `{ "error": "Falta el parámetro de búsqueda «q»." }` |
+| `403` | Cabecera `Origin` ausente o fuera de `ALLOWED_ORIGINS`; también cuando esa secret falta o está vacía (fail-closed). Mismo cuerpo para todos los casos | `{ "error": "Origen no autorizado." }` |
 | `404` | Ruta desconocida o método distinto de GET | `{ "error": "Ruta no encontrada." }` |
 | `500` | Secretos `CLIENT_ID`/`CLIENT_SECRET` sin configurar, o fallo interno | `{ "error": "Worker not configured: faltan los secretos CLIENT_ID y CLIENT_SECRET." }` / `{ "error": "Error interno del Worker." }` |
 | `502` | Twitch o IGDB fallaron o respondieron fuera de 2xx | `{ "error": "No se pudo contactar con IGDB." }` |

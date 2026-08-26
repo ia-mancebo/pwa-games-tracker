@@ -24,4 +24,5 @@ Glosario del dominio. Sin detalles de implementación: los términos y nada más
 - **Fuente de datos**: servicio externo del que se obtienen juegos, géneros, carátulas y fechas de lanzamiento.
 - **Cliente de la Fuente de datos**: pieza que habla con la Fuente de datos usando la Conexión. No decide cómo se configura: su conexión se le entrega ya hecha.
 - **Conexión**: ajustes que ligan la app a su Fuente de datos externa. Forman parte del archivo de datos personal de la Biblioteca y viajan con él; nunca incluyen credenciales.
+- **Origen autorizado**: origen web desde el que la app tiene permiso para hablar con la Fuente de datos. Decide qué páginas pueden usarla; se configura aparte del repositorio y nunca incluye credenciales.
 - **Enlace de archivo**: vínculo vivo entre la Biblioteca y su archivo de datos personal (.json): conectarlo, volcar a él, reconectarlo y resolver conflictos. Es lo que permite autoguardado; sin él solo existe el espejo del navegador.
