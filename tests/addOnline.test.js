@@ -181,7 +181,7 @@ describe('camino online activo (servicio configurado + conexión)', () => {
 
     typeQuery(sheet, 'cele');
     typeQuery(sheet, 'celeste');
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1), { timeout: 2000 });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1), { timeout: 5000 });
     await new Promise((r) => setTimeout(r, 350));
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(`${WORKER_URL}/api/search?q=celeste`);
@@ -199,7 +199,7 @@ describe('camino online activo (servicio configurado + conexión)', () => {
 
     const sheet = openSheet();
     typeQuery(sheet, 'celeste');
-    await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(2), { timeout: 2000 });
+    await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(2), { timeout: 5000 });
     const first = need(qsa('[data-result]', sheet)[0]);
     expect(first.querySelector('.cover img')?.getAttribute('src')).toBe(SEARCH_RESULT.coverUrl);
     expect(first.textContent).toContain('Celeste');
@@ -221,7 +221,7 @@ describe('camino online activo (servicio configurado + conexión)', () => {
 
     const sheet = openSheet();
     typeQuery(sheet, 'celeste');
-    await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 2000 });
+    await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 5000 });
     btn(qs('[data-result]', sheet)).click();
 
     // Previsualización con los datos compartidos; la biblioteca sigue intacta.
@@ -247,7 +247,7 @@ describe('camino online activo (servicio configurado + conexión)', () => {
 
     const sheet = openSheet();
     typeQuery(sheet, 'celeste');
-    await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 2000 });
+    await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 5000 });
     btn(qs('[data-result]', sheet)).click();
     btn(await vi.waitFor(() => need(qs('[data-preview-add]', sheet)))).click();
 
@@ -277,7 +277,7 @@ describe('camino online activo (servicio configurado + conexión)', () => {
 
     const sheet = need(qs('.add-sheet'));
     typeQuery(sheet, 'celeste');
-    await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 2000 });
+    await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 5000 });
     btn(qs('[data-result]', sheet)).click();
     btn(await vi.waitFor(() => need(qs('[data-preview-add]', sheet)))).click();
 
@@ -294,7 +294,7 @@ describe('camino online activo (servicio configurado + conexión)', () => {
 
     const sheet = openSheet();
     typeQuery(sheet, 'celeste');
-    await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 2000 });
+    await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 5000 });
     btn(qs('[data-result]', sheet)).click();
     btn(await vi.waitFor(() => need(qs('[data-preview-add]', sheet)))).click();
 
@@ -317,7 +317,7 @@ describe('camino online activo (servicio configurado + conexión)', () => {
 
     const sheet = openSheet();
     typeQuery(sheet, 'otro');
-    await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 2000 });
+    await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 5000 });
     // El título «Celeste» coincide por normalización aunque el igdbId sea nuevo.
     stubFetch([{ ...SEARCH_RESULT, igdbId: 999999 }]);
     typeQuery(sheet, 'celeste 2');
@@ -326,7 +326,7 @@ describe('camino online activo (servicio configurado + conexión)', () => {
         const rows = qsa('[data-result]', sheet);
         return rows.length === 1 && rows[0]?.textContent?.includes('Celeste');
       },
-      { timeout: 2000 }
+      { timeout: 5000 }
     );
     btn(qs('[data-result]', sheet)).click();
     btn(await vi.waitFor(() => need(qs('[data-preview-add]', sheet)))).click();
@@ -343,7 +343,7 @@ describe('camino online activo (servicio configurado + conexión)', () => {
 
     const sheet = openSheet();
     typeQuery(sheet, 'zzzz');
-    await vi.waitFor(() => need(qs('[data-online-empty]', sheet)), { timeout: 2000 });
+    await vi.waitFor(() => need(qs('[data-online-empty]', sheet)), { timeout: 5000 });
     expect(need(qs('[data-online-empty]', sheet)).textContent).toContain('Sin resultados');
   });
 
@@ -359,7 +359,7 @@ describe('camino online activo (servicio configurado + conexión)', () => {
 
     const sheet = openSheet();
     typeQuery(sheet, 'celeste');
-    await vi.waitFor(() => need(qs('[data-online-error]', sheet)), { timeout: 2000 });
+    await vi.waitFor(() => need(qs('[data-online-error]', sheet)), { timeout: 5000 });
     expect(need(qs('[data-online-error]', sheet)).textContent).toContain(
       'No se pudo contactar con el servicio'
     );
@@ -411,7 +411,7 @@ describe('camino online deshabilitado', () => {
     expect(btn(need(qs('[data-online-tab]', sheet))).classList.contains('on')).toBe(true);
 
     typeQuery(sheet, 'celeste');
-    await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 2000 });
+    await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 5000 });
     btn(qs('[data-result]', sheet)).click();
     btn(await vi.waitFor(() => need(qs('[data-preview-add]', sheet)))).click();
     await vi.waitFor(() => expect(store.get().doc?.games).toHaveLength(1));

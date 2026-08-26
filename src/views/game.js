@@ -539,7 +539,8 @@ function playCardHtml(game, play) {
 }
 
 /**
- * Galería de capturas: scroll horizontal, imágenes siempre online.
+ * Galería de capturas: scroll horizontal, imágenes siempre online; el clic
+ * abre el visor a pantalla completa ({@link openLightbox}).
  * @param {string[]} shots
  * @returns {string}
  */
@@ -548,10 +549,64 @@ function galleryHtml(shots) {
     <h3>Galería</h3>
     <div class="d-gallery"
       >${shots.map(
-        (url) => html`<span class="d-shot"><img loading="lazy" src="${url}" alt="" /></span>`
+        (url) =>
+          html`<button
+              type="button"
+              class="d-shot"
+              data-shot="${url}"
+              aria-label="Ampliar captura"
+              ><img loading="lazy" src="${url}" alt="" /></button
+            >`
       )}</div
     >
   </section>`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Visor de capturas (lightbox)                                        */
+/* ------------------------------------------------------------------ */
+
+/** Capa del visor abierta. @type {HTMLElement|null} */
+let lightboxLayer = null;
+
+/** @type {((e: KeyboardEvent) => void)|null} */
+let lightboxKeyHandler = null;
+
+/**
+ * Abre el visor a pantalla completa con una captura ampliada.
+ * @param {string} url
+ */
+export function openLightbox(url) {
+  if (!url || lightboxLayer?.isConnected) return;
+  lightboxLayer = document.createElement('div');
+  lightboxLayer.className = 'lightbox fade';
+  lightboxLayer.setAttribute('role', 'dialog');
+  lightboxLayer.setAttribute('aria-modal', 'true');
+  lightboxLayer.setAttribute('aria-label', 'Captura ampliada');
+  lightboxLayer.innerHTML = html`<img src="${url}" alt="Captura ampliada" />
+    <button type="button" class="chip lightbox-close" data-close-lightbox aria-label="Cerrar">
+      ✕
+    </button>`;
+  document.body.appendChild(lightboxLayer);
+  // Cualquier toque fuera (fondo o imagen) cierra; es un visor, no un formulario.
+  lightboxLayer.addEventListener('click', () => closeLightbox());
+  lightboxKeyHandler = (e) => {
+    if (e.key === 'Escape' && lightboxLayer?.isConnected) {
+      e.preventDefault();
+      closeLightbox();
+    }
+  };
+  document.addEventListener('keydown', lightboxKeyHandler);
+}
+
+/** Cierra el visor y retira sus listeners globales. */
+export function closeLightbox() {
+  if (lightboxKeyHandler) {
+    document.removeEventListener('keydown', lightboxKeyHandler);
+    lightboxKeyHandler = null;
+  }
+  lightboxLayer?.remove();
+  lightboxLayer = null;
 }
 
 /**
@@ -805,6 +860,12 @@ function wire(container, store) {
 
     if (pick('[data-back-ficha]')) {
       closeGame(store);
+      return;
+    }
+    const shot = pick('[data-shot]');
+    if (shot) {
+      const url = shot.getAttribute('data-shot');
+      if (url) openLightbox(url);
       return;
     }
     if (pick('[data-edit-title]')) {

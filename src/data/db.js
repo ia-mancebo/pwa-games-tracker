@@ -5,9 +5,10 @@
  */
 
 const DB_NAME = 'game-tracker';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STATE_KEY = 'doc';
 const META_KEY = 'app';
+const HANDLE_KEY = 'file';
 
 /** @typedef {{ dirty: boolean, updatedAt: string|null, lastSavedFileHash: string|null, connectedFileName: string|null, exportFileName?: string, persistAsked?: boolean }} Meta */
 
@@ -35,6 +36,8 @@ export function openDb() {
       if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
       // Instantánea de Novedades (ticket 23, spec §7.2); clave 'snapshot'.
       if (!db.objectStoreNames.contains('novedades')) db.createObjectStore('novedades');
+      // Handle FSA del enlace de archivo; clave 'file' (ticket 18/autoguardado).
+      if (!db.objectStoreNames.contains('handles')) db.createObjectStore('handles');
     });
     req.addEventListener('success', () => resolve(req.result));
     req.addEventListener('error', () => reject(req.error ?? new Error('No se pudo abrir IDB')));
@@ -137,6 +140,52 @@ export async function putStateAndMeta(doc, meta, { strict = true } = {}) {
     tx.objectStore('state').put(doc, STATE_KEY);
     tx.objectStore('meta').put(meta, META_KEY);
     if (strict) tx.commit();
+    await done(tx);
+  } finally {
+    db.close();
+  }
+}
+
+/** Registro del enlace de archivo persistido. @typedef {{ name: string|null, handle: any }} HandleRecord */
+
+/**
+ * Lee el handle FSA guardado entre sesiones (clave 'file'); null si no hay.
+ * @returns {Promise<HandleRecord|null>}
+ */
+export async function getHandleRecord() {
+  const db = await openDb();
+  try {
+    const tx = db.transaction('handles', 'readonly');
+    const value = await asPromise(tx.objectStore('handles').get(HANDLE_KEY));
+    return /** @type {HandleRecord|null} */ (value) ?? null;
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Guarda el handle FSA y el nombre del archivo para reconectar sin picker.
+ * @param {any} handle FileSystemFileHandle; structured-cloneable en Chrome.
+ * @param {string|null} name
+ * @returns {Promise<void>}
+ */
+export async function putHandleRecord(handle, name) {
+  const db = await openDb();
+  try {
+    const tx = db.transaction('handles', 'readwrite');
+    tx.objectStore('handles').put({ name, handle }, HANDLE_KEY);
+    await done(tx);
+  } finally {
+    db.close();
+  }
+}
+
+/** Borra el handle guardado (p. ej., al resetear la sesión de enlace). */
+export async function clearHandleRecord() {
+  const db = await openDb();
+  try {
+    const tx = db.transaction('handles', 'readwrite');
+    tx.objectStore('handles').delete(HANDLE_KEY);
     await done(tx);
   } finally {
     db.close();

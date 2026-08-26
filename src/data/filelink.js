@@ -7,11 +7,77 @@ import { store } from '../app.js';
 import { debounce } from '../lib/debounce.js';
 import { importDoc, markSaved } from './library.js';
 import { validateDoc } from '../domain/validate.js';
-import { getHandle, hasFsa, pickJsonText, setHandle } from '../services/fsa.js';
+import { getHandle, hasFsa, pickJsonText, permissionState, setHandle } from '../services/fsa.js';
 import { sha256Hex } from '../services/hash.js';
 import { snapshotBackup } from './opfs.js';
 import { requestPersistOnce } from './persist.js';
 import { assertWritable } from './tablock.js';
+import {
+  clearHandleRecord,
+  getHandleRecord,
+  putHandleRecord,
+} from './db.js';
+
+/**
+ * Registro del enlace persistido: {name, handle}.
+ * @typedef {{ name: string|null, handle: any }} HandleRecord
+ */
+
+/**
+ * Almacén del handle FSA entre sesiones (IDB en producción). Seam inyectable:
+ * los FileSystemFileHandle reales son structured-cloneable, pero los fakes de
+ * prueba llevan métodos y no pueden cruzar IDB; cada escenario monta el suyo.
+ * @typedef {{
+ *   get(): Promise<HandleRecord|null>,
+ *   put(handle: any, name: string|null): Promise<void>,
+ *   clear(): Promise<void>,
+ * }} HandleStore
+ */
+
+/** @type {HandleStore} */
+let handleStore = {
+  /** @returns {Promise<HandleRecord|null>} */
+  async get() {
+    return getHandleRecord();
+  },
+  /**
+   * @param {any} handle
+   * @param {string|null} name
+   */
+  async put(handle, name) {
+    await putHandleRecord(handle, name);
+  },
+  async clear() {
+    await clearHandleRecord();
+  },
+};
+
+/**
+ * Sustituye (o, con null, restablece) el almacén del enlace.
+ * @param {HandleStore | null} [next]
+ */
+export function setHandleStore(next) {
+  if (!next) {
+    handleStore = {
+      /** @returns {Promise<HandleRecord|null>} */
+      async get() {
+        return getHandleRecord();
+      },
+      /**
+       * @param {any} h
+       * @param {string|null} n
+       */
+      async put(h, n) {
+        await putHandleRecord(h, n);
+      },
+      async clear() {
+        await clearHandleRecord();
+      },
+    };
+    return;
+  }
+  handleStore = next;
+}
 
 /**
  * Handle FSA con escritura y permisos; tipado estructural para que los tests
@@ -80,6 +146,20 @@ export function setConflictHandler(fn) {
  */
 export function markConnected(name) {
   store.set({ file: { status: 'connected', name, error: null } });
+  // La conexión fue deliberada: guarda el handle para reconectar sin picker
+  // en la próxima sesión y que el autoguardado retome solo. Se espera a IDB
+  // dentro: lectores inmediatos (pruebas, arranque) asumen registro escrito.
+  /** @returns {Promise<void>} */
+  const persist = async () => {
+    const handle = getHandle();
+    if (!name || !handle) return;
+    try {
+      await handleStore.put(handle, name);
+    } catch {
+      // Sin registro la próxima sesión pedirá el archivo a mano; nada rompe.
+    }
+  };
+  return persist();
 }
 
 /** @returns {string | null} */
@@ -155,7 +235,69 @@ export async function pickAndConnect() {
     return { status: 'error', error: errorMessage(err) };
   }
   setConnected(picked.name);
+  const handle = getHandle();
+  if (handle) {
+    try {
+      await handleStore.put(handle, picked.name);
+    } catch {
+      // Sin registro la próxima sesión pedirá el archivo a mano.
+    }
+  }
   return { status: 'connected', name: picked.name };
+}
+
+/**
+ * Reconexión silenciosa al arrancar (autoguardado sin fricción): recupera el
+ * handle guardado en IDB y, si el permiso sigue vigente SIN gesto, compara
+ * hashes igual que {@link reconnect}. Con permiso caducado devuelve
+ * 'needs-gesture' para que la UI ofrezca el botón de reconectar. Cualquier
+ * fallo de lectura queda como error de sesión; nunca tumba el arranque.
+ * @returns {Promise<'connected'|'needs-gesture'|'none'>}
+ */
+export async function restoreSavedLink() {
+  if (!hasFsa() || !store.get().doc) return 'none';
+  let record;
+  try {
+    record = await handleStore.get();
+  } catch {
+    return 'none';
+  }
+  if (!record?.handle) {
+    await handleStore.clear().catch(() => {});
+    return 'none';
+  }
+  const { meta } = store.get();
+  const name = record.name ?? meta.connectedFileName ?? null;
+  setHandle(/** @type {WritableFileHandle} */ (record.handle));
+  const permission = await permissionState(record.handle);
+  if (permission !== 'granted') return 'needs-gesture';
+  let fileText;
+  let fileHash;
+  try {
+    const file = await /** @type {WritableFileHandle} */ (record.handle).getFile();
+    fileText = await file.text();
+    fileHash = await sha256Hex(fileText);
+  } catch (err) {
+    setFileError(err);
+    return 'needs-gesture';
+  }
+  if (fileHash === meta.lastSavedFileHash) {
+    setConnected(name);
+    if (meta.dirty) await saveNow();
+    return 'connected';
+  }
+  if (!meta.dirty) {
+    try {
+      await importDoc(fileText, { hash: fileHash, fileName: name });
+    } catch (err) {
+      setFileError(err);
+      return 'needs-gesture';
+    }
+    setConnected(name);
+    return 'connected';
+  }
+  raiseConflict(fileText, fileHash);
+  return 'connected';
 }
 
 /**
@@ -443,5 +585,7 @@ export function resetFilelink() {
   stopAutosave();
   pendingConflict = null;
   saving = false;
+  scheduled = false;
   setHandle(null);
+  void handleStore.clear().catch(() => {});
 }

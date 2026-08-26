@@ -3,11 +3,13 @@ import './styles/base.css';
 import './styles/components.css';
 import { createApp, store } from './app.js';
 import { initLibrary } from './data/library.js';
-import { startAutosave } from './data/filelink.js';
+import { restoreSavedLink, startAutosave } from './data/filelink.js';
 import { requestPersistOnce } from './data/persist.js';
 import { acquireTabLock, onLockReleased } from './data/tablock.js';
 import { initCoverSeeding } from './data/covers.js';
 import { initNovedadesRetry } from './data/novedades.js';
+import { hasFsa } from './services/fsa.js';
+import { openReconnectModal } from './ui/reconnectModal.js';
 import { registerSW } from 'virtual:pwa-register';
 import { showOfflineToast, showUpdateToast } from './ui/toasts.js';
 
@@ -44,6 +46,23 @@ if (root) {
     initNovedadesRetry();
   } catch {
     // Sin listeners de red el refresco queda manual.
+  }
+  try {
+    // Reconexión silenciosa del enlace al .json (autoguardado entre sesiones):
+    // handle guardado en IDB + permiso vigente ⇒ conecta y vuelca pendientes
+    // sin pedir nada. Con permiso caducado o sin enlace guardado, el modal
+    // grande avisa: sin archivo conectado los cambios viven solo aquí.
+    const restored = await restoreSavedLink();
+    if (
+      (restored === 'needs-gesture' || (restored === 'none' && hasFsa())) &&
+      store.get().doc &&
+      store.get().tabRole === 'primary'
+    ) {
+      openReconnectModal();
+    }
+  } catch {
+    // El arranque nunca depende de la reconexión; la pastilla del enlace
+    // informa y «Datos» permite conectar o exportar a mano.
   }
   try {
     // Autoguardado + chequeos de foco/visibilidad (ticket 18).

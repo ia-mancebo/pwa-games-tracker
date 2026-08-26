@@ -26,6 +26,24 @@ export function hasFsa() {
   return typeof self !== 'undefined' && 'showOpenFilePicker' in self;
 }
 
+/**
+ * Estado de permiso del handle SIN gesto de usuario (`queryPermission`).
+ * Handles sin el método (fakes de prueba, motores antiguos) se asumen
+ * concedidos: la conexión reciente siempre llegó con permiso explícito.
+ * @param {{ getFile(): Promise<File>, queryPermission?: (o?: { mode: string }) => Promise<string> } | null} handle
+ * @param {'read' | 'readwrite'} [mode]
+ * @returns {Promise<'granted' | 'denied' | 'prompt'>}
+ */
+export async function permissionState(handle, mode = 'readwrite') {
+  const query = /** @type {any} */ (handle)?.queryPermission;
+  if (typeof query !== 'function') return 'granted';
+  try {
+    return await query.call(handle, { mode });
+  } catch {
+    return 'denied';
+  }
+}
+
 const PICKER_OPTS = {
   types: [{ description: 'Game Tracker', accept: { 'application/json': ['.json'] } }],
   multiple: false,

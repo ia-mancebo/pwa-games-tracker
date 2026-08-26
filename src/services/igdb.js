@@ -11,7 +11,12 @@ import { store } from '../app.js';
 /** Mensaje único de modo degradado para cualquier fallo del servicio (spec §7.3). */
 export const IGDB_SERVICE_ERROR = 'No se pudo contactar con el servicio';
 
-const TIMEOUT_MS = 10_000;
+/**
+ * Corte de cada petición al Worker. 25 s deja sitio al arranque en frío del
+ * Worker y a la limitación de IGDB (novedades trae cuatro secciones); antes
+ * de bajarlo de aquí, comprobar worker/CONTRACT.md.
+ */
+const TIMEOUT_MS = 25_000;
 
 const NOVEDADES_SECTIONS = ['recientes', 'proximos', 'populares', 'esperados'];
 
@@ -88,7 +93,7 @@ export function createDataSource(readConnection) {
   }
 
   /**
-   * GET JSON contra el Worker con timeout de 10 s; todo fallo → IgdbError.
+   * GET JSON contra el Worker con timeout de 25 s; todo fallo → IgdbError.
    * @param {string} path Ruta con query incluida («/api/search?q=…»).
    * @returns {Promise<unknown>}
    */

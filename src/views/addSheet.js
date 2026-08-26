@@ -28,8 +28,8 @@ export const OFFLINE_REASON = 'Sin conexión — crea el juego manualmente';
 /** Resultados mostrados como máximo en la lista de búsqueda. */
 const MAX_RESULTS = 10;
 
-/** Retardo del debounce de búsqueda (spec §8.4). */
-const SEARCH_DEBOUNCE_MS = 300;
+/** Retardo del debounce de búsqueda (spec §8.4): 1 s para no saturar el proxy. */
+const SEARCH_DEBOUNCE_MS = 1000;
 
 /** Coincidencias mostradas como máximo en el aviso de duplicados. */
 const MAX_DUP_LIST = 3;

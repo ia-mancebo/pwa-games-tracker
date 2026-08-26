@@ -117,7 +117,7 @@ describe('searchGames', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('aborta a los 10 s y lanza IgdbError', async () => {
+  it('aborta a los 25 s y lanza IgdbError', async () => {
     vi.useFakeTimers();
     try {
       fetchMock = vi.fn(
@@ -136,7 +136,7 @@ describe('searchGames', () => {
         name: 'IgdbError',
         message: 'No se pudo contactar con el servicio',
       });
-      await vi.advanceTimersByTimeAsync(10_000);
+      await vi.advanceTimersByTimeAsync(25_000);
       await expectation;
     } finally {
       vi.useRealTimers();
