@@ -46,7 +46,7 @@ function hbarHtml(rows) {
  * @returns {string}
  */
 function distBodyHtml(rows) {
-  if (rows.length === 0) return '<p class="d-meta">Sin datos.</p>';
+  if (rows.length === 0) return html`<p class="d-meta">Sin datos.</p>`;
   return hbarHtml(rows.slice(0, BAR_LIMIT));
 }
 
@@ -73,7 +73,7 @@ function topSectionHtml(top) {
     <h3>Top 5 mejor valorados</h3>
     ${
       top.length === 0
-        ? '<p class="d-meta">Sin valoraciones todavía.</p>'
+        ? html`<p class="d-meta">Sin valoraciones todavía.</p>`
         : html`<ol class="top-list">${top.map((t) =>
               html`<li>
                 <button type="button" class="top-row" data-game-id="${t.game.id}">

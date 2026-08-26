@@ -1005,19 +1005,21 @@ button.plate:hover {
     background 0.15s;
 }
 
-.status-chip.st-backlog span {
+/* Variante por data-status: las clases st-* quedan reservadas a la píldora
+   de Estado (ui/pill.js); en el label pintarían su fondo/anillo rectangular. */
+.status-chip[data-status='backlog'] span {
   --sc: var(--st-backlog);
 }
 
-.status-chip.st-playing span {
+.status-chip[data-status='playing'] span {
   --sc: var(--st-playing);
 }
 
-.status-chip.st-finished span {
+.status-chip[data-status='finished'] span {
   --sc: var(--st-finished);
 }
 
-.status-chip.st-abandoned span {
+.status-chip[data-status='abandoned'] span {
   --sc: var(--st-abandoned);
 }
 

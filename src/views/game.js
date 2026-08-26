@@ -206,25 +206,25 @@ function sharedBodyHtml(game, name) {
     case 'description':
       return game.description
         ? html`<p class="d-desc">${game.description}</p>`
-        : '<p class="d-meta">—</p>';
+        : html`<p class="d-meta">—</p>`;
     case 'coverUrl':
       return game.coverUrl
         ? html`<p class="d-meta mono wrap">${game.coverUrl}</p>`
-        : '<p class="d-meta">—</p>';
+        : html`<p class="d-meta">—</p>`;
     case 'genres': {
       const genres = game.genres ?? [];
-      if (genres.length === 0) return '<p class="d-meta">—</p>';
+      if (genres.length === 0) return html`<p class="d-meta">—</p>`;
       return html`<div class="d-status"
         >${genres.map((g) => html`<span class="chip static">${g.name}</span>`)}</div
       >`;
     }
     case 'platforms': {
       const platforms = game.platforms ?? [];
-      if (platforms.length === 0) return '<p class="d-meta">—</p>';
+      if (platforms.length === 0) return html`<p class="d-meta">—</p>`;
       return html`<p class="d-meta mono wrap">${platforms.map((p) => p.name).join(', ')}</p>`;
     }
     case 'screenshots':
-      return '<p class="d-meta">—</p>';
+      return html`<p class="d-meta">—</p>`;
   }
 }
 

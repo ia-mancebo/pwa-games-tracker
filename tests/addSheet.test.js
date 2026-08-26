@@ -195,8 +195,16 @@ describe('botón fijo y hoja de alta', () => {
 
     const sheet = openSheet();
     typeTitle(sheet, 'Hades');
+
+    // Los chips van por data-status: la clase st-* es de la píldora de Estado
+    // y sobre el label pintaba fondo/anillo rectangular (regresión visual).
+    const chips = qsa('.status-chip', sheet);
+    expect(chips).toHaveLength(4);
+    for (const chip of chips) expect(chip.className).not.toMatch(/st-/);
+    expect(qs(".status-chip[data-status='playing']", sheet)).toBeTruthy();
+
     const playing = need(qs('input[name="status"][value="playing"]', sheet));
-    btn(qs(`label.status-chip.st-playing`, sheet)).click();
+    btn(qs(`label.status-chip[data-status='playing']`, sheet)).click();
     expect(/** @type {HTMLInputElement} */ (playing).checked).toBe(true);
 
     btn(qs('[data-save-add]', sheet)).click();

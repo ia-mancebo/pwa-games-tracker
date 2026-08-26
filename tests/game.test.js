@@ -533,6 +533,27 @@ describe('reglas de edición de datos compartidos (spec §8.5)', () => {
     expect(select.textContent).toContain('Steam Deck');
   });
 
+  it('alta manual: los datos compartidos vacíos pintan «—» como elemento, no como texto escapado', async () => {
+    await seed([
+      {
+        id: 'gm',
+        title: 'Mi juego',
+        plays: [{ status: 'backlog', addedAt: '2026-07-01' }],
+      },
+    ]);
+    const root = mount();
+    createApp(root);
+    openFromPanel(root, 'gm', 'backlog');
+
+    // Los cinco cuerpos (descripción, carátula, géneros, plataformas, capturas)
+    // muestran su raaya como <p class="d-meta"> real; una cadena plana devuelta
+    // por sharedBodyHtml llegaba ESCAPADA al interpolarse en la plantilla html.
+    const dashes = qsa('section[data-sec] .d-body > p.d-meta', root);
+    expect(dashes).toHaveLength(5);
+    for (const p of dashes) expect(p.textContent?.trim()).toBe('—');
+    expect(root.textContent).not.toContain('<p class="d-meta">');
+  });
+
   it('Cancelar descarta la edición del campo compartido sin escribir nada', async () => {
     await seed([
       {

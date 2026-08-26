@@ -119,6 +119,24 @@ describe('dashboard de estadísticas', () => {
     expect(kpi('avg')).toBe('4,5');
   });
 
+  it('los avisos de distribución y Top 5 vacíos pintan como elemento, no como texto escapado', async () => {
+    await seed([
+      { id: 'g1', title: 'Gris', plays: [{ id: 'g1-p1', status: 'backlog', addedAt: '2026-07-01' }] },
+    ]);
+    const root = mount();
+    openStats(root);
+
+    // Sin plataforma/género/etiquetas ni valoraciones: esas cuatro cajas
+    // muestran su aviso como <p class="d-meta"> real; devuelto como cadena
+    // plana llegaba ESCAPADO al interpolarse en la plantilla html. «Terminados
+    // en el tiempo» siempre pinta su ventana de 12 meses, sin aviso.
+    const notices = qsa('section.cardbox > p.d-meta', root);
+    expect(notices).toHaveLength(4);
+    for (const p of notices.slice(0, 3)) expect(p.textContent?.trim()).toBe('Sin datos.');
+    expect(notices[3].textContent?.trim()).toBe('Sin valoraciones todavía.');
+    expect(root.textContent).not.toContain('<p class="d-meta">');
+  });
+
   it('las tres filas de filtros empiezan con «Todas» activa', async () => {
     await seed(SAMPLE_GAMES);
     const root = mount();

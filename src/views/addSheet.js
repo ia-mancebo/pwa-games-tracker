@@ -247,12 +247,14 @@ function disabledOnlineHtml(configured) {
 }
 
 /**
- * Chip de radio para elegir el Estado inicial antes de guardar.
+ * Chip de radio para elegir el Estado inicial antes de guardar. La variante
+ * viaja en `data-status`, NO en clase `st-*`: esas clases son las de la
+ * píldora de Estado (ui/pill.js) y pintarían su fondo/anillo sobre el label.
  * @param {import('../domain/schema.js').Status} status
  * @returns {string}
  */
 function statusChipHtml(status) {
-  return html`<label class="status-chip st-${status}">
+  return html`<label class="status-chip" data-status="${status}">
     <input type="radio" name="status" value="${status}" ${status === 'backlog' ? 'checked' : ''} />
     <span>${STATUS_LABELS[status]}</span>
   </label>`;
