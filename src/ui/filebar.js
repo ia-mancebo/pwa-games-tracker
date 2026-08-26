@@ -45,8 +45,11 @@ export function renderFilebar(container, _store) {
   const ro = readOnly();
   const banner = ro ? raw(bannerHtml()) : '';
   if (!hasFsa()) {
+    // Sin File System Access no hay .json enlazado, pero el espejo IndexedDB
+    // guarda cada cambio al momento (library.mutate): la pastilla informa,
+    // no alerta. Exportar en Datos sigue como copia manual.
     container.innerHTML = html`${banner}<div class="filebar">
-      <span class="pill st-backlog">Sin acceso a archivos — usa Exportar en Datos</span>${raw(DATOS_BTN)}
+      <span class="pill st-playing">Guardado automático en este navegador</span>${raw(DATOS_BTN)}
     </div>`;
     return;
   }

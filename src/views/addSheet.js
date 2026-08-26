@@ -2,9 +2,10 @@
  * Hoja de Alta (tickets 16 y 21, spec §8.4): botón fijo → hoja con dos
  * caminos. «Buscar online» busca contra el proxy IGDB (src/services/igdb.js)
  * con debounce de 300 ms; sin servicio o sin conexión queda deshabilitada con
- * motivo, empujando al manual. Elegir un resultado precarga los datos
- * compartidos y guarda vía el MISMO camino único {@link submitManual}, con el
- * aviso de duplicados de la spec §4.5 (abrir ficha existente o crear otro).
+ * motivo, empujando al manual. Elegir un resultado abre la PREVISUALIZACIÓN
+ * con sus datos compartidos; «Añadir a la biblioteca» guarda vía el MISMO
+ * camino único {@link submitManual}, con el aviso de duplicados de la spec
+ * §4.5 (abrir ficha existente o crear otro).
  */
 import { html, qs, qsa, raw } from '../lib/dom.js';
 import { debounce } from '../lib/debounce.js';
@@ -166,7 +167,7 @@ function resultItemHtml(result, index) {
       ${raw(coverHtml(fakeGame))}
       <span class="r-meta"
         ><span class="r-title">${result.title}</span>${sub
-          ? html`<span class="r-sub">${sub}</span>`
+          ? raw(html`<span class="r-sub">${sub}</span>`)
           : ''}</span
       >
     </button>
@@ -174,11 +175,48 @@ function resultItemHtml(result, index) {
 }
 
 /**
- * Cuerpo de la región de resultados según el estado de búsqueda.
- * @param {OnlineState} online
+ * Previsualización del resultado elegido (spec §8.4): los datos compartidos
+ * del juego ANTES de decidir; añadir exige pulsar el botón explícito.
+ * @param {import('../services/igdb.js').IgdbGame} result
  * @returns {string}
  */
-function onlineResultsHtml(online) {
+function previewHtml(result) {
+  const fakeGame = /** @type {import('../domain/schema.js').Game} */ ({
+    id: `igdb-${result.igdbId}`,
+    title: result.title,
+    coverUrl: result.coverUrl ?? undefined,
+    plays: [],
+  });
+  const year = result.releaseDate ? result.releaseDate.slice(0, 4) : '';
+  const platforms = (result.platforms ?? []).map((p) => p.name).join(', ');
+  const sub = [year, platforms].filter(Boolean).join(' · ');
+  const genres = (result.genres ?? []).map((g) =>
+    raw(html`<span class="chip static">${g.name}</span>`)
+  );
+  return html`<div class="add-preview">
+    ${raw(coverHtml(fakeGame))}
+    <div class="add-preview-info">
+      <h3 class="add-preview-title">${result.title}</h3>
+      ${sub ? raw(html`<p class="r-sub">${sub}</p>`) : ''}
+      ${genres.length > 0 ? raw(html`<div class="add-preview-genres">${genres}</div>`) : ''}
+      ${result.description ? raw(html`<p class="add-preview-desc">${result.description}</p>`) : ''}
+    </div>
+    <div class="add-preview-actions">
+      <button type="button" class="chip" data-preview-back>← Volver a resultados</button>
+      <button type="button" class="btn-primary" data-preview-add>Añadir a la biblioteca</button>
+    </div>
+  </div>`;
+}
+
+/**
+ * Cuerpo de la región de resultados según el estado de búsqueda; con un
+ * resultado pendiente muestra su previsualización en lugar de la lista.
+ * @param {OnlineState} online
+ * @param {import('../services/igdb.js').IgdbGame|null} pending
+ * @returns {string}
+ */
+function onlineResultsHtml(online, pending) {
+  if (pending) return previewHtml(pending);
   if (online.status === 'loading')
     return html`<p class="add-online-hint" data-online-loading>Buscando…</p>`;
   if (online.status === 'error')
@@ -296,7 +334,7 @@ function sheetHtml(state, { onlineReady, configured }) {
             autocomplete="off"
           />
           <div class="add-online-results" data-online-results>
-            ${raw(onlineResultsHtml(state.online))}
+            ${raw(onlineResultsHtml(state.online, state.pending))}
           </div>
           <div class="add-feedback" data-add-feedback>${raw(feedbackHtml(state))}</div>
         </div>`
@@ -363,7 +401,7 @@ export function openAddSheet(opts = {}) {
 
   const paintOnline = () => {
     const box = layer ? qs('[data-online-results]', layer) : null;
-    if (box) box.innerHTML = onlineResultsHtml(state.online);
+    if (box) box.innerHTML = onlineResultsHtml(state.online, state.pending);
   };
 
   const clearTransient = () => {
@@ -497,15 +535,26 @@ export function openAddSheet(opts = {}) {
       store.set({ tab: 'biblioteca' });
       return;
     }
+    if (e.target.closest('[data-preview-back]')) {
+      state.pending = null;
+      paintOnline();
+      return;
+    }
+    if (e.target.closest('[data-preview-add]')) {
+      void doSubmit(false);
+      return;
+    }
     if (e.target.closest('[data-result]')) {
       const button = e.target.closest('[data-result]');
       const index = Number(button?.getAttribute('data-result'));
       const result = state.online.results[index];
       if (result) {
+        // Previsualizar primero: añadir exige confirmación explícita.
         state.pending = result;
         state.error = null;
         state.duplicates = null;
-        void doSubmit(false);
+        paintFeedback();
+        paintOnline();
       }
       return;
     }

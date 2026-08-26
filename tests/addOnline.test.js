@@ -212,7 +212,7 @@ describe('camino online activo (servicio configurado + conexión)', () => {
     expect(second.textContent).toContain('2022');
   });
 
-  it('elegir un resultado crea el juego con datos IGDB y primera jugada Quiero jugar', async () => {
+  it('elegir un resultado muestra la previsualización y NO añade hasta confirmar; «Volver» restaura la lista', async () => {
     stubFetch();
     await newLibrary(NOW);
     seedWorkerUrl(WORKER_URL);
@@ -223,6 +223,33 @@ describe('camino online activo (servicio configurado + conexión)', () => {
     typeQuery(sheet, 'celeste');
     await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 2000 });
     btn(qs('[data-result]', sheet)).click();
+
+    // Previsualización con los datos compartidos; la biblioteca sigue intacta.
+    const preview = await vi.waitFor(() => need(qs('.add-preview', sheet)));
+    expect(preview.textContent).toContain('Celeste');
+    expect(preview.textContent).toContain('2018');
+    expect(preview.textContent).toContain('Un plataformas para quienes están decididos a escalar.');
+    expect(preview.textContent).toContain('Platform');
+    expect(store.get().doc?.games).toHaveLength(0);
+
+    btn(qs('[data-preview-back]', sheet)).click();
+    await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1));
+    expect(qs('.add-preview', sheet)).toBeNull();
+    expect(store.get().doc?.games).toHaveLength(0);
+  });
+
+  it('elegir un resultado y confirmar crea el juego con datos IGDB y primera jugada Quiero jugar', async () => {
+    stubFetch();
+    await newLibrary(NOW);
+    seedWorkerUrl(WORKER_URL);
+    const root = mount();
+    createApp(root);
+
+    const sheet = openSheet();
+    typeQuery(sheet, 'celeste');
+    await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 2000 });
+    btn(qs('[data-result]', sheet)).click();
+    btn(await vi.waitFor(() => need(qs('[data-preview-add]', sheet)))).click();
 
     await vi.waitFor(() => expect(store.get().doc?.games).toHaveLength(1));
     const game = currentDoc().games[0];
@@ -252,6 +279,7 @@ describe('camino online activo (servicio configurado + conexión)', () => {
     typeQuery(sheet, 'celeste');
     await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 2000 });
     btn(qs('[data-result]', sheet)).click();
+    btn(await vi.waitFor(() => need(qs('[data-preview-add]', sheet)))).click();
 
     await vi.waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
     expect(onSaved.mock.calls[0]?.[0]).toMatchObject({ igdbId: 1877, title: 'Celeste' });
@@ -268,6 +296,7 @@ describe('camino online activo (servicio configurado + conexión)', () => {
     typeQuery(sheet, 'celeste');
     await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 2000 });
     btn(qs('[data-result]', sheet)).click();
+    btn(await vi.waitFor(() => need(qs('[data-preview-add]', sheet)))).click();
 
     const warning = await vi.waitFor(() => need(qs('[data-dup-warning]', sheet)));
     expect(warning.textContent).toContain('Otra cosa');
@@ -300,6 +329,7 @@ describe('camino online activo (servicio configurado + conexión)', () => {
       { timeout: 2000 }
     );
     btn(qs('[data-result]', sheet)).click();
+    btn(await vi.waitFor(() => need(qs('[data-preview-add]', sheet)))).click();
     await vi.waitFor(() => need(qs('[data-dup-warning]', sheet)));
     expect(currentDoc().games).toHaveLength(1);
   });
@@ -383,6 +413,7 @@ describe('camino online deshabilitado', () => {
     typeQuery(sheet, 'celeste');
     await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 2000 });
     btn(qs('[data-result]', sheet)).click();
+    btn(await vi.waitFor(() => need(qs('[data-preview-add]', sheet)))).click();
     await vi.waitFor(() => expect(store.get().doc?.games).toHaveLength(1));
     expect(currentDoc().games[0]?.igdbId).toBe(1877);
   });

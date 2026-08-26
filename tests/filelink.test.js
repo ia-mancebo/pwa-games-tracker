@@ -620,12 +620,13 @@ describe('pastilla de archivo (chrome de la app)', () => {
     expect(qs('.filebar', root)?.textContent).toContain('Archivo: game-tracker.json');
   });
 
-  it('sin FSA muestra la pista estática de exportar, sin botones', async () => {
+  it('sin FSA informa del guardado automático local, sin botones de enlace', async () => {
     const handle = makeHandle(FILE_V1_TEXT);
     await connectFile(FILE_V1_TEXT, handle);
     const root = mountApp();
 
-    expect(qs('.filebar', root)?.textContent).toContain('Sin acceso a archivos — usa Exportar en Datos');
+    expect(qs('.filebar', root)?.textContent).toContain('Guardado automático en este navegador');
+    expect(qs('.filebar', root)?.textContent).not.toContain('Sin acceso a archivos');
     expect(qs('[data-save-now]', root)).toBeNull();
     expect(qs('[data-connect]', root)).toBeNull();
     expect(qs('[data-retry]', root)).toBeNull();

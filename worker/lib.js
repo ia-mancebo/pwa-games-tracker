@@ -133,6 +133,34 @@ export function popularityTypesQuery() {
 }
 
 /**
+ * Resuelve el id de un tipo de PopScore tolerando renombranzas de IGDB:
+ * la API ha cambiado nombres («IGDB Visits» pasó a «Visits»), así que se
+ * aceptan varios candidatos exactos (sin mayúsculas ni espacios sobrantes)
+ * y, en último caso, cualquier nombre que contenga la palabra clave.
+ * @param {{ id: number, name: string }[]} types
+ * @param {{ names: string[], keyword: string }} want
+ * @returns {number | null} id del tipo, o null si ninguno encaja
+ */
+export function resolvePopularityTypeId(types, want) {
+  const normalize = (/** @type {string} */ name) => name.trim().toLowerCase();
+  /** @type {Map<string, number>} */
+  const byName = new Map(
+    types
+      .filter((type) => type && typeof type.name === 'string' && type.id != null)
+      .map((type) => /** @type {[string, number]} */ ([normalize(type.name), type.id])),
+  );
+  for (const candidate of want.names) {
+    const id = byName.get(normalize(candidate));
+    if (id != null) return id;
+  }
+  const keyword = normalize(want.keyword);
+  for (const [name, id] of byName) {
+    if (name.includes(keyword)) return id;
+  }
+  return null;
+}
+
+/**
  * @param {number} typeId
  * @param {number} limit
  * @returns {string}

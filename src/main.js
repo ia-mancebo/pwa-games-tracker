@@ -4,6 +4,7 @@ import './styles/components.css';
 import { createApp, store } from './app.js';
 import { initLibrary } from './data/library.js';
 import { startAutosave } from './data/filelink.js';
+import { requestPersistOnce } from './data/persist.js';
 import { acquireTabLock, onLockReleased } from './data/tablock.js';
 import { initCoverSeeding } from './data/covers.js';
 import { initNovedadesRetry } from './data/novedades.js';
@@ -49,6 +50,11 @@ if (root) {
     startAutosave();
   } catch {
     // Sin autoguardado la app sigue operativa; el vuelco manual persiste.
+  }
+  if (store.get().doc) {
+    // Con biblioteca en el espejo se pide persistencia UNA vez (ticket 19):
+    // también sin FSA, para que el navegador no pudiera limpiar los datos.
+    void requestPersistOnce();
   }
 }
 

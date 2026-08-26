@@ -872,6 +872,70 @@ button.plate:hover {
   padding: 8px 2px 0;
 }
 
+/* Previsualización del resultado elegido: datos del juego antes de añadir */
+.add-preview {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 14px 16px;
+}
+
+.add-preview > .cover {
+  width: 92px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.add-preview-info {
+  flex: 1 1 200px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.add-preview-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.add-preview .r-sub {
+  margin: 0;
+  white-space: normal;
+}
+
+.add-preview-genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.add-preview-desc {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  margin: 0;
+  max-height: 7.25em;
+  overflow: auto;
+}
+
+.add-preview-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 12px;
+}
+
 .add-form .field {
   display: block;
   border: none;
@@ -1220,12 +1284,15 @@ button.plate:hover {
 .tag-add,
 .p-pf select,
 .p-date input[type='date'],
-.p-pf input[type='text'] {
+.p-pf input[type='text'],
+.p-notes textarea {
   background: var(--bg2);
   border: 1px solid var(--line);
   border-radius: 9px;
   padding: 7px 11px;
   font-size: 0.92rem;
+  color: var(--ink);
+  font-family: inherit;
   min-width: 0;
 }
 
@@ -1456,6 +1523,12 @@ button.plate:hover {
   flex-wrap: wrap;
   gap: 10px;
   padding: 2px 0 16px;
+}
+
+/* Pastillas del filebar con aire: el texto de estado largo no debe rozar el borde */
+.filebar .pill,
+.filebar .pill-btn {
+  padding: 6px 14px;
 }
 
 .file-name {

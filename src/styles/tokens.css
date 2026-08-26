@@ -23,6 +23,7 @@
 }
 
 :root {
+  color-scheme: dark;
   --bg0: #151210;
   --bg1: #1c1815;
   --bg2: #272119;

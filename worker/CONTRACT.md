@@ -76,9 +76,11 @@ Instantánea completa del tablón Novedades: composición fija **12 recientes / 
 
 - `recientes`: lanzamientos ya ocurridos (`release_dates.date <= hoy`), más nuevos primero. Un juego puede repetir fecha por plataforma: el Worker deduplica por `igdbId`.
 - `proximos`: lanzamientos futuros (`date > hoy`), los inminentes primero.
-- `populares`: top PopScore «IGDB Visits» (juegos más visitados ahora mismo).
+- `populares`: top PopScore «IGDB Visits» (juegos más visitados ahora mismo). El tipo se resuelve por nombre tolerante («IGDB Visits», «Visits»…): IGDB renombra primitivas y el Worker no debe romperse por ello.
 - `esperados`: primitiva «Most Wishlisted Upcoming» (más deseados que aún no salen).
 - `generatedAt`: sello ISO del momento de generación; alimenta el «Actualizado: fecha/hora» del tablón.
+
+**Degradación elegante del bloque PopScore**: si las llamadas de populares/esperados fallan (tipo no encontrado, IGDB caído…), la respuesta sigue siendo **200** con `populares: []` y `esperados: []`; solo `recientes`/`proximos` quedan garantizados. En ese caso la caché del tablón caduca en **30 min** (ver tabla de cachés) para recuperar el bloque antes. El cliente ya trata las cuatro secciones como arrays y pinta las baldas vacías.
 
 **200 OK**
 
@@ -114,6 +116,7 @@ El cliente debe tratar cualquier estado ≥ 400 como «No se pudo contactar con 
 | Qué | TTL | Notas |
 |---|---|---|
 | Respuesta completa de `/api/novedades` | **6 h** (`Cache-Control: public, max-age=21600`) | Cacheada en `caches.default` del Worker por URL; solo respuestas 200 se cachean. |
+| Respuesta degradada (sin bloque PopScore) | **30 min** (`max-age=1800`) | El tablón recupera populares/esperados en cuanto IGDB vuelva a responder. |
 | Bloque intermedio populares+esperados | **24 h** (`max-age=86400`) | Clave interna `/__internal__/popular-block`: PopScore diario aunque el tablón refresque cada 6 h. |
 | Token de Twitch (client credentials) | `expires_in` de la respuesta (~55 días), renovado con 10 min de margen | Cacheado en memoria del isolate; ante un `401` de IGDB se invalida y se pide uno nuevo (un reintento). |
 

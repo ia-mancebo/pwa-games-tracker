@@ -8,6 +8,7 @@ import {
   recentQuery,
   upcomingQuery,
   popularityTypesQuery,
+  resolvePopularityTypeId,
   popularQuery,
   hypedQuery,
   idsQuery,
@@ -23,10 +24,13 @@ const ALLOWED_ORIGIN = 'https://mi-usuario.github.io';
 const TWITCH_TOKEN_URL = 'https://id.twitch.tv/oauth2/token';
 const IGDB_API_BASE = 'https://api.igdb.com/v4';
 
-const POPULAR_TYPE_NAME = 'IGDB Visits';
-const HYPED_TYPE_NAME = 'Most Wishlisted Upcoming';
+const POPULAR_TYPE = { names: ['IGDB Visits', 'Visits'], keyword: 'visits' };
+const HYPED_TYPE = { names: ['Most Wishlisted Upcoming', 'Most Wishlisted'], keyword: 'wishlisted' };
 
 const NOVEDADES_MAX_AGE = 21600;
+// Respuesta degradada (sin bloque PopScore): se reconsulta antes, para que el
+// tablón recupere populares/esperados en cuanto IGDB vuelva a responder.
+const NOVEDADES_DEGRADED_MAX_AGE = 1800;
 const POPULAR_BLOCK_MAX_AGE = 86400;
 
 const TOKEN_DEFAULT_TTL_SECONDS = 55 * 24 * 60 * 60;
@@ -153,15 +157,15 @@ async function loadPopularBlock(requestUrl, env) {
   if (cached) return cached.json();
 
   const types = await igdbCall('popularity_types', popularityTypesQuery(), env);
-  const typeIdByName = (name) => {
-    const found = types.find((type) => type.name === name);
-    if (!found) throw new UpstreamError(`popularity type not found: ${name}`);
-    return found.id;
+  const typeId = (want) => {
+    const id = resolvePopularityTypeId(types, want);
+    if (id == null) throw new UpstreamError(`popularity type not found: ${want.names[0]}`);
+    return id;
   };
 
   const [popularPrimitives, hypedPrimitives] = await Promise.all([
-    igdbCall('popularity_primitives', popularQuery(typeIdByName(POPULAR_TYPE_NAME)), env),
-    igdbCall('popularity_primitives', hypedQuery(typeIdByName(HYPED_TYPE_NAME)), env),
+    igdbCall('popularity_primitives', popularQuery(typeId(POPULAR_TYPE)), env),
+    igdbCall('popularity_primitives', hypedQuery(typeId(HYPED_TYPE)), env),
   ]);
 
   const gameIds = [...new Set([...popularPrimitives, ...hypedPrimitives].map((p) => p.game_id))];
@@ -182,6 +186,22 @@ async function loadPopularBlock(requestUrl, env) {
   return block;
 }
 
+/**
+ * Bloque PopScore OPCIONAL: si IGDB rechaza cualquiera de sus llamadas, el
+ * tablón se sirve igual con recientes/próximos (degradación elegante) en
+ * lugar de fallar todo /api/novedades.
+ */
+async function loadPopularBlockSafe(requestUrl, env) {
+  try {
+    const block = await loadPopularBlock(requestUrl, env);
+    return { ...block, degraded: false };
+  } catch (err) {
+    if (err instanceof NotConfiguredError) throw err;
+    console.error('Bloque PopScore omitido:', err instanceof Error ? err.message : err);
+    return { populares: [], esperados: [], degraded: true };
+  }
+}
+
 async function handleNovedades(request, env) {
   const cached = await caches.default.match(request);
   if (cached) return cached;
@@ -190,7 +210,7 @@ async function handleNovedades(request, env) {
     igdbCall('release_dates', recentQuery(todayIso()), env),
     igdbCall('release_dates', upcomingQuery(todayIso()), env),
   ]);
-  const { populares, esperados } = await loadPopularBlock(request.url, env);
+  const { populares, esperados, degraded } = await loadPopularBlockSafe(request.url, env);
 
   const response = jsonResponse(
     {
@@ -201,7 +221,7 @@ async function handleNovedades(request, env) {
       generatedAt: new Date().toISOString(),
     },
     200,
-    { 'Cache-Control': `public, max-age=${NOVEDADES_MAX_AGE}` },
+    { 'Cache-Control': `public, max-age=${degraded ? NOVEDADES_DEGRADED_MAX_AGE : NOVEDADES_MAX_AGE}` },
   );
   await caches.default.put(request, response.clone());
   return response;

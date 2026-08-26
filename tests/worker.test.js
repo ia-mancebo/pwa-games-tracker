@@ -4,6 +4,7 @@ import {
   recentQuery,
   upcomingQuery,
   popularityTypesQuery,
+  resolvePopularityTypeId,
   popularQuery,
   hypedQuery,
   idsQuery,
@@ -84,8 +85,7 @@ describe('recentQuery / upcomingQuery', () => {
   });
 });
 
-describe('popularity queries', () => {
-  it('popularityTypesQuery pide id y nombre', () => {
+describe('popularity queries', () => {  it('popularityTypesQuery pide id y nombre', () => {
     expect(popularityTypesQuery()).toBe('fields id,name;\nlimit 50;');
   });
 
@@ -108,6 +108,46 @@ describe('popularity queries', () => {
     const query = idsQuery([10, 20, 10]);
     expect(query).toContain('where id = (10,20);');
     expect(query).toContain('limit 2;');
+  });
+});
+
+describe('resolvePopularityTypeId', () => {
+  const types = [
+    { id: 1, name: 'Visits' },
+    { id: 2, name: 'Want to Play' },
+    { id: 10, name: 'Most Wishlisted Upcoming' },
+  ];
+
+  it('resuelve por nombre exacto histórico (IGDB Visits)', () => {
+    const want = { names: ['IGDB Visits', 'Visits'], keyword: 'visits' };
+    expect(resolvePopularityTypeId([{ id: 1, name: 'IGDB Visits' }], want)).toBe(1);
+  });
+
+  it('resuelve el nombre actual de la API (Visits sin prefijo)', () => {
+    const want = { names: ['IGDB Visits', 'Visits'], keyword: 'visits' };
+    expect(resolvePopularityTypeId(types, want)).toBe(1);
+  });
+
+  it('resuelve «Most Wishlisted Upcoming» y acepta variantes', () => {
+    const want = { names: ['Most Wishlisted Upcoming', 'Most Wishlisted'], keyword: 'wishlisted' };
+    expect(resolvePopularityTypeId(types, want)).toBe(10);
+    expect(resolvePopularityTypeId([{ id: 9, name: 'Most Wishlisted' }], want)).toBe(9);
+  });
+
+  it('ignora mayúsculas y espacios sobrantes', () => {
+    const want = { names: ['IGDB Visits', 'Visits'], keyword: 'visits' };
+    expect(resolvePopularityTypeId([{ id: 4, name: '  visits ' }], want)).toBe(4);
+  });
+
+  it('cae a la palabra clave si ningún candidato exacto encaja', () => {
+    const want = { names: ['IGDB Visits', 'Visits'], keyword: 'visits' };
+    expect(resolvePopularityTypeId([{ id: 7, name: 'Steam Visits' }], want)).toBe(7);
+  });
+
+  it('devuelve null si no hay nada parecido', () => {
+    const want = { names: ['IGDB Visits', 'Visits'], keyword: 'visits' };
+    expect(resolvePopularityTypeId([{ id: 2, name: 'Want to Play' }], want)).toBeNull();
+    expect(resolvePopularityTypeId([], want)).toBeNull();
   });
 });
 
