@@ -45,7 +45,20 @@ export async function permissionState(handle, mode = 'readwrite') {
 }
 
 const PICKER_OPTS = {
-  types: [{ description: 'Game Tracker', accept: { 'application/json': ['.json'] } }],
+  types: [
+    {
+      description: 'Game Tracker',
+      // Los providers de Android (Descargas, apps de sync) suelen reportar
+      // .json como application/octet-stream o text/plain; si el filtro solo
+      // acepta application/json, el picker los deja en gris. La validación
+      // real la hace validateDoc/importDoc después del pick.
+      accept: {
+        'application/json': ['.json'],
+        'application/octet-stream': ['.json'],
+        'text/plain': ['.json'],
+      },
+    },
+  ],
   multiple: false,
 };
 
