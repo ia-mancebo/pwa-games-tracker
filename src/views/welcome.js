@@ -106,7 +106,12 @@ export function render(container, _store) {
     ${importError ? html`<p class="form-error" role="alert">${importError}</p>` : ''}
     ${fsa
       ? ''
-      : html`<input type="file" accept=".json,application/json" hidden data-import-input />`}
+      : html`<input
+          type="file"
+          accept=".json,application/json,application/octet-stream,text/plain"
+          hidden
+          data-import-input
+        />`}
   </div>`;
   wire(container, fsa);
 }

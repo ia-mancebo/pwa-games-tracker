@@ -309,7 +309,10 @@ function pickViaInput() {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.json,application/json';
+    // Android 11/Chrome: los providers suelen reportar .json como
+    // application/octet-stream o text/plain; si solo filtramos por MIME estricto,
+    // el picker los deja en gris. La validación real la hace importDoc.
+    input.accept = '.json,application/json,application/octet-stream,text/plain';
     input.hidden = true;
     input.addEventListener(
       'change',
