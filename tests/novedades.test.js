@@ -218,7 +218,7 @@ beforeEach(async () => {
     doc: null,
     meta: { dirty: false, updatedAt: null, lastSavedFileHash: null, connectedFileName: null },
     ready: false,
-    novedades: { section: null, genre: null },
+    novedades: { section: null, genre: null, detail: null },
   });
   await initLibrary();
   await newLibrary(NOW);

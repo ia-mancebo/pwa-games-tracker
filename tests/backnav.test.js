@@ -9,6 +9,7 @@ import './support/storage.js';
 import { createApp, store } from '../src/app.js';
 import { importDoc, initLibrary } from '../src/data/library.js';
 import { resetBackNav } from '../src/backnav.js';
+import { saveSnapshot } from '../src/data/snapshot.js';
 import { qs } from '../src/lib/dom.js';
 
 /**
@@ -74,7 +75,7 @@ beforeEach(async () => {
       tag: null,
       gameId: null,
     },
-    novedades: { section: null, genre: null },
+    novedades: { section: null, genre: null, detail: null },
   });
   await initLibrary();
   await seed();
@@ -130,6 +131,73 @@ describe('atrás del sistema', () => {
     await vi.waitFor(() => expect(store.get().tab).toBe('biblioteca'));
     // Volver a Biblioteca desde otra pestaña repone la estantería (ticket 14).
     expect(store.get().library.view).toBe('shelves');
+  });
+
+  it('desde la Ficha de Novedades la cierra y se queda en Novedades', async () => {
+    await saveSnapshot({
+      recientes: [
+        {
+          igdbId: 268807,
+          title: 'Celeste',
+          releaseDate: '2026-08-01',
+          coverUrl: 'https://images.igdb.com/igdb/image/upload/t_cover_big/co268807.jpg',
+          description: 'Descripci�n de prueba',
+          genres: [{ id: 8, name: 'Platform' }],
+          platforms: [{ id: 130, name: 'Nintendo Switch' }],
+        },
+      ],
+      proximos: [],
+      populares: [],
+      esperados: [],
+    });
+    const root = mount();
+    createApp(root);
+
+    btn(qs('[data-tab="novedades"]', root)).click();
+    await vi.waitFor(() => expect(qs('[data-ndetail="recientes:0"]', root)).toBeTruthy());
+    btn(qs('[data-ndetail="recientes:0"]', root)).click();
+    expect(store.get().novedades.detail).toBe('recientes:0');
+    expect(need(qs('.add-layer', document.body))).toBeTruthy();
+
+    // El atrás del sistema cierra la Ficha; NO regresa a Biblioteca.
+    history.back();
+    await vi.waitFor(() => expect(store.get().novedades.detail).toBeNull());
+    expect(store.get().tab).toBe('novedades');
+    await vi.waitFor(() => expect(qs('.add-layer', document.body)).toBeNull());
+  });
+
+  it('el ✕ de la Ficha de Novedades consume su entrada de historial', async () => {
+    await saveSnapshot({
+      recientes: [
+        {
+          igdbId: 268807,
+          title: 'Celeste',
+          releaseDate: '2026-08-01',
+          coverUrl: 'https://images.igdb.com/igdb/image/upload/t_cover_big/co268807.jpg',
+          description: 'Descripci�n de prueba',
+          genres: [{ id: 8, name: 'Platform' }],
+          platforms: [{ id: 130, name: 'Nintendo Switch' }],
+        },
+      ],
+      proximos: [],
+      populares: [],
+      esperados: [],
+    });
+    const root = mount();
+    createApp(root);
+
+    btn(qs('[data-tab="novedades"]', root)).click();
+    await vi.waitFor(() => expect(qs('[data-ndetail="recientes:0"]', root)).toBeTruthy());
+    btn(qs('[data-ndetail="recientes:0"]', root)).click();
+    expect(store.get().novedades.detail).toBe('recientes:0');
+
+    btn(need(qs('[data-close-detail]', document.body))).click();
+    // Cambio síncrono y consumo de la entrada: el atrás del sistema no repite.
+    expect(store.get().novedades.detail).toBeNull();
+    expect(store.get().tab).toBe('novedades');
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(store.get().novedades.detail).toBeNull();
+    expect(store.get().tab).toBe('novedades');
   });
 });
 

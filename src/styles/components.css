@@ -1584,6 +1584,23 @@ button.plate:hover {
     display: none;
   }
 
+  /* Etiquetas propias en fila única deslizable: con muchas etiquetas la zona
+     no crece (antes estiraba la pantalla entera); se recorren con un gesto
+     horizontal, como cualquier carrusel de chips en móvil */
+  .tag-list {
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 2px;
+  }
+
+  .tag-list .tag-mini {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
   .card,
   .card .cover {
     width: 112px;

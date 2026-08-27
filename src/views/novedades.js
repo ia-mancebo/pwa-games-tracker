@@ -317,7 +317,7 @@ function drillDownHtml(sectionKey, genre) {
  */
 function boardHtml() {
   const snap = snapshotCache;
-  const nv = store.get().novedades ?? { section: null, genre: null };
+  const nv = store.get().novedades ?? { section: null, genre: null, detail: null };
   const head = headHtml(snap);
   if (!snapshotLoaded) {
     return html`<div class="fade" data-nov-loading><p class="empty">Cargando…</p></div>`;
@@ -353,15 +353,25 @@ function boardHtml() {
 /** Capa abierta actualmente. @type {HTMLElement|null} */
 let detailLayer = null;
 
-/** Referencia «sección:índice» de la ficha abierta. @type {string|null} */
-let detailRef = null;
+/** Referencia «sección:índice» pintada en la capa abierta. @type {string|null} */
+let paintedRef = null;
 
 /** @type {((e: KeyboardEvent) => void)|null} */
 let detailKeyHandler = null;
 
 let adding = false;
 
-/** Cierra la ficha externa y retira sus listeners. */
+/**
+ * Referencia «sección:índice» de la Ficha abierta según el estado; la Ficha
+ * es una pantalla (viaja en novedades.detail) y el botón atrás del móvil la
+ * cierra sin cambiar de pestaña (src/backnav.js).
+ * @returns {string|null}
+ */
+function currentDetailRef() {
+  return store.get().novedades?.detail ?? null;
+}
+
+/** Cierra la capa de la Ficha y retira sus listeners, sin tocar el estado. */
 export function closeDetail() {
   if (detailKeyHandler) {
     document.removeEventListener('keydown', detailKeyHandler);
@@ -369,7 +379,68 @@ export function closeDetail() {
   }
   detailLayer?.remove();
   detailLayer = null;
-  detailRef = null;
+  paintedRef = null;
+}
+
+/**
+ * Cierre con gesto (✕, fondo, Escape): aplica el cambio al instante y consume
+ * la entrada de historial de la Ficha para que el atrás del sistema no la
+ * repita (src/backnav.js).
+ */
+function requestCloseDetail() {
+  const nv = store.get().novedades ?? { section: null, genre: null, detail: null };
+  goBackScreen(store, {
+    novedades: { section: nv.section ?? null, genre: nv.genre ?? null, detail: null },
+  });
+}
+
+/** Sincroniza la capa de la Ficha con el estado: la abre, la cierra o nada. */
+function syncDetail() {
+  const ref = currentDetailRef();
+  if (ref) {
+    if (detailLayer?.isConnected && paintedRef === ref) return;
+    openDetailLayer(ref);
+  } else if (detailLayer) {
+    closeDetail();
+  }
+}
+
+/**
+ * Crea la capa de la Ficha para una referencia ya validada del estado.
+ * @param {string} ref
+ */
+function openDetailLayer(ref) {
+  closeDetail();
+  paintedRef = ref;
+  detailLayer = document.createElement('div');
+  detailLayer.className = 'add-layer fade';
+  document.body.appendChild(detailLayer);
+  paintDetail();
+  if (!detailLayer) return;
+  detailLayer.addEventListener('click', (e) => {
+    if (!(e.target instanceof HTMLElement)) return;
+    if (e.target.closest('[data-close-detail]')) {
+      requestCloseDetail();
+      return;
+    }
+    if (e.target.closest('[data-want-play]')) {
+      const snap = snapshotCache;
+      const parts = (currentDetailRef() ?? '').split(':');
+      const game = snap
+        ? /** @type {IgdbGame[]} */ (snap[/** @type {SectionKey} */ (parts[0])] ?? [])[
+            Number(parts[1])
+          ]
+        : undefined;
+      if (game) void wantToPlay(game);
+    }
+  });
+  detailKeyHandler = (e) => {
+    if (e.key === 'Escape' && detailLayer?.isConnected) {
+      e.preventDefault();
+      requestCloseDetail();
+    }
+  };
+  document.addEventListener('keydown', detailKeyHandler);
 }
 
 /**
@@ -401,13 +472,15 @@ function releaseTextHtml(game) {
 function paintDetail() {
   const layer = detailLayer;
   const snap = snapshotCache;
-  if (!layer || !detailRef || !snap) return;
-  const [sec, idxRaw] = detailRef.split(':');
+  const ref = currentDetailRef();
+  if (!layer || !ref || !snap) return;
+  const [sec, idxRaw] = ref.split(':');
   const game = /** @type {IgdbGame[]} */ (snap[/** @type {SectionKey} */ (sec)] ?? [])[
     Number(idxRaw)
   ];
   if (!game) {
-    closeDetail();
+    // La instantánea ya no contiene la referencia: cerrar de verdad.
+    requestCloseDetail();
     return;
   }
   const inLibrary = isInLibrary(game);
@@ -493,44 +566,6 @@ async function wantToPlay(game) {
   paintDetail();
 }
 
-/**
- * Abre la ficha externa para «sección:índice» de la instantánea cargada.
- * @param {string|null} ref
- */
-function openDetail(ref) {
-  if (!ref || !snapshotCache) return;
-  closeDetail();
-  detailRef = ref;
-  detailLayer = document.createElement('div');
-  detailLayer.className = 'add-layer fade';
-  document.body.appendChild(detailLayer);
-  paintDetail();
-  detailLayer.addEventListener('click', (e) => {
-    if (!(e.target instanceof HTMLElement)) return;
-    if (e.target.closest('[data-close-detail]')) {
-      closeDetail();
-      return;
-    }
-    if (e.target.closest('[data-want-play]')) {
-      const snap = snapshotCache;
-      const parts = detailRef?.split(':') ?? [];
-      const game = snap
-        ? /** @type {IgdbGame[]} */ (snap[/** @type {SectionKey} */ (parts[0])] ?? [])[
-            Number(parts[1])
-          ]
-        : undefined;
-      if (game) void wantToPlay(game);
-    }
-  });
-  detailKeyHandler = (e) => {
-    if (e.key === 'Escape' && detailLayer?.isConnected) {
-      e.preventDefault();
-      closeDetail();
-    }
-  };
-  document.addEventListener('keydown', detailKeyHandler);
-}
-
 /* ------------------------------------------------------------------ */
 /* Render y eventos                                                    */
 /* ------------------------------------------------------------------ */
@@ -556,7 +591,12 @@ async function reloadSnapshot() {
 }
 
 function repaint() {
-  if (hostEl && hostEl.isConnected) paintSync(hostEl);
+  // Solo si el tablón sigue siendo la superficie viva del main: un repinto
+  // tardío (refresco asíncrono) no debe aplastar otra pestaña ya renderizada.
+  const surface = hostEl?.firstElementChild ?? null;
+  if (hostEl && hostEl.isConnected && surface?.matches('[data-nov],[data-nov-loading]')) {
+    paintSync(hostEl);
+  }
 }
 
 /**
@@ -581,12 +621,16 @@ function paintSync(container) {
     if (target.hasAttribute('data-nback')) {
       // Cierra el drill-down al instante y consume su entrada de historial
       // (src/backnav.js): el botón atrás del sistema no la repite.
-      goBackScreen(store, { novedades: { section: null, genre: null } });
+      goBackScreen(store, { novedades: { section: null, genre: null, detail: null } });
       return;
     }
     if (target.hasAttribute('data-nsection')) {
       store.set({
-        novedades: { section: target.getAttribute('data-nsection'), genre: null },
+        novedades: {
+          section: target.getAttribute('data-nsection'),
+          genre: null,
+          detail: null,
+        },
       });
       // Sección nueva: pantalla propia para el botón atrás del móvil.
       pushScreen(store);
@@ -594,20 +638,41 @@ function paintSync(container) {
     }
     if (target.hasAttribute('data-ngenre')) {
       const value = target.getAttribute('data-ngenre');
-      const current = store.get().novedades ?? { section: null, genre: null };
+      const current = store.get().novedades ?? { section: null, genre: null, detail: null };
       store.set({
-        novedades: { section: current.section, genre: current.genre === value ? null : value },
+        novedades: {
+          section: current.section ?? null,
+          genre: current.genre === value ? null : value,
+          detail: current.detail ?? null,
+        },
       });
       return;
     }
-    openDetail(target.getAttribute('data-ndetail'));
+    const detailRef = target.getAttribute('data-ndetail');
+    if (detailRef && snapshotCache) {
+      // La Ficha es una pantalla: entra en el estado y empuja su entrada de
+      // historial para que el atrás del móvil la cierre sin cambiar de
+      // pestaña (src/backnav.js).
+      const nv = store.get().novedades ?? { section: null, genre: null, detail: null };
+      store.set({
+        novedades: {
+          section: nv.section ?? null,
+          genre: nv.genre ?? null,
+          detail: detailRef,
+        },
+      });
+      pushScreen(store);
+      syncDetail();
+    }
   });
 }
 
 /**
  * Vista Novedades: pinta siempre desde la instantánea IDB (nunca desde red).
  * Contenedores fuera del documento se ignoran: el render es estado de la
- * vista activa y un main desconectado no debe tocar nada.
+ * vista activa y un main desconectado no debe tocar nada. La capa de la
+ * Ficha se sincroniza con el estado aquí: un popstate que restaure una
+ * instantánea sin ficha la cierra; una con ficha la reabre (src/backnav.js).
  * @param {Element} container
  * @param {import('../app.js').Store} _store
  */
@@ -615,6 +680,7 @@ export function render(container, _store) {
   if (!container.isConnected) return;
   hostEl = container;
   paintSync(container);
+  syncDetail();
   void reloadSnapshot().catch(() => {});
 }
 

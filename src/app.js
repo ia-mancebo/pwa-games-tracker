@@ -63,9 +63,12 @@ import { installBackNav, pushScreen } from './backnav.js';
  */
 
 /**
- * Estado de la vista Novedades (ticket 23): sección abierta del drill-down y
- * género filtrado. El tablón en sí vive en la instantánea IDB.
- * @typedef {{ section: string|null, genre: string|null }} NovedadesState
+ * Estado de la vista Novedades (ticket 23): sección abierta del drill-down,
+ * género filtrado y Ficha externa abierta (referencia «sección:índice»). El
+ * tablón en sí vive en la instantánea IDB. La Ficha viaja en el estado para
+ * que el botón atrás del móvil la cierre sin cambiar de pestaña
+ * (src/backnav.js).
+ * @typedef {{ section: string|null, genre: string|null, detail: string|null }} NovedadesState
  */
 
 /**
@@ -115,7 +118,7 @@ let state = {
     gameId: null,
   },
   stats: { platform: null, genre: null, tag: null },
-  novedades: { section: null, genre: null },
+  novedades: { section: null, genre: null, detail: null },
 };
 
 /** @type {Set<Listener>} */
