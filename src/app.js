@@ -6,6 +6,7 @@ import * as welcome from './views/welcome.js';
 import { renderFilebar } from './ui/filebar.js';
 import { openDataDialog } from './views/dataDialog.js';
 import { autoRefreshIfNeeded } from './data/novedades.js';
+import { installBackNav, pushScreen } from './backnav.js';
 
 /**
  * Meta del espejo IndexedDB (spec §5.1). `exportFileName` y `persistAsked` son
@@ -215,6 +216,8 @@ export function createApp(root) {
   </div>`;
   const main = qs('main', root);
   if (!main) throw new Error('shell sin <main>');
+  // Botón atrás del navegador/móvil integrado con la navegación por estado.
+  installBackNav(store);
 
   root.addEventListener('click', (e) => {
     const trigger =
@@ -238,9 +241,12 @@ export function createApp(root) {
         tab,
         library: { ...store.get().library, view: 'shelves', panelStatus: null, gameId: null },
       });
-      return;
+    } else {
+      store.set({ tab, library: { ...store.get().library, gameId: null } });
     }
-    store.set({ tab, library: { ...store.get().library, gameId: null } });
+    // Cambio de pestaña = pantalla nueva: el botón atrás del móvil regresa a
+    // la pestaña anterior (src/backnav.js).
+    pushScreen(store);
     // Entrar en Novedades dispara el refresco automático silencioso
     // (>12 h y con conexión; ticket 23, spec §7.3), fire-and-forget.
     if (tab === 'novedades' && previous !== 'novedades') {

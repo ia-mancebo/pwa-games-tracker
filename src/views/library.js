@@ -17,6 +17,7 @@ import { statusPillHtml } from '../ui/pill.js';
 import { chipRowHtml } from '../ui/chips.js';
 import { openAddSheet } from './addSheet.js';
 import { openGame, renderGame } from './game.js';
+import { pushScreen, goBackScreen } from '../backnav.js';
 
 /** Portadas visibles por balda antes de la tarjeta «+N más» (spec §8.1). */
 const SHELF_LIMIT = 6;
@@ -89,20 +90,25 @@ function hasActiveFilters(f) {
 
 /**
  * Abre el Panel de un estado, reiniciando su paginación; conserva filtros.
+ * Pantalla nueva: empuja entrada de historial (botón atrás del móvil).
  * @param {import('../app.js').Store} store
  * @param {import('../domain/schema.js').Status} status
  */
 function openPanel(store, status) {
   panelShown = PANEL_PAGE;
   store.set({ library: { ...store.get().library, view: 'panel', panelStatus: status } });
+  pushScreen(store);
 }
 
 /**
- * Vuelve del Panel a la Estantería; conserva filtros.
+ * Vuelve del Panel a la Estantería; conserva filtros. Consume la entrada de
+ * historial del panel para que el botón atrás del sistema no la repita.
  * @param {import('../app.js').Store} store
  */
 function backToShelves(store) {
-  store.set({ library: { ...store.get().library, view: 'shelves', panelStatus: null } });
+  goBackScreen(store, {
+    library: { ...store.get().library, view: 'shelves', panelStatus: null },
+  });
 }
 
 /**
@@ -248,7 +254,11 @@ function panelRowHtml(game, status) {
     ${coverHtml(game, { mini: true })}
     <span class="b-cell">
       <span class="b-title">${game.title}</span>
-      ${tags.map((tag) => html`<span class="tag-mini own">#${tag}</span>`)}
+      ${tags.length > 0
+        ? html`<span class="tag-list"
+            >${tags.map((tag) => html`<span class="tag-mini own">#${tag}</span>`)}</span
+          >`
+        : ''}
     </span>
     <span class="b-cell b-col-pf mono">${platforms}</span>
     <span class="b-cell b-col-stars">${starsHtml(gameRating(game))}</span>

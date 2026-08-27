@@ -21,6 +21,7 @@ import {
 } from '../data/library.js';
 import { coverHtml } from '../ui/cover.js';
 import { statusPillHtml } from '../ui/pill.js';
+import { pushScreen, goBackScreen } from '../backnav.js';
 
 /**
  * Estado efímero de edición de la Ficha (qué formulario está abierto, qué
@@ -62,13 +63,15 @@ let ui = freshUi(null);
 
 /**
  * Abre la Ficha de un juego desde estantería o panel; conserva la vista y los
- * filtros para que «← Volver» regrese donde estaba el usuario.
+ * filtros para que «← Volver» regrese donde estaba el usuario. Pantalla
+ * nueva: empuja entrada de historial (botón atrás del móvil, src/backnav.js).
  * @param {import('../app.js').Store} store
  * @param {string} gameId
  */
 export function openGame(store, gameId) {
   ui = freshUi(gameId);
   store.set({ library: { ...store.get().library, gameId } });
+  pushScreen(store);
 }
 
 /**
@@ -398,18 +401,20 @@ function tagsEditorHtml(game) {
       ${
         tags.length === 0
           ? raw('<span class="d-meta">Sin etiquetas todavía.</span>')
-          : tags.map(
-              (tag) =>
-                html`<span class="tag-mini own">#${tag}
-                    <button
-                      type="button"
-                      class="tag-x"
-                      data-tag-remove="${tag}"
-                      aria-label="Quitar ${tag}"
-                      >×</button
-                    ></span
-                  >`
-            )
+          : html`<div class="tag-list"
+                >${tags.map(
+                  (tag) =>
+                    html`<span class="tag-mini own">#${tag}
+                        <button
+                          type="button"
+                          class="tag-x"
+                          data-tag-remove="${tag}"
+                          aria-label="Quitar ${tag}"
+                          >×</button
+                        ></span
+                      >`
+                )}</div
+              >`
       }
       <input
         type="text"
@@ -859,7 +864,9 @@ function wire(container, store) {
     const pick = (sel) => clicked.closest(sel);
 
     if (pick('[data-back-ficha]')) {
-      closeGame(store);
+      // Aplica el cierre al instante y consume la entrada de historial de la
+      // Ficha (src/backnav.js): el botón atrás del sistema no la repite.
+      goBackScreen(store, { library: { ...store.get().library, gameId: null } });
       return;
     }
     const shot = pick('[data-shot]');

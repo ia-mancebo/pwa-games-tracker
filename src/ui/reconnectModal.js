@@ -5,7 +5,7 @@
  * está conectado, y ofrece reconectar (con gesto, para pedir permiso),
  * conectar otro .json, empezar biblioteca nueva o seguir por ahora.
  */
-import { html, qs } from '../lib/dom.js';
+import { html, qs, qsa } from '../lib/dom.js';
 import { store } from '../app.js';
 import { newLibrary } from '../data/library.js';
 import { pickAndConnect, reconnect } from '../data/filelink.js';
@@ -45,6 +45,14 @@ export function openReconnectModal() {
     >
       <header class="add-head">
         <h2 id="reconnect-title">Biblioteca cargada · Archivo no conectado</h2>
+        <button
+          type="button"
+          class="chip chip-xs reconnect-close"
+          data-dismiss-reconnect
+          aria-label="Cerrar"
+        >
+          ✕
+        </button>
       </header>
       <p class="reconnect-lead">
         La biblioteca del espejo local se abrió bien, pero <b>no está conectada al
@@ -80,8 +88,10 @@ export function openReconnectModal() {
 function wire() {
   const layerNow = layer;
   if (!layerNow) return;
-  qs('[data-close-reconnect]', layerNow)?.addEventListener('click', closeReconnectModal);
-  qs('[data-dismiss-reconnect]', layerNow)?.addEventListener('click', closeReconnectModal);
+  // Toda la vía de cierre (✕ de cabecera, backdrop y «Seguir por ahora»).
+  for (const btn of qsa('[data-dismiss-reconnect],[data-close-reconnect]', layerNow)) {
+    btn.addEventListener('click', closeReconnectModal);
+  }
   qs('[data-reconnect-now]', layerNow)?.addEventListener('click', () => {
     void reconnect();
   });

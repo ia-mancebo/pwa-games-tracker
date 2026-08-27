@@ -13,6 +13,7 @@ export default [
         window: 'readonly',
         navigator: 'readonly',
         localStorage: 'readonly',
+        history: 'readonly',
         indexedDB: 'readonly',
         caches: 'readonly',
         crypto: 'readonly',

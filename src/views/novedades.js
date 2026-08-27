@@ -13,6 +13,7 @@ import { getSnapshot } from '../data/snapshot.js';
 import { refreshNovedades } from '../data/novedades.js';
 import { IGDB_SERVICE_ERROR, igdb } from '../services/igdb.js';
 import { store } from '../app.js';
+import { pushScreen, goBackScreen } from '../backnav.js';
 
 /** Composición fija del tablón (spec §7.2). @type {{key: SectionKey, label: string}[]} */
 const SECTIONS = [
@@ -578,13 +579,17 @@ function paintSync(container) {
       return;
     }
     if (target.hasAttribute('data-nback')) {
-      store.set({ novedades: { section: null, genre: null } });
+      // Cierra el drill-down al instante y consume su entrada de historial
+      // (src/backnav.js): el botón atrás del sistema no la repite.
+      goBackScreen(store, { novedades: { section: null, genre: null } });
       return;
     }
     if (target.hasAttribute('data-nsection')) {
       store.set({
         novedades: { section: target.getAttribute('data-nsection'), genre: null },
       });
+      // Sección nueva: pantalla propia para el botón atrás del móvil.
+      pushScreen(store);
       return;
     }
     if (target.hasAttribute('data-ngenre')) {
