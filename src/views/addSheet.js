@@ -17,6 +17,7 @@ import { openGame } from './game.js';
 import { statusPillHtml } from '../ui/pill.js';
 import { coverHtml } from '../ui/cover.js';
 import { IGDB_SERVICE_ERROR, igdb } from '../services/igdb.js';
+import { openSheet } from '../ui/sheet.js';
 
 /** Motivo del camino online sin servicio configurado. */
 export const ONLINE_UNAVAILABLE_REASON =
@@ -53,26 +54,22 @@ const MAX_DUP_LIST = 3;
  * }} SheetState
  */
 
-/** Capa fija (fondo + hoja) actualmente abierta, si la hay. @type {HTMLElement|null} */
+/** Hoja del módulo de hojas actualmente abierta (el .add-sheet), si la hay.
+ * @type {HTMLElement|null} */
 let layer = null;
 
-/** Listener de Escape del último openAddSheet. @type {((e: KeyboardEvent) => void)|null} */
-let keyHandler = null;
+/** Cierre de la hoja del módulo. @type {(() => void)|null} */
+let closeSheet = null;
 
 /** Se incrementa en cada cierre: invalida búsquedas programadas/en vuelo de hojas viejas. */
 let epochCounter = 0;
 
-/** Cierra la hoja abierta (si la hay) y retira sus listeners globales. */
+/** Cierra la hoja abierta (si la hay); el ✕, el fondo y Escape los cierra el módulo. */
 export function closeAddSheet() {
   epochCounter += 1;
-  if (keyHandler) {
-    document.removeEventListener('keydown', keyHandler);
-    keyHandler = null;
-  }
-  if (layer) {
-    layer.remove();
-    layer = null;
-  }
+  closeSheet?.();
+  closeSheet = null;
+  layer = null;
 }
 
 /**
@@ -301,14 +298,14 @@ function feedbackHtml(state) {
 }
 
 /**
- * Marcado completo de la capa: fondo clicable + hoja (diálogo). En móvil es
- * bottom sheet; en escritorio queda centrada (CSS). Con camino online activo
- * las pestañas alternan entre el panel de búsqueda y el formulario manual.
+ * Cuerpo de la hoja (el módulo de hojas pinta la capa, el fondo y la cabecera
+ * con el título; aquí solo vive el contenido repintable). Con camino online
+ * activo las pestañas alternan entre el panel de búsqueda y el formulario manual.
  * @param {SheetState} state
  * @param {{ onlineReady: boolean, configured: boolean }} availability
  * @returns {string}
  */
-function sheetHtml(state, { onlineReady, configured }) {
+function bodyHtml(state, { onlineReady, configured }) {
   const onlineBlock = onlineReady
     ? html`<div class="add-paths">
           <button
@@ -339,13 +336,7 @@ function sheetHtml(state, { onlineReady, configured }) {
           <div class="add-feedback" data-add-feedback>${feedbackHtml(state)}</div>
         </div>`
     : html`<div data-online-block>${disabledOnlineHtml(configured)}</div>`;
-  return html`<div class="add-backdrop" data-close-add></div>
-    <section class="add-sheet" role="dialog" aria-modal="true" aria-labelledby="add-sheet-title">
-      <header class="add-head">
-        <h2 id="add-sheet-title">Añadir juego</h2>
-        <button type="button" class="chip" data-close-add aria-label="Cerrar">✕</button>
-      </header>
-      ${onlineBlock}
+  return html`${onlineBlock}
       <form class="add-form" data-manual-pane${!onlineReady || state.path === 'manual' ? '' : ' hidden'}>
         <label class="field">
           <span class="lbl">Título</span>
@@ -364,22 +355,20 @@ function sheetHtml(state, { onlineReady, configured }) {
           <button type="button" class="chip" data-close-add>Cancelar</button>
           <button type="submit" class="btn-primary" data-save-add>Añadir a la biblioteca</button>
         </footer>
-      </form>
-    </section>`;
+      </form>`;
 }
 
 /**
- * Abre la hoja de Alta sobre `host` (document.body por defecto) y devuelve su
- * función de cierre. El camino online se activa solo con servicio configurado
- * y conexión; `onSaved` corre tras guardar (cualquier camino) con el juego
- * creado. El guardado pasa siempre por {@link submitManual}.
- * @param {{ host?: Element, onSaved?: (game: import('../domain/schema.js').Game) => void }} [opts]
+ * Abre la hoja de Alta (el módulo de hojas la monta en document.body) y
+ * devuelve su función de cierre. El camino online se activa solo con servicio
+ * configurado y conexión; `onSaved` corre tras guardar (cualquier camino) con
+ * el juego creado. El guardado pasa siempre por {@link submitManual}.
+ * @param {{ onSaved?: (game: import('../domain/schema.js').Game) => void }} [opts]
  * @returns {() => void}
  */
 export function openAddSheet(opts = {}) {
   closeAddSheet();
   const epoch = epochCounter;
-  const host = opts.host ?? document.body;
   const configured = igdb.isConfigured();
   const onlineReady = configured && globalThis.navigator.onLine;
   /** @type {SheetState} */
@@ -390,9 +379,17 @@ export function openAddSheet(opts = {}) {
     online: { status: 'idle', results: [], error: null },
     pending: null,
   };
-  layer = document.createElement('div');
-  layer.className = 'add-layer fade';
-  host.appendChild(layer);
+  const handle = openSheet({
+    title: 'Añadir juego',
+    // El ✕ de cabecera lo cierra el módulo (data-sheet-close); el fondo
+    // conserva data-close-add para compatibilidad con tests y «Cancelar»
+    // del formulario sigue cerrando vía el listener de la hoja.
+    backdropAttr: 'data-close-add',
+    onClose: closeAddSheet,
+    content: bodyHtml(state, { onlineReady, configured }),
+  });
+  layer = handle.layer;
+  closeSheet = handle.close;
 
   const paintFeedback = () => {
     if (!layer) return;
@@ -516,11 +513,9 @@ export function openAddSheet(opts = {}) {
   };
   const scheduleSearch = debounce(runSearch, SEARCH_DEBOUNCE_MS);
 
-  layer.innerHTML = sheetHtml(state, { onlineReady, configured });
-
   layer.addEventListener('click', (e) => {
     if (!(e.target instanceof HTMLElement)) return;
-    if (e.target.closest('[data-close-add]') || e.target.classList.contains('add-backdrop')) {
+    if (e.target.closest('[data-close-add]')) {
       closeAddSheet();
       return;
     }
@@ -586,14 +581,9 @@ export function openAddSheet(opts = {}) {
     paintFeedback();
   });
 
-  keyHandler = (e) => {
-    if (e.key === 'Escape' && layer?.isConnected) {
-      e.preventDefault();
-      closeAddSheet();
-    }
-  };
-  document.addEventListener('keydown', keyHandler);
-
+  // Escape y ✕/fondo los cierra el módulo de hojas; aquí solo se repone el
+  // foco inicial del formulario (el módulo enfocó el primer elemento de la
+  // hoja, que con camino online es la pestaña, no el campo de búsqueda).
   const initialFocus = qs(
     onlineReady ? 'input[name="online-query"]' : 'input[name="title"]',
     layer

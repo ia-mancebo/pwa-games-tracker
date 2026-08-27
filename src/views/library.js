@@ -15,9 +15,10 @@ import { formatAvg } from '../lib/format.js';
 import { coverHtml, starsHtml } from '../ui/cover.js';
 import { statusPillHtml } from '../ui/pill.js';
 import { chipRowHtml } from '../ui/chips.js';
+import { tagChipsHtml } from '../ui/tags.js';
 import { openAddSheet } from './addSheet.js';
 import { openGame, renderGame } from './game.js';
-import { pushScreen, goBackScreen } from '../backnav.js';
+import { navigate } from '../backnav.js';
 
 /** Portadas visibles por balda antes de la tarjeta «+N más» (spec §8.1). */
 const SHELF_LIMIT = 6;
@@ -96,8 +97,9 @@ function hasActiveFilters(f) {
  */
 function openPanel(store, status) {
   panelShown = PANEL_PAGE;
-  store.set({ library: { ...store.get().library, view: 'panel', panelStatus: status } });
-  pushScreen(store);
+  navigate(store, 'push', {
+    library: { ...store.get().library, view: 'panel', panelStatus: status },
+  });
 }
 
 /**
@@ -106,7 +108,7 @@ function openPanel(store, status) {
  * @param {import('../app.js').Store} store
  */
 function backToShelves(store) {
-  goBackScreen(store, {
+  navigate(store, 'back', {
     library: { ...store.get().library, view: 'shelves', panelStatus: null },
   });
 }
@@ -254,11 +256,7 @@ function panelRowHtml(game, status) {
     ${coverHtml(game, { mini: true })}
     <span class="b-cell">
       <span class="b-title">${game.title}</span>
-      ${tags.length > 0
-        ? html`<span class="tag-list"
-            >${tags.map((tag) => html`<span class="tag-mini own">#${tag}</span>`)}</span
-          >`
-        : ''}
+      ${tags.length > 0 ? tagChipsHtml(tags) : ''}
     </span>
     <span class="b-cell b-col-pf mono">${platforms}</span>
     <span class="b-cell b-col-stars">${starsHtml(gameRating(game))}</span>

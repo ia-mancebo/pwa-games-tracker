@@ -1,7 +1,9 @@
 /**
  * Diálogo «Datos» (ticket 19, spec §5.6): agrupa conexión/importación,
  * exportación verificada, «Compartir copia», restauración de copias OPFS y
- * almacenamiento persistente. Reutiliza el patrón .add-layer/.add-sheet.
+ * almacenamiento persistente. Es un adaptador de la hoja profunda
+ * (src/ui/sheet.js): el módulo pinta la capa y es dueño de ✕/fondo/Escape;
+ * aquí solo viven el contenido y los repintados del .sheet-body.
  */
 import { html, qs, qsa, raw } from '../lib/dom.js';
 import { store } from '../app.js';
@@ -14,6 +16,7 @@ import { assertWritable } from '../data/tablock.js';
 import { sha256Hex } from '../services/hash.js';
 import { igdb } from '../services/igdb.js';
 import { saveWorkerUrl } from '../data/library.js';
+import { openSheet, SHEET_BODY_SELECTOR } from '../ui/sheet.js';
 
 /** @typedef {import('../data/opfs.js').BackupInfo} BackupInfo */
 
@@ -28,8 +31,11 @@ import { saveWorkerUrl } from '../data/library.js';
 
 const fmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
 
-/** @type {HTMLElement | null} */
+/** Hoja del módulo de hojas actualmente abierta (el .add-sheet). @type {HTMLElement | null} */
 let layer = null;
+
+/** Cierre de la hoja del módulo. @type {(() => void)|null} */
+let closeSheet = null;
 
 /** @type {DataView} */
 let view = {};
@@ -39,15 +45,23 @@ export function isDataOpen() {
 }
 
 export function closeDataDialog() {
-  layer?.remove();
+  closeSheet?.();
+  closeSheet = null;
   layer = null;
 }
 
 export function openDataDialog() {
   closeDataDialog();
-  layer = document.createElement('div');
-  layer.className = 'add-layer';
-  document.body.appendChild(layer);
+  const handle = openSheet({
+    title: 'Datos',
+    closeAttr: 'data-close',
+    backdropAttr: 'data-close',
+    closeClass: 'tag-x',
+    onClose: closeDataDialog,
+    content: '',
+  });
+  layer = handle.layer;
+  closeSheet = handle.close;
   view = {};
   paint();
   void loadBackups();
@@ -292,17 +306,10 @@ function backupsSectionHtml() {
   </section>`;
 }
 
-function sheetHtml() {
+function bodyHtml() {
   const nameInput = /** @type {string} */ (store.get().meta.exportFileName || DEFAULT_EXPORT_NAME);
   const shareBtn = canShareFiles() ? raw('<button type="button" class="chip" data-share>Compartir copia</button>') : '';
-  return html`<div class="add-backdrop" data-close></div>
-    <div class="add-sheet datos-sheet fade" role="dialog" aria-modal="true" aria-labelledby="datos-title">
-      <header class="add-head">
-        <h2 id="datos-title">Datos</h2>
-        <button type="button" class="tag-x" data-close aria-label="Cerrar">✕</button>
-      </header>
-
-      <section class="datos-sec">
+  return html`<section class="datos-sec">
         <h3>Conectar / Importar</h3>
         <p class="datos-hint">
           Elegir un .json es una decisión deliberada: tras validar, su contenido SUSTITUYE la biblioteca local. Sin
@@ -357,15 +364,15 @@ function sheetHtml() {
       </section>
 
       ${view.note ? html`<p class="datos-note">${view.note}</p>` : ''}
-      ${view.error ? html`<p class="form-error" role="alert">${view.error}</p>` : ''}
-    </div>`;
+      ${view.error ? html`<p class="form-error" role="alert">${view.error}</p>` : ''}`;
 }
 
 function paint(/** @type {DataView} */ patch = {}) {
   view = { ...view, ...patch };
   const layerEl = layer;
   if (!layerEl) return;
-  layerEl.innerHTML = sheetHtml();
+  const body = qs(SHEET_BODY_SELECTOR, layerEl);
+  if (body) body.innerHTML = bodyHtml();
   wire(layerEl);
 }
 
@@ -373,9 +380,6 @@ function paint(/** @type {DataView} */ patch = {}) {
  * @param {HTMLElement} layerEl
  */
 function wire(layerEl) {
-  for (const closer of qsa('[data-close]', layerEl)) {
-    closer.addEventListener('click', () => closeDataDialog());
-  }
   qs('[data-conectar]', layerEl)?.addEventListener('click', () => void doConnect());
   qs('[data-export]', layerEl)?.addEventListener('click', () => void doExport());
   qs('[data-share]', layerEl)?.addEventListener('click', () => void doShare());

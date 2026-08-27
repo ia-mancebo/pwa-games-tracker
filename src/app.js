@@ -6,7 +6,7 @@ import * as welcome from './views/welcome.js';
 import { renderFilebar } from './ui/filebar.js';
 import { openDataDialog } from './views/dataDialog.js';
 import { autoRefreshIfNeeded } from './data/novedades.js';
-import { installBackNav, pushScreen } from './backnav.js';
+import { installBackNav, navigate } from './backnav.js';
 
 /**
  * Meta del espejo IndexedDB (spec §5.1). `exportFileName` y `persistAsked` son
@@ -238,18 +238,17 @@ export function createApp(root) {
     const previous = store.get().tab;
     // Volver a Biblioteca desde otra pestaña repone la estantería (ticket 14);
     // la búsqueda y los filtros persisten (barra común del ticket 15).
-    // Cambiar de pestaña cierra siempre la Ficha abierta (ticket 17).
+    // Cambiar de pestaña cierra siempre la Ficha abierta (ticket 17). Cambio
+    // de pestaña = pantalla nueva: el botón atrás del móvil regresa a la
+    // pestaña anterior (src/backnav.js).
     if (tab === 'biblioteca' && previous !== 'biblioteca') {
-      store.set({
+      navigate(store, 'push', {
         tab,
         library: { ...store.get().library, view: 'shelves', panelStatus: null, gameId: null },
       });
     } else {
-      store.set({ tab, library: { ...store.get().library, gameId: null } });
+      navigate(store, 'push', { tab, library: { ...store.get().library, gameId: null } });
     }
-    // Cambio de pestaña = pantalla nueva: el botón atrás del móvil regresa a
-    // la pestaña anterior (src/backnav.js).
-    pushScreen(store);
     // Entrar en Novedades dispara el refresco automático silencioso
     // (>12 h y con conexión; ticket 23, spec §7.3), fire-and-forget.
     if (tab === 'novedades' && previous !== 'novedades') {

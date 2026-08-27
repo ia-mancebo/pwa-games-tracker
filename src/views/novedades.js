@@ -4,7 +4,7 @@
  * externa con «➕ Quiero jugarlo» (alta 100 % local). El tablón SIEMPRE se
  * pinta desde la instantánea IDB; las bandas explican el modo degradado.
  */
-import { html, raw } from '../lib/dom.js';
+import { html, raw, qs } from '../lib/dom.js';
 import { todayFrom } from '../domain/schema.js';
 import { findDuplicates } from '../domain/selectors.js';
 import { coverHtml } from '../ui/cover.js';
@@ -13,7 +13,8 @@ import { getSnapshot } from '../data/snapshot.js';
 import { refreshNovedades } from '../data/novedades.js';
 import { IGDB_SERVICE_ERROR, igdb } from '../services/igdb.js';
 import { store } from '../app.js';
-import { pushScreen, goBackScreen } from '../backnav.js';
+import { navigate } from '../backnav.js';
+import { openSheet, SHEET_BODY_SELECTOR } from '../ui/sheet.js';
 
 /** Composición fija del tablón (spec §7.2). @type {{key: SectionKey, label: string}[]} */
 const SECTIONS = [
@@ -347,82 +348,73 @@ function boardHtml() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Ficha externa (.add-layer)                                          */
+/* Ficha externa (hoja profunda, src/ui/sheet.js)                      */
 /* ------------------------------------------------------------------ */
 
-/** Capa abierta actualmente. @type {HTMLElement|null} */
-let detailLayer = null;
+/** Hoja del módulo actualmente abierta (handle de openSheet). @type {{ close: () => void, layer: HTMLElement }|null} */
+let sheet = null;
 
-/** Referencia «sección:índice» pintada en la capa abierta. @type {string|null} */
+/** Referencia «sección:índice» pintada en la hoja abierta. @type {string|null} */
 let paintedRef = null;
-
-/** @type {((e: KeyboardEvent) => void)|null} */
-let detailKeyHandler = null;
 
 let adding = false;
 
 /**
- * Referencia «sección:índice» de la Ficha abierta según el estado; la Ficha
- * es una pantalla (viaja en novedades.detail) y el botón atrás del móvil la
- * cierra sin cambiar de pestaña (src/backnav.js).
+ * Referencia «sección:índice» de la Ficha abierta según el estado. La Ficha
+ * ya NO es una pantalla (Q12): sin entrada de historial; el botón atrás del
+ * móvil la cierra vía el módulo de hojas (src/backnav.js + src/ui/sheet.js).
  * @returns {string|null}
  */
 function currentDetailRef() {
   return store.get().novedades?.detail ?? null;
 }
 
-/** Cierra la capa de la Ficha y retira sus listeners, sin tocar el estado. */
+/** Cierra la hoja de la Ficha (el ✕, el fondo y Escape los cierra el módulo). */
 export function closeDetail() {
-  if (detailKeyHandler) {
-    document.removeEventListener('keydown', detailKeyHandler);
-    detailKeyHandler = null;
-  }
-  detailLayer?.remove();
-  detailLayer = null;
+  sheet?.close();
+  sheet = null;
   paintedRef = null;
 }
 
 /**
- * Cierre con gesto (✕, fondo, Escape): aplica el cambio al instante y consume
- * la entrada de historial de la Ficha para que el atrás del sistema no la
- * repita (src/backnav.js).
+ * Cierre con gesto (✕, fondo, Escape, botón atrás): aplica el cambio al
+ * instante; el historial lo gestiona el módulo de hojas (sin entrada propia).
  */
 function requestCloseDetail() {
   const nv = store.get().novedades ?? { section: null, genre: null, detail: null };
-  goBackScreen(store, {
+  store.set({
     novedades: { section: nv.section ?? null, genre: nv.genre ?? null, detail: null },
   });
 }
 
-/** Sincroniza la capa de la Ficha con el estado: la abre, la cierra o nada. */
+/** Sincroniza la hoja de la Ficha con el estado: la abre, la cierra o nada. */
 function syncDetail() {
   const ref = currentDetailRef();
   if (ref) {
-    if (detailLayer?.isConnected && paintedRef === ref) return;
+    if (sheet?.layer.isConnected && paintedRef === ref) return;
     openDetailLayer(ref);
-  } else if (detailLayer) {
+  } else if (sheet) {
     closeDetail();
   }
 }
 
 /**
- * Crea la capa de la Ficha para una referencia ya validada del estado.
+ * Abre la hoja de la Ficha para una referencia ya validada del estado.
  * @param {string} ref
  */
 function openDetailLayer(ref) {
   closeDetail();
   paintedRef = ref;
-  detailLayer = document.createElement('div');
-  detailLayer.className = 'add-layer fade';
-  document.body.appendChild(detailLayer);
-  paintDetail();
-  if (!detailLayer) return;
-  detailLayer.addEventListener('click', (e) => {
+  const handle = openSheet({
+    title: 'Ficha',
+    closeAttr: 'data-close-detail',
+    backdropAttr: 'data-close-detail',
+    onClose: requestCloseDetail,
+    content: '',
+  });
+  sheet = handle;
+  handle.layer.addEventListener('click', (e) => {
     if (!(e.target instanceof HTMLElement)) return;
-    if (e.target.closest('[data-close-detail]')) {
-      requestCloseDetail();
-      return;
-    }
     if (e.target.closest('[data-want-play]')) {
       const snap = snapshotCache;
       const parts = (currentDetailRef() ?? '').split(':');
@@ -434,13 +426,7 @@ function openDetailLayer(ref) {
       if (game) void wantToPlay(game);
     }
   });
-  detailKeyHandler = (e) => {
-    if (e.key === 'Escape' && detailLayer?.isConnected) {
-      e.preventDefault();
-      requestCloseDetail();
-    }
-  };
-  document.addEventListener('keydown', detailKeyHandler);
+  paintDetail();
 }
 
 /**
@@ -468,12 +454,13 @@ function releaseTextHtml(game) {
   </p>`;
 }
 
-/** Repinta solo la hoja de la ficha abierta (el botón cambia tras añadir). */
+/** Repinta solo el cuerpo de la hoja abierta (el botón cambia tras añadir). */
 function paintDetail() {
-  const layer = detailLayer;
+  const sheetEl = sheet?.layer ?? null;
   const snap = snapshotCache;
   const ref = currentDetailRef();
-  if (!layer || !ref || !snap) return;
+  const body = sheetEl ? qs(SHEET_BODY_SELECTOR, sheetEl) : null;
+  if (!body || !ref || !snap) return;
   const [sec, idxRaw] = ref.split(':');
   const game = /** @type {IgdbGame[]} */ (snap[/** @type {SectionKey} */ (sec)] ?? [])[
     Number(idxRaw)
@@ -486,13 +473,7 @@ function paintDetail() {
   const inLibrary = isInLibrary(game);
   const genres = (game.genres ?? []).map((g) => g.name);
   const platforms = (game.platforms ?? []).map((p) => p.name);
-  layer.innerHTML = html`<div class="add-backdrop" data-close-detail></div>
-    <section class="add-sheet" role="dialog" aria-modal="true" aria-label="${game.title}">
-      <header class="add-head">
-        <h2>Ficha</h2>
-        <button type="button" class="chip" data-close-detail aria-label="Cerrar">✕</button>
-      </header>
-      <div class="d-hero">
+  body.innerHTML = html`<div class="d-hero">
         <div class="d-cover">${coverHtml(fakeSchemaGame(game))}</div>
         <div class="d-head">
           <h3 class="d-title">${game.title}</h3>
@@ -536,8 +517,7 @@ function paintDetail() {
                     Se añade a tu biblioteca como «Quiero jugar», sin conexión.
                   </p>`
         }
-      </div>
-    </section>`;
+      </div>`;
 }
 
 /**
@@ -621,19 +601,18 @@ function paintSync(container) {
     if (target.hasAttribute('data-nback')) {
       // Cierra el drill-down al instante y consume su entrada de historial
       // (src/backnav.js): el botón atrás del sistema no la repite.
-      goBackScreen(store, { novedades: { section: null, genre: null, detail: null } });
+      navigate(store, 'back', { novedades: { section: null, genre: null, detail: null } });
       return;
     }
     if (target.hasAttribute('data-nsection')) {
-      store.set({
+      // Sección nueva: pantalla propia para el botón atrás del móvil.
+      navigate(store, 'push', {
         novedades: {
           section: target.getAttribute('data-nsection'),
           genre: null,
           detail: null,
         },
       });
-      // Sección nueva: pantalla propia para el botón atrás del móvil.
-      pushScreen(store);
       return;
     }
     if (target.hasAttribute('data-ngenre')) {
@@ -650,9 +629,9 @@ function paintSync(container) {
     }
     const detailRef = target.getAttribute('data-ndetail');
     if (detailRef && snapshotCache) {
-      // La Ficha es una pantalla: entra en el estado y empuja su entrada de
-      // historial para que el atrás del móvil la cierre sin cambiar de
-      // pestaña (src/backnav.js).
+      // La Ficha ya NO es una pantalla (Q12): sin entrada de historial. El
+      // botón atrás del móvil la cierra vía el módulo de hojas, que re-empuja
+      // la instantánea al consumir la pulsación (src/backnav.js).
       const nv = store.get().novedades ?? { section: null, genre: null, detail: null };
       store.set({
         novedades: {
@@ -661,7 +640,6 @@ function paintSync(container) {
           detail: detailRef,
         },
       });
-      pushScreen(store);
       syncDetail();
     }
   });

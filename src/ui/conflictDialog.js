@@ -1,21 +1,28 @@
 /**
  * Diálogo de conflicto real (ticket 18, spec §5.5): tres opciones explícitas
- * con la fecha de ambas versiones; jamás sobrescribe en silencio. Reutiliza el
- * patrón .add-layer/.add-backdrop/.add-sheet de la hoja de Alta.
+ * con la fecha de ambas versiones; jamás sobrescribe en silencio. Es un
+ * adaptador de la hoja profunda (src/ui/sheet.js): el módulo pinta la capa,
+ * el fondo y la cabecera, y es dueño de ✕/fondo/Escape; aquí solo viven el
+ * contenido y los repintados del .sheet-body.
  */
-import { html, qs, qsa } from '../lib/dom.js';
+import { html, qs } from '../lib/dom.js';
 import { store } from '../app.js';
 import { resolveConflict } from '../data/filelink.js';
+import { openSheet, SHEET_BODY_SELECTOR } from './sheet.js';
 
-/** @type {HTMLElement | null} */
+/** Hoja del módulo de hojas actualmente abierta (el .add-sheet). @type {HTMLElement | null} */
 let layer = null;
+
+/** Cierre de la hoja del módulo. @type {(() => void)|null} */
+let closeSheet = null;
 
 export function isConflictOpen() {
   return layer !== null;
 }
 
 export function closeConflict() {
-  layer?.remove();
+  closeSheet?.();
+  closeSheet = null;
   layer = null;
 }
 
@@ -35,9 +42,17 @@ function stamp(iso) {
 export function openConflict(fileDoc) {
   closeConflict();
   if (!store.get().doc) return;
-  layer = document.createElement('div');
-  layer.className = 'add-layer';
-  document.body.appendChild(layer);
+  const handle = openSheet({
+    title: 'Conflicto de versiones',
+    closeAttr: 'data-close',
+    backdropAttr: 'data-close',
+    closeClass: 'tag-x',
+    sheetClass: 'conflict-sheet',
+    onClose: closeConflict,
+    content: '',
+  });
+  layer = handle.layer;
+  closeSheet = handle.close;
   paint(fileDoc);
 }
 
@@ -60,13 +75,9 @@ function paint(fileDoc, { armed = false, note = '', error = '' } = {}) {
         <button type="button" class="btn-primary" data-choice="local">Mantener mis cambios</button>
         <button type="button" class="chip" data-choice="download">Descargar copia local</button>
       </div>`;
-  layerEl.innerHTML = html`<div class="add-backdrop" data-close></div>
-    <div class="add-sheet conflict-sheet fade" role="dialog" aria-modal="true" aria-labelledby="conflict-title">
-      <header class="add-head">
-        <h2 id="conflict-title">Conflicto de versiones</h2>
-        <button type="button" class="tag-x" data-close aria-label="Cerrar">✕</button>
-      </header>
-      <p class="conflict-intro">
+  const body = qs(SHEET_BODY_SELECTOR, layerEl);
+  if (body) {
+    body.innerHTML = html`<p class="conflict-intro">
         El archivo cambió fuera de la app y además hay cambios sin volcar. Elige qué
         versión conservar; no se pierde nada sin tu confirmación.
       </p>
@@ -82,8 +93,8 @@ function paint(fileDoc, { armed = false, note = '', error = '' } = {}) {
       </div>
       ${actions}
       ${note ? html`<p class="conflict-note">${note}</p>` : ''}
-      ${error ? html`<p class="form-error" role="alert">${error}</p>` : ''}
-    </div>`;
+      ${error ? html`<p class="form-error" role="alert">${error}</p>` : ''}`;
+  }
   wire(layerEl, fileDoc);
 }
 
@@ -106,9 +117,6 @@ async function finish(choice, fileDoc) {
  * @param {import('../domain/schema.js').Doc} fileDoc
  */
 function wire(layerEl, fileDoc) {
-  for (const closer of qsa('[data-close]', layerEl)) {
-    closer.addEventListener('click', () => closeConflict());
-  }
   qs('[data-choice="file"]', layerEl)?.addEventListener('click', () => paint(fileDoc, { armed: true }));
   qs('[data-choice="local"]', layerEl)?.addEventListener('click', () => void finish('local', fileDoc));
   qs('[data-choice="download"]', layerEl)?.addEventListener('click', () => {

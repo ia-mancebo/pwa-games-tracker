@@ -4,14 +4,19 @@
  * sesión desde main.js cuando hay biblioteca en el espejo pero el archivo no
  * está conectado, y ofrece reconectar (con gesto, para pedir permiso),
  * conectar otro .json, empezar biblioteca nueva o seguir por ahora.
+ *
+ * Es un adaptador de la hoja profunda (src/ui/sheet.js): el módulo de hojas
+ * pinta la capa y es dueño de ✕/fondo/Escape; aquí solo vive el contenido y
+ * el cierre automático por suscripción al estado del enlace.
  */
-import { html, qs, qsa } from '../lib/dom.js';
+import { html, qs } from '../lib/dom.js';
 import { store } from '../app.js';
 import { newLibrary } from '../data/library.js';
 import { pickAndConnect, reconnect } from '../data/filelink.js';
+import { openSheet } from './sheet.js';
 
-/** Capa abierta actualmente. @type {HTMLElement|null} */
-let layer = null;
+/** Cierre de la hoja actual. @type {(() => void)|null} */
+let closeSheet = null;
 
 /** @type {(() => boolean)|null} */
 let unsubscribe = null;
@@ -20,8 +25,8 @@ let unsubscribe = null;
 export function closeReconnectModal() {
   unsubscribe?.();
   unsubscribe = null;
-  layer?.remove();
-  layer = null;
+  closeSheet?.();
+  closeSheet = null;
 }
 
 /**
@@ -33,28 +38,16 @@ export function openReconnectModal() {
   closeReconnectModal();
   if (!store.get().doc) return closeReconnectModal;
   const name = store.get().meta.connectedFileName ?? 'tu game-tracker.json';
-  layer = document.createElement('div');
-  layer.className = 'add-layer fade reconnect-layer';
-  document.body.appendChild(layer);
-  layer.innerHTML = html`<div class="add-backdrop" data-close-reconnect></div>
-    <section
-      class="add-sheet reconnect-sheet"
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="reconnect-title"
-    >
-      <header class="add-head">
-        <h2 id="reconnect-title">Biblioteca cargada · Archivo no conectado</h2>
-        <button
-          type="button"
-          class="chip chip-xs reconnect-close"
-          data-dismiss-reconnect
-          aria-label="Cerrar"
-        >
-          ✕
-        </button>
-      </header>
-      <p class="reconnect-lead">
+  const handle = openSheet({
+    title: 'Biblioteca cargada · Archivo no conectado',
+    titleId: 'reconnect-title',
+    role: 'alertdialog',
+    closeAttr: 'data-dismiss-reconnect',
+    backdropAttr: 'data-close-reconnect',
+    layerClass: 'reconnect-layer',
+    sheetClass: 'reconnect-sheet',
+    onClose: closeReconnectModal,
+    content: html`<p class="reconnect-lead">
         La biblioteca del espejo local se abrió bien, pero <b>no está conectada al
         archivo «${name}»</b>: mientras siga así, tus cambios <b>se guardan solo en este
         navegador</b> y el autoguardado no puede volcarlos.
@@ -75,9 +68,10 @@ export function openReconnectModal() {
       </p>
       <footer class="add-foot">
         <button type="button" class="chip" data-dismiss-reconnect>Seguir por ahora</button>
-      </footer>
-    </section>`;
-  wire();
+      </footer>`,
+  });
+  closeSheet = handle.close;
+  wire(handle.layer);
   // Cierre automático en cuanto la sesión quede conectada de cualquier forma.
   unsubscribe = store.subscribe((state) => {
     if (state.file.status === 'connected') closeReconnectModal();
@@ -85,22 +79,25 @@ export function openReconnectModal() {
   return closeReconnectModal;
 }
 
-function wire() {
-  const layerNow = layer;
-  if (!layerNow) return;
-  // Toda la vía de cierre (✕ de cabecera, backdrop y «Seguir por ahora»).
-  for (const btn of qsa('[data-dismiss-reconnect],[data-close-reconnect]', layerNow)) {
-    btn.addEventListener('click', closeReconnectModal);
-  }
-  qs('[data-reconnect-now]', layerNow)?.addEventListener('click', () => {
+/**
+ * @param {HTMLElement} layerEl
+ */
+function wire(layerEl) {
+  qs('[data-reconnect-now]', layerEl)?.addEventListener('click', () => {
     void reconnect();
   });
-  qs('[data-connect-other]', layerNow)?.addEventListener('click', () => {
+  qs('[data-connect-other]', layerEl)?.addEventListener('click', () => {
     void pickAndConnect();
   });
-  qs('[data-new-library]', layerNow)?.addEventListener('click', () => {
+  qs('[data-new-library]', layerEl)?.addEventListener('click', () => {
     void newLibrary(new Date()).then(() => closeReconnectModal());
   });
+  // «Seguir por ahora» del pie; el ✕ de cabecera y el fondo los cierra el
+  // módulo (data-dismiss-reconnect del ✕ es solo compatibilidad con tests).
+  qs('.add-foot [data-dismiss-reconnect]', layerEl)?.addEventListener(
+    'click',
+    closeReconnectModal
+  );
 }
 
 /** Limpieza total para pruebas. */

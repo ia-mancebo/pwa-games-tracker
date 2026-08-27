@@ -21,7 +21,8 @@ import {
 } from '../data/library.js';
 import { coverHtml } from '../ui/cover.js';
 import { statusPillHtml } from '../ui/pill.js';
-import { pushScreen, goBackScreen } from '../backnav.js';
+import { addTag, removeTag, tagEditorHtml } from '../ui/tags.js';
+import { navigate } from '../backnav.js';
 
 /**
  * Estado efímero de edición de la Ficha (qué formulario está abierto, qué
@@ -70,8 +71,7 @@ let ui = freshUi(null);
  */
 export function openGame(store, gameId) {
   ui = freshUi(gameId);
-  store.set({ library: { ...store.get().library, gameId } });
-  pushScreen(store);
+  navigate(store, 'push', { library: { ...store.get().library, gameId } });
 }
 
 /**
@@ -388,46 +388,6 @@ function heroHtml(game) {
 }
 
 /**
- * Editor de etiquetas propias: chips con × más campo para añadir (Enter).
- * Siempre presente, también en juegos de IGDB (spec §8.5).
- * @param {import('../domain/schema.js').Game} game
- * @returns {string}
- */
-function tagsEditorHtml(game) {
-  const tags = game.tags ?? [];
-  return html`<section class="d-sec" data-sec="tags">
-    <h3>Etiquetas propias</h3>
-    <div class="tag-edit">
-      ${
-        tags.length === 0
-          ? raw('<span class="d-meta">Sin etiquetas todavía.</span>')
-          : html`<div class="tag-list"
-                >${tags.map(
-                  (tag) =>
-                    html`<span class="tag-mini own">#${tag}
-                        <button
-                          type="button"
-                          class="tag-x"
-                          data-tag-remove="${tag}"
-                          aria-label="Quitar ${tag}"
-                          >×</button
-                        ></span
-                      >`
-                )}</div
-              >`
-      }
-      <input
-        type="text"
-        class="tag-add"
-        data-tag-add
-        placeholder="añadir…"
-        aria-label="Añadir etiqueta propia"
-      />
-    </div>
-  </section>`;
-}
-
-/**
  * Selector de plataforma efectiva de una jugada: las plataformas del juego más
  * «Otra (propia)…», que revela un campo para el nombre propio (id: null).
  * @param {import('../domain/schema.js').Game} game
@@ -637,7 +597,10 @@ function fichaHtml(game) {
     ${SHARED_NAMES.filter((name) => sharedSectionVisible(game, name)).map((name) =>
       sharedSecHtml(game, name)
     )}
-    ${tagsEditorHtml(game)}
+    <section class="d-sec" data-sec="tags">
+      <h3>Etiquetas propias</h3>
+      ${tagEditorHtml(game.tags ?? [])}
+    </section>
     <section class="d-sec" data-sec="status">
       <h3>Estado</h3>
       <div class="d-status"
@@ -765,19 +728,6 @@ async function commitTitle(surface, store) {
 }
 
 /**
- * Añade una etiqueta propia escrita en el campo del editor.
- * @param {HTMLInputElement} input
- * @param {import('../app.js').Store} store
- */
-async function addTag(input, store) {
-  const game = currentGame(store);
-  const tag = input.value.trim();
-  if (!game || !tag) return;
-  input.value = '';
-  await updateGame(game.id, { tags: [...(game.tags ?? []), tag] });
-}
-
-/**
  * Parche de actualización para un dato compartido editado como texto; null si
  * el campo es desconocido.
  * @param {import('../domain/schema.js').Game} game
@@ -866,7 +816,7 @@ function wire(container, store) {
     if (pick('[data-back-ficha]')) {
       // Aplica el cierre al instante y consume la entrada de historial de la
       // Ficha (src/backnav.js): el botón atrás del sistema no la repite.
-      goBackScreen(store, { library: { ...store.get().library, gameId: null } });
+      navigate(store, 'back', { library: { ...store.get().library, gameId: null } });
       return;
     }
     const shot = pick('[data-shot]');
@@ -897,9 +847,7 @@ function wire(container, store) {
     const tagRemove = pick('[data-tag-remove]');
     if (tagRemove) {
       const tag = tagRemove.getAttribute('data-tag-remove') ?? '';
-      void updateGame(game.id, { tags: (game.tags ?? []).filter((t) => t !== tag) }).catch(
-        () => {}
-      );
+      void removeTag(game, tag).catch(() => {});
       return;
     }
     const editField = pick('[data-edit-field]');
@@ -1010,7 +958,10 @@ function wire(container, store) {
     if (pick('[data-del-game-yes]')) {
       void deleteGame(game.id)
         .then(() => {
-          store.set({
+          // La Ficha ya no existe: su entrada de historial se sustituye por
+          // la estantería (src/backnav.js); el back del sistema salta al
+          // Panel previo, nunca a la Ficha borrada.
+          navigate(store, 'replace', {
             library: {
               ...store.get().library,
               view: 'shelves',
@@ -1089,7 +1040,7 @@ function wire(container, store) {
 
     if (target.matches('[data-tag-add]') && e.key === 'Enter') {
       e.preventDefault();
-      void addTag(/** @type {HTMLInputElement} */ (target), store).catch(() => {});
+      void addTag(game, /** @type {HTMLInputElement} */ (target)).catch(() => {});
       return;
     }
     if (target.matches('[data-platform-name]') && e.key === 'Enter') {

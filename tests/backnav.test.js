@@ -8,9 +8,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import './support/storage.js';
 import { createApp, store } from '../src/app.js';
 import { importDoc, initLibrary } from '../src/data/library.js';
-import { resetBackNav } from '../src/backnav.js';
+import {
+  installBackNav,
+  navigate,
+  registerSheetCloser,
+  resetBackNav,
+} from '../src/backnav.js';
 import { saveSnapshot } from '../src/data/snapshot.js';
 import { qs } from '../src/lib/dom.js';
+// El cierre de hoja real (ticket 2): resetBackNav lo anula y estos tests
+// abren la Ficha de Novedades, cuyo atrás del sistema pasa por el módulo.
+import { resetSheet } from '../src/ui/sheet.js';
 
 /**
  * @returns {HTMLElement}
@@ -60,6 +68,7 @@ async function seed() {
 beforeEach(async () => {
   document.body.innerHTML = '';
   resetBackNav();
+  resetSheet();
   store.set({
     tab: 'biblioteca',
     doc: null,
@@ -141,7 +150,7 @@ describe('atrás del sistema', () => {
           title: 'Celeste',
           releaseDate: '2026-08-01',
           coverUrl: 'https://images.igdb.com/igdb/image/upload/t_cover_big/co268807.jpg',
-          description: 'Descripci�n de prueba',
+          description: 'Descripci�n de prueba',
           genres: [{ id: 8, name: 'Platform' }],
           platforms: [{ id: 130, name: 'Nintendo Switch' }],
         },
@@ -174,7 +183,7 @@ describe('atrás del sistema', () => {
           title: 'Celeste',
           releaseDate: '2026-08-01',
           coverUrl: 'https://images.igdb.com/igdb/image/upload/t_cover_big/co268807.jpg',
-          description: 'Descripci�n de prueba',
+          description: 'Descripci�n de prueba',
           genres: [{ id: 8, name: 'Platform' }],
           platforms: [{ id: 130, name: 'Nintendo Switch' }],
         },
@@ -226,5 +235,107 @@ describe('«← Volver» interno', () => {
     await new Promise((resolve) => setTimeout(resolve, 25));
     expect(store.get().library.gameId).toBeNull();
     expect(store.get().library.view).toBe('shelves');
+  });
+});
+
+describe('navigate · costura directa', () => {
+  it('push y después history.back() restaura la pantalla anterior', async () => {
+    installBackNav(store);
+    navigate(store, 'push', {
+      library: { ...store.get().library, view: 'panel', panelStatus: 'playing' },
+    });
+    expect(store.get().library.view).toBe('panel');
+
+    history.back();
+    await vi.waitFor(() => expect(store.get().library.view).toBe('shelves'));
+    expect(store.get().library.panelStatus).toBeNull();
+  });
+
+  it('back aplica la transición al instante y se traga el popstate (los filtros no derivan)', async () => {
+    installBackNav(store);
+    navigate(store, 'push', {
+      library: { ...store.get().library, view: 'panel', panelStatus: 'playing' },
+    });
+    // Cambio de filtro sin historial: la entrada del Panel quedó obsoleta.
+    store.set({ library: { ...store.get().library, genre: 'Aventura' } });
+    navigate(store, 'push', { library: { ...store.get().library, gameId: 'g1' } });
+    expect(store.get().library.gameId).toBe('g1');
+
+    navigate(store, 'back', { library: { ...store.get().library, gameId: null } });
+    // Cambio síncrono y el filtro conservado…
+    expect(store.get().library.view).toBe('panel');
+    expect(store.get().library.genre).toBe('Aventura');
+    // …y la instantánea obsoleta (sin filtro) no lo pisa tras el popstate.
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(store.get().library.genre).toBe('Aventura');
+    // El back interno consumió la entrada del Panel: el siguiente back del
+    // sistema restaura la estantería previa al Panel.
+    history.back();
+    await vi.waitFor(() => expect(store.get().library.view).toBe('shelves'));
+  });
+
+  it('replace sustituye la entrada de la Ficha: el back restaura el Panel, nunca la Ficha', async () => {
+    installBackNav(store);
+    navigate(store, 'push', {
+      library: { ...store.get().library, view: 'panel', panelStatus: 'playing' },
+    });
+    navigate(store, 'push', { library: { ...store.get().library, gameId: 'g1' } });
+    // Borrado del juego: la Ficha se sustituye por la estantería.
+    navigate(store, 'replace', {
+      library: { ...store.get().library, view: 'shelves', panelStatus: null, gameId: null },
+    });
+    expect(store.get().library.view).toBe('shelves');
+
+    history.back();
+    await vi.waitFor(() => expect(store.get().library.view).toBe('panel'));
+    expect(store.get().library.panelStatus).toBe('playing');
+    expect(store.get().library.gameId).toBeNull();
+  });
+
+  it('registerSheetCloser: closer true consume la pulsación sin cambiar la pantalla y el re-push conserva la entrada', async () => {
+    installBackNav(store);
+    navigate(store, 'push', {
+      library: { ...store.get().library, view: 'panel', panelStatus: 'playing' },
+    });
+    const closer = vi.fn().mockReturnValueOnce(true).mockReturnValue(false);
+    registerSheetCloser(closer);
+
+    history.back();
+    await vi.waitFor(() => expect(closer).toHaveBeenCalled());
+    // La pulsación se consumió cerrando la hoja: la pantalla no cambió.
+    expect(store.get().library.view).toBe('panel');
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(store.get().library.view).toBe('panel');
+    // El re-push deshizo el pop: el segundo back restaura la pantalla previa.
+    history.back();
+    await vi.waitFor(() => expect(store.get().library.view).toBe('shelves'));
+  });
+
+  it('registerSheetCloser: closer false deja el restore normal', async () => {
+    installBackNav(store);
+    navigate(store, 'push', {
+      library: { ...store.get().library, view: 'panel', panelStatus: 'playing' },
+    });
+    const closer = vi.fn(() => false);
+    registerSheetCloser(closer);
+
+    history.back();
+    await vi.waitFor(() => expect(store.get().library.view).toBe('shelves'));
+    expect(closer).toHaveBeenCalled();
+  });
+
+  it('back con depth 0 aplica la transición sin tocar el historial', async () => {
+    installBackNav(store);
+    const backSpy = vi.spyOn(history, 'back');
+
+    navigate(store, 'back', {
+      library: { ...store.get().library, view: 'panel', panelStatus: 'playing' },
+    });
+    expect(store.get().library.view).toBe('panel');
+    expect(backSpy).not.toHaveBeenCalled();
+    // Sin popstate pendiente: nada pisa el cambio tras el margen habitual.
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(store.get().library.view).toBe('panel');
+    backSpy.mockRestore();
   });
 });
