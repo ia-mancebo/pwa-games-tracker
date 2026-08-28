@@ -299,6 +299,70 @@ describe('flujo del duplicado del Alta (la danza de tres pasos desaparece)', () 
   });
 });
 
+describe('pulsar la pestaña Biblioteca con Lista y Ficha abiertas · flujo DOM', () => {
+  it('pulsar Biblioteca (pestaña ya activa) repone la estantería, no reabre la Lista (flujo: Lista → Ficha → Biblioteca)', async () => {
+    await importDoc({
+      schema: 'game-tracker',
+      version: 1,
+      updatedAt: '2026-08-23T10:00:00Z',
+      games: [
+        {
+          id: 'g1',
+          title: 'Hollow Knight',
+          plays: [{ id: 'g1-p1', status: 'backlog', addedAt: '2026-08-01' }],
+        },
+      ],
+    });
+    const root = mount();
+    createApp(root);
+
+    // Lista abierta: balda «Quiero jugar» → Panel.
+    btn(need(qs('[data-open-panel="backlog"]', root))).click();
+    expect(qs('[data-back-shelves]', root)).toBeTruthy();
+    expect(store.get().library.panelStatus).toBe('backlog');
+
+    // Ficha abierta desde la fila del Panel.
+    btn(need(qs('[data-game-id="g1"]', root))).click();
+    expect(qs('.ficha', root)).toBeTruthy();
+
+    // Pulsar Biblioteca en el raíl: SIEMPRE repone la Estantería.
+    btn(need(qs('[data-tab="biblioteca"]', root))).click();
+
+    expect(store.get().library.gameId).toBeNull();
+    expect(store.get().library.view).toBe('shelves');
+    expect(store.get().library.panelStatus).toBeNull();
+    expect(qs('.shelves', root)).toBeTruthy();
+    expect(qs('[data-back-shelves]', root)).toBeNull();
+  });
+
+  it('variante mínima: solo la Lista abierta (sin Ficha) también repone la estantería', async () => {
+    await importDoc({
+      schema: 'game-tracker',
+      version: 1,
+      updatedAt: '2026-08-23T10:00:00Z',
+      games: [
+        {
+          id: 'g1',
+          title: 'Hollow Knight',
+          plays: [{ id: 'g1-p1', status: 'backlog', addedAt: '2026-08-01' }],
+        },
+      ],
+    });
+    const root = mount();
+    createApp(root);
+
+    btn(need(qs('[data-open-panel="backlog"]', root))).click();
+    expect(qs('[data-back-shelves]', root)).toBeTruthy();
+
+    btn(need(qs('[data-tab="biblioteca"]', root))).click();
+
+    expect(store.get().library.view).toBe('shelves');
+    expect(store.get().library.panelStatus).toBeNull();
+    expect(qs('.shelves', root)).toBeTruthy();
+    expect(qs('[data-back-shelves]', root)).toBeNull();
+  });
+});
+
 describe('flujo del Top 5 de estadísticas (push único)', () => {
   it('abrir la Ficha desde el Top 5 empuja una sola entrada; el atrás del móvil regresa a Estadísticas', async () => {
     await importDoc({

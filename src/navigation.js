@@ -16,22 +16,23 @@ import { freshFicha } from './app.js';
 /**
  * Cambia de pestaña. Pantalla nueva: empuja entrada de historial (el botón
  * atrás del móvil regresa a la pestaña anterior). Dos reglas (tickets 14/17):
- * (a) volver a Biblioteca desde otra pestaña repone la estantería conservando
- * búsqueda y filtros; (b) cualquier cambio de pestaña cierra la Ficha abierta.
- * Solo llamar con pestañas válidas: el guard vive en la vista (app.js).
+ * (a) pulsar Biblioteca repone la estantería conservando búsqueda y filtros,
+ * venga de otra pestaña o ya estando en ella con Panel o Ficha abiertos;
+ * (b) cualquier cambio de pestaña cierra la Ficha abierta. Solo llamar con
+ * pestañas válidas: el guard vive en la vista (app.js).
  * @param {import('./app.js').Store} store
  * @param {string} tab
  */
 export function switchTab(store, tab) {
-  const previous = store.get().tab;
-  if (tab === 'biblioteca' && previous !== 'biblioteca') {
+  const library = store.get().library;
+  if (tab === 'biblioteca') {
     navigate(store, 'push', {
       tab,
-      library: { ...store.get().library, view: 'shelves', panelStatus: null, gameId: null },
+      library: { ...library, view: 'shelves', panelStatus: null, gameId: null },
     });
     return;
   }
-  navigate(store, 'push', { tab, library: { ...store.get().library, gameId: null } });
+  navigate(store, 'push', { tab, library: { ...library, gameId: null } });
 }
 
 /**
