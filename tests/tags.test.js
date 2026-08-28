@@ -100,7 +100,7 @@ async function seed(games) {
 }
 
 describe('addTag (Enter en el editor)', () => {
-  it('recorta, limpia el campo y añade la etiqueta vía updateGame', async () => {
+  it('recorta, limpia el campo y añade la etiqueta vía el motor de la Ficha', async () => {
     await seed([{ id: 'g1', title: 'Hades', tags: ['retro'] }]);
     const input = document.createElement('input');
     input.value = '  viciante  ';
@@ -135,7 +135,7 @@ describe('addTag (Enter en el editor)', () => {
 });
 
 describe('removeTag (× en el editor)', () => {
-  it('quita la etiqueta indicada vía updateGame', async () => {
+  it('quita la etiqueta indicada vía el motor de la Ficha', async () => {
     await seed([{ id: 'g1', title: 'Hades', tags: ['retro', 'viciante'] }]);
 
     await removeTag(findGame('g1'), 'retro');

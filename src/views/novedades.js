@@ -7,6 +7,7 @@
 import { html, raw, qs } from '../lib/dom.js';
 import { todayFrom } from '../domain/schema.js';
 import { findDuplicates } from '../domain/selectors.js';
+import { mapSourceToAddInput, toCoverGame } from '../domain/gateway.js';
 import { coverHtml } from '../ui/cover.js';
 import { addGame } from '../data/library.js';
 import { getSnapshot } from '../data/snapshot.js';
@@ -106,16 +107,6 @@ function isStale(snap) {
 /* Marcado                                                             */
 /* ------------------------------------------------------------------ */
 
-/** @param {IgdbGame} game */
-function fakeSchemaGame(game) {
-  return /** @type {import('../domain/schema.js').Game} */ ({
-    id: `igdb-${game.igdbId}`,
-    title: game.title,
-    ...(game.coverUrl ? { coverUrl: game.coverUrl } : {}),
-    plays: [],
-  });
-}
-
 /**
  * Tarjeta de portada con badge de fecha; el clic abre la ficha.
  * @param {SectionKey} section
@@ -131,7 +122,7 @@ function newsCardHtml(section, index, game) {
     data-ndetail="${section}:${index}"
     title="${game.title}"
   >
-    ${coverHtml(fakeSchemaGame(game))}
+    ${coverHtml(toCoverGame(game))}
     ${badge ? html`<span class="badge mono">${badge}</span>` : ''}
     <span class="cap"><span>${game.title}</span></span>
   </button>`;
@@ -298,7 +289,7 @@ function drillDownHtml(sectionKey, genre) {
       ${rows.length === 0 ? raw('<p class="empty">Nada con ese género.</p>') : ''}
       ${rows.map(({ game, i }) =>
         html`<div class="b-row" data-ndetail="${sectionKey}:${i}">
-            ${coverHtml(fakeSchemaGame(game), { mini: true })}
+            ${coverHtml(toCoverGame(game), { mini: true })}
             <span class="b-cell">
               <span class="b-title">${game.title}</span>
               <span class="b-sub">${(game.genres ?? []).map((x) => x.name).join(', ')}</span>
@@ -474,7 +465,7 @@ function paintDetail() {
   const genres = (game.genres ?? []).map((g) => g.name);
   const platforms = (game.platforms ?? []).map((p) => p.name);
   body.innerHTML = html`<div class="d-hero">
-        <div class="d-cover">${coverHtml(fakeSchemaGame(game))}</div>
+        <div class="d-cover">${coverHtml(toCoverGame(game))}</div>
         <div class="d-head">
           <h3 class="d-title">${game.title}</h3>
           ${releaseTextHtml(game)}
@@ -529,17 +520,7 @@ async function wantToPlay(game) {
   if (adding) return;
   adding = true;
   try {
-    await addGame({
-      title: game.title,
-      status: 'backlog',
-      today: todayFrom(new Date()),
-      ...(game.igdbId != null ? { igdbId: game.igdbId } : {}),
-      ...(game.coverUrl ? { coverUrl: game.coverUrl } : {}),
-      ...(game.description ? { description: game.description } : {}),
-      ...((game.genres ?? []).length > 0 ? { genres: game.genres } : {}),
-      ...((game.platforms ?? []).length > 0 ? { platforms: game.platforms } : {}),
-      ...((game.screenshots ?? []).length > 0 ? { screenshots: game.screenshots } : {}),
-    });
+    await addGame(mapSourceToAddInput(game, { status: 'backlog', today: todayFrom(new Date()) }));
   } finally {
     adding = false;
   }

@@ -6,6 +6,8 @@
  * aquí solo viven el contenido y los repintados del .sheet-body.
  */
 import { html, qs, qsa, raw } from '../lib/dom.js';
+import { downloadTextBlob } from '../lib/download.js';
+import { formatError, isAbortError } from '../lib/errors.js';
 import { store } from '../app.js';
 import { validateDoc } from '../domain/validate.js';
 import { DEFAULT_EXPORT_NAME, importDoc, markSaved, saveExportName } from '../data/library.js';
@@ -111,33 +113,6 @@ function hasSavePicker() {
   return typeof self !== 'undefined' && 'showSaveFilePicker' in self;
 }
 
-/** @param {unknown} err @returns {boolean} */
-function isAbortError(err) {
-  return err instanceof Error && err.name === 'AbortError';
-}
-
-/** @param {unknown} err @returns {string} */
-function message(err) {
-  return err instanceof Error ? err.message : String(err);
-}
-
-/**
- * Descarga universal (Blob + a[download]): la vía manual sin FSA (spec §5.6).
- * @param {string} text
- * @param {string} name
- */
-function downloadText(text, name) {
-  const blob = new Blob([text], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
 /** Doc actual serializado y validado, o motivo de error. @returns {{ ok: true, text: string } | { ok: false, reason: string }} */
 function serializeDoc() {
   const { doc } = store.get();
@@ -195,7 +170,7 @@ async function doExport() {
       // Picker roto o permiso fallido: cae al vuelco universal por descarga.
     }
   }
-  if (!written) downloadText(text, name);
+  if (!written) downloadTextBlob(text, name);
 
   // El export manual cuenta como vuelco verificado (spec §5.6): marca limpio.
   if (!assertWritable()) {
@@ -206,7 +181,7 @@ async function doExport() {
     await markSaved({ hash: await sha256Hex(text), now: new Date() });
     void requestPersistOnce();
   } catch (err) {
-    paint({ note: '', error: `Copia exportada como «${name}», pero no se pudo registrar el vuelco: ${message(err)}` });
+    paint({ note: '', error: `Copia exportada como «${name}», pero no se pudo registrar el vuelco: ${formatError(err)}` });
     return;
   }
   paint({ note: `Copia exportada como «${name}»: vuelco verificado registrado.`, error: '' });
@@ -224,7 +199,7 @@ async function doShare() {
     paint({ note: 'Copia compartida.', error: '' });
   } catch (err) {
     if (isAbortError(err)) return;
-    paint({ note: '', error: `No se pudo compartir: ${message(err)}` });
+    paint({ note: '', error: `No se pudo compartir: ${formatError(err)}` });
   }
 }
 
@@ -235,7 +210,7 @@ async function doSaveName(input) {
     const saved = await saveExportName(value);
     paint({ note: `Nombre sugerido guardado: «${saved}».`, error: '' });
   } catch (err) {
-    paint({ note: '', error: message(err) });
+    paint({ note: '', error: formatError(err) });
   }
 }
 
@@ -262,7 +237,7 @@ async function doSaveWorkerUrl(input) {
       error: '',
     });
   } catch (err) {
-    paint({ note: '', error: message(err) });
+    paint({ note: '', error: formatError(err) });
   }
 }
 
@@ -276,7 +251,7 @@ async function doRestore(name) {
     await importDoc(text, { hash: await sha256Hex(text), fileName: null });
     closeDataDialog();
   } catch (err) {
-    paint({ note: '', error: `No se pudo restaurar la copia: ${message(err)}` });
+    paint({ note: '', error: `No se pudo restaurar la copia: ${formatError(err)}` });
   }
 }
 

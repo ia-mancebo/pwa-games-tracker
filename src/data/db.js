@@ -85,25 +85,6 @@ export async function getState() {
 }
 
 /**
- * Reemplaza el documento atómicamente.
- * @param {import('../domain/schema.js').Doc} doc
- * @param {{ strict?: boolean }} [options]
- */
-export async function putState(doc, { strict = false } = {}) {
-  const db = await openDb();
-  try {
-    const tx = db.transaction('state', 'readwrite', {
-      durability: strict ? 'strict' : 'relaxed',
-    });
-    tx.objectStore('state').put(doc, STATE_KEY);
-    if (strict) tx.commit();
-    await done(tx);
-  } finally {
-    db.close();
-  }
-}
-
-/**
  * Reemplaza la meta atómicamente.
  * @param {Meta} meta
  * @param {{ strict?: boolean }} [options]

@@ -17,8 +17,8 @@ import { statusPillHtml } from '../ui/pill.js';
 import { chipRowHtml } from '../ui/chips.js';
 import { tagChipsHtml } from '../ui/tags.js';
 import { openAddSheet } from './addSheet.js';
-import { openGame, renderGame } from './game.js';
-import { navigate } from '../backnav.js';
+import { renderGame } from './game.js';
+import * as nav from '../navigation.js';
 
 /** Portadas visibles por balda antes de la tarjeta «+N más» (spec §8.1). */
 const SHELF_LIMIT = 6;
@@ -97,9 +97,7 @@ function hasActiveFilters(f) {
  */
 function openPanel(store, status) {
   panelShown = PANEL_PAGE;
-  navigate(store, 'push', {
-    library: { ...store.get().library, view: 'panel', panelStatus: status },
-  });
+  nav.openPanel(store, status);
 }
 
 /**
@@ -108,9 +106,7 @@ function openPanel(store, status) {
  * @param {import('../app.js').Store} store
  */
 function backToShelves(store) {
-  navigate(store, 'back', {
-    library: { ...store.get().library, view: 'shelves', panelStatus: null },
-  });
+  nav.backToShelves(store);
 }
 
 /**
@@ -120,7 +116,7 @@ function backToShelves(store) {
  * @param {string} gameId
  */
 function openFicha(store, gameId) {
-  openGame(store, gameId);
+  nav.openGame(store, gameId);
 }
 
 /**

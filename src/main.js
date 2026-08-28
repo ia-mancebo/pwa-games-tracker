@@ -3,13 +3,14 @@ import './styles/base.css';
 import './styles/components.css';
 import { createApp, store } from './app.js';
 import { initLibrary } from './data/library.js';
-import { restoreSavedLink, startAutosave } from './data/filelink.js';
+import { restoreSavedLink, setConflictHandler, startAutosave } from './data/filelink.js';
 import { requestPersistOnce } from './data/persist.js';
 import { acquireTabLock, onLockReleased } from './data/tablock.js';
 import { initCoverSeeding } from './data/covers.js';
 import { initNovedadesRetry } from './data/novedades.js';
 import { hasFsa } from './services/fsa.js';
 import { openReconnectModal } from './ui/reconnectModal.js';
+import { openConflict } from './ui/conflictDialog.js';
 import { registerSW } from 'virtual:pwa-register';
 import { showOfflineToast, showUpdateToast } from './ui/toasts.js';
 
@@ -21,6 +22,11 @@ if (root) {
     // Sin espejo accesible: la app arranca igual; el bienvenida (ticket 13) toma el control.
   }
   createApp(/** @type {HTMLElement} */ (root));
+  // El diálogo de conflicto es render del estado (ADR-0004): el registro del
+  // handler es explícito en el arranque, antes de cualquier reconexión que
+  // pueda elevarlo; los conflictos en segundo plano (foco, ocultar pestaña,
+  // autoguardado) abren el diálogo vía el slice `file.conflict`.
+  setConflictHandler(() => openConflict());
   try {
     // Siembra offline de carátulas (ticket 22): observador fire-and-forget,
     // nunca bloquea el arranque ni la UI.

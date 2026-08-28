@@ -151,7 +151,7 @@ beforeEach(() => {
     tab: 'biblioteca',
     doc: null,
     meta: { dirty: false, updatedAt: null, lastSavedFileHash: null, connectedFileName: null },
-    file: { status: 'disconnected', name: null, error: null },
+    file: { status: 'disconnected', name: null, error: null, conflict: null },
     ready: false,
   });
   resetFilelink();
@@ -180,7 +180,12 @@ describe('pickAndConnect (elección deliberada, §5.5)', () => {
     expect(store.get().meta.dirty).toBe(false);
     expect(store.get().meta.lastSavedFileHash).toBe(await sha256Hex(FILE_V1_TEXT));
     expect(store.get().meta.connectedFileName).toBe('game-tracker.json');
-    expect(store.get().file).toEqual({ status: 'connected', name: 'game-tracker.json', error: null });
+    expect(store.get().file).toEqual({
+      status: 'connected',
+      name: 'game-tracker.json',
+      error: null,
+      conflict: null,
+    });
   });
 
   it('cancelar el picker (AbortError) es silencioso y no cambia nada', async () => {
@@ -501,7 +506,7 @@ describe('autoguardado (§5.4)', () => {
     const handle = makeHandle(FILE_V1_TEXT);
     await connectFile(FILE_V1_TEXT, handle);
     setHandle(null);
-    store.set({ file: { status: 'disconnected', name: null, error: null } });
+    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null } });
     await addGame({ title: 'Hades II', today: TODAY });
 
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -565,7 +570,7 @@ describe('pastilla de archivo (chrome de la app)', () => {
     const handle = makeHandle(FILE_V1_TEXT);
     await connectFile(FILE_V1_TEXT, handle);
     setHandle(null);
-    store.set({ file: { status: 'disconnected', name: null, error: null } });
+    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null } });
 
     const root = mountApp();
     const connect = qs('[data-connect]', root);
@@ -636,7 +641,9 @@ describe('pastilla de archivo (chrome de la app)', () => {
 describe('diálogo de conflicto (§5.5)', () => {
   it('muestra ambas fechas, las tres opciones y cierra con backdrop sin resolver', async () => {
     await seedConflict();
-    openConflict(JSON.parse(FILE_V2_TEXT));
+    // El conflicto se lee del estado (ADR-0004): hay que elevarlo antes de abrir.
+    expect((await saveNow()).status).toBe('conflict');
+    openConflict();
 
     expect(isConflictOpen()).toBe(true);
     const sheet = qs('.conflict-sheet', document.body);
@@ -658,7 +665,7 @@ describe('diálogo de conflicto (§5.5)', () => {
   it('«Mantener mis cambios» resuelve por los locales y cierra', async () => {
     const handle = await seedConflict();
     expect((await saveNow()).status).toBe('conflict');
-    openConflict(JSON.parse(FILE_V2_TEXT));
+    openConflict();
 
     btn(qs('[data-choice="local"]', document.body)).click();
     await settle();
@@ -672,7 +679,7 @@ describe('diálogo de conflicto (§5.5)', () => {
   it('«Usar la versión del archivo» arma confirmación fuerte; Sí importa y No desarma', async () => {
     await seedConflict();
     expect((await saveNow()).status).toBe('conflict');
-    openConflict(JSON.parse(FILE_V2_TEXT));
+    openConflict();
 
     btn(qs('[data-choice="file"]', document.body)).click();
     expect(qs('.conflict-confirm', document.body)?.textContent).toContain(
@@ -693,6 +700,7 @@ describe('diálogo de conflicto (§5.5)', () => {
 
   it('«Descargar copia local» mantiene el diálogo abierto con nota y estado intacto', async () => {
     const handle = await seedConflict();
+    expect((await saveNow()).status).toBe('conflict');
     const urlApi = /** @type {any} */ (globalThis.URL);
     const prevCreate = urlApi.createObjectURL;
     const prevRevoke = urlApi.revokeObjectURL;
@@ -700,7 +708,7 @@ describe('diálogo de conflicto (§5.5)', () => {
     urlApi.revokeObjectURL = () => {};
 
     try {
-      openConflict(JSON.parse(FILE_V2_TEXT));
+      openConflict();
       btn(qs('[data-choice="download"]', document.body)).click();
       await settle();
 

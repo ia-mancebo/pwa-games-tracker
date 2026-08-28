@@ -63,6 +63,17 @@ const PICKER_OPTS = {
 };
 
 /**
+ * Lista MIME/accept del .json para el `<input type="file">` de reserva,
+ * derivada de {@link PICKER_OPTS}: una única fuente para que el picker y el
+ * input no puedan divergir (spec «Lista MIME»).
+ * @type {string}
+ */
+export const JSON_ACCEPT = (() => {
+  const accept = PICKER_OPTS.types[0].accept;
+  return [...new Set([...Object.values(accept).flat(), ...Object.keys(accept)])].join(',');
+})();
+
+/**
  * Abre el picker nativo de apertura; guarda el handle y devuelve el texto del
  * archivo con su nombre. Rechaza con `AbortError` si el usuario cancela.
  * @returns {Promise<{ text: string, name: string }>}

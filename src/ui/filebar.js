@@ -7,18 +7,8 @@
 import { html, qs, raw } from '../lib/dom.js';
 import { store } from '../app.js';
 import { getHandle, hasFsa } from '../services/fsa.js';
-import { openConflict } from './conflictDialog.js';
-import { pickAndConnect, reconnect, saveNow, setConflictHandler } from '../data/filelink.js';
+import { pickAndConnect, reconnect, saveNow } from '../data/filelink.js';
 import { onLockReleased } from '../data/tablock.js';
-
-// Los conflictos detectados en segundo plano (foco, ocultar pestaña,
-// autoguardado) también abren el diálogo aquí.
-setConflictHandler((info) => openConflict(info.fileDoc));
-
-/** @param {import('../data/filelink.js').LinkResult | undefined} res */
-function surfaceConflict(res) {
-  if (res?.status === 'conflict' && res.fileDoc) openConflict(res.fileDoc);
-}
 
 /** @returns {boolean} */
 function readOnly() {
@@ -78,11 +68,11 @@ export function renderFilebar(container, _store) {
   });
   if (ro) return;
   qs('[data-connect]', container)?.addEventListener('click', () => {
-    const operation = getHandle() ? reconnect() : pickAndConnect();
-    void operation.then(surfaceConflict);
+    if (getHandle()) void reconnect();
+    else void pickAndConnect();
   });
   qs('[data-save-now]', container)?.addEventListener('click', () => {
-    void saveNow().then(surfaceConflict);
+    void saveNow();
   });
   // Reintento manual tras un fallo de escritura; el espejo sigue intacto.
   qs('[data-retry]', container)?.addEventListener('click', () => {

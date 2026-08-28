@@ -244,7 +244,7 @@ beforeEach(() => {
     tab: 'biblioteca',
     doc: null,
     meta: { dirty: false, updatedAt: null, lastSavedFileHash: null, connectedFileName: null },
-    file: { status: 'disconnected', name: null, error: null },
+    file: { status: 'disconnected', name: null, error: null, conflict: null },
     ready: false,
     tabRole: 'primary',
   });

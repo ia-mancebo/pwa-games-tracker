@@ -2,12 +2,27 @@
  * Orquestación archivo ↔ espejo (ticket 18, spec §5.3–§5.5): conexión del
  * .json, vuelco verificado con pre-chequeo de hash, autoguardado con debounce
  * de 15 s, recarga al recuperar foco y conflicto real a tres opciones.
+ *
+ * El conflicto pendiente vive en el slice `file` del estado (ADR-0004):
+ * elevarlo escribe el slice completo y avisa al handler registrado en el
+ * arranque; la regla documentada es que los guards existentes (no volcar y no
+ * chequear externo mientras hay conflicto) son lo que mantiene vivo ese
+ * campo — ninguna otra ruta escribe el slice durante un conflicto.
  */
 import { store } from '../app.js';
 import { debounce } from '../lib/debounce.js';
+import { downloadTextBlob } from '../lib/download.js';
+import { formatError, isAbortError } from '../lib/errors.js';
 import { importDoc, markSaved } from './library.js';
 import { validateDoc } from '../domain/validate.js';
-import { getHandle, hasFsa, pickJsonText, permissionState, setHandle } from '../services/fsa.js';
+import {
+  getHandle,
+  hasFsa,
+  JSON_ACCEPT,
+  pickJsonText,
+  permissionState,
+  setHandle,
+} from '../services/fsa.js';
 import { sha256Hex } from '../services/hash.js';
 import { snapshotBackup } from './opfs.js';
 import { requestPersistOnce } from './persist.js';
@@ -34,49 +49,38 @@ import {
  * }} HandleStore
  */
 
+/**
+ * Almacén por defecto del handle: registros FSA en IDB vía db.js.
+ * @returns {HandleStore}
+ */
+function createDefaultHandleStore() {
+  return {
+    /** @returns {Promise<HandleRecord|null>} */
+    async get() {
+      return getHandleRecord();
+    },
+    /**
+     * @param {any} handle
+     * @param {string|null} name
+     */
+    async put(handle, name) {
+      await putHandleRecord(handle, name);
+    },
+    async clear() {
+      await clearHandleRecord();
+    },
+  };
+}
+
 /** @type {HandleStore} */
-let handleStore = {
-  /** @returns {Promise<HandleRecord|null>} */
-  async get() {
-    return getHandleRecord();
-  },
-  /**
-   * @param {any} handle
-   * @param {string|null} name
-   */
-  async put(handle, name) {
-    await putHandleRecord(handle, name);
-  },
-  async clear() {
-    await clearHandleRecord();
-  },
-};
+let handleStore = createDefaultHandleStore();
 
 /**
  * Sustituye (o, con null, restablece) el almacén del enlace.
  * @param {HandleStore | null} [next]
  */
 export function setHandleStore(next) {
-  if (!next) {
-    handleStore = {
-      /** @returns {Promise<HandleRecord|null>} */
-      async get() {
-        return getHandleRecord();
-      },
-      /**
-       * @param {any} h
-       * @param {string|null} n
-       */
-      async put(h, n) {
-        await putHandleRecord(h, n);
-      },
-      async clear() {
-        await clearHandleRecord();
-      },
-    };
-    return;
-  }
-  handleStore = next;
+  handleStore = next ?? createDefaultHandleStore();
 }
 
 /**
@@ -106,21 +110,42 @@ export function setHandleStore(next) {
  */
 
 /**
- * Conflicto real pendiente de resolver (spec §5.5).
- * @typedef {{
- *   fileText: string,
- *   fileHash: string,
- *   fileDoc: import('../domain/schema.js').Doc,
- * }} ConflictInfo
+ * Conflicto real pendiente, definido en el slice `file` (src/app.js).
+ * @typedef {import('../app.js').ConflictInfo} ConflictInfo
  */
+
+/**
+ * Resultado de {@link decideLink}.
+ * @typedef {{
+ *   kind: 'same',
+ * } | {
+ *   kind: 'reload' | 'conflict',
+ *   text: string,
+ *   hash: string,
+ * }} LinkDecision
+ */
+
+/**
+ * Decisión de tres vías del enlace (spec §5.5): hash del archivo contra
+ * `meta.lastSavedFileHash` — igual; distinto + espejo limpio → recarga (manda
+ * el archivo); distinto + dirty → conflicto real. Pura: sin I/O, sin store ni
+ * handle; cada flujo conserva su lectura, su manejo de errores y su mapeo a
+ * resultados del enlace.
+ * @param {string} fileText
+ * @param {string} fileHash
+ * @param {Pick<import('../app.js').Meta, 'dirty' | 'lastSavedFileHash'>} meta
+ * @returns {LinkDecision}
+ */
+export function decideLink(fileText, fileHash, meta) {
+  if (fileHash === meta.lastSavedFileHash) return { kind: 'same' };
+  if (meta.dirty) return { kind: 'conflict', text: fileText, hash: fileHash };
+  return { kind: 'reload', text: fileText, hash: fileHash };
+}
 
 const AUTOSAVE_MS = 15000;
 
 /** Puente hacia la UI: quien pinta el diálogo de conflicto. @type {(info: ConflictInfo) => void} */
 let conflictHandler = () => {};
-
-/** @type {ConflictInfo | null} */
-let pendingConflict = null;
 
 let saving = false;
 let scheduled = false;
@@ -132,11 +157,26 @@ let unsubscribe = null;
 const debouncedSave = debounce(() => runScheduledSave(), AUTOSAVE_MS);
 
 /**
- * Registra quién pinta el diálogo de conflicto (lo llama la UI al montarse).
+ * Registra quién pinta el diálogo de conflicto (lo llama el arranque de la
+ * app; la pastilla de archivo NO registra nada al importarse — ticket 03).
  * @param {(info: ConflictInfo) => void} fn
  */
 export function setConflictHandler(fn) {
   conflictHandler = fn;
+}
+
+/**
+ * Conflicto pendiente leído del estado: «¿hay conflicto pendiente?» tiene
+ * respuesta observable (ADR-0004).
+ * @returns {ConflictInfo | null}
+ */
+function pendingConflict() {
+  return store.get().file.conflict ?? null;
+}
+
+/** Limpia el conflicto pendiente del slice `file` (resuelto o reset). */
+function clearPendingConflict() {
+  store.set({ file: { ...store.get().file, conflict: null } });
 }
 
 /**
@@ -145,7 +185,7 @@ export function setConflictHandler(fn) {
  * @param {string | null} name
  */
 export function markConnected(name) {
-  store.set({ file: { status: 'connected', name, error: null } });
+  store.set({ file: { ...store.get().file, status: 'connected', name, error: null } });
   // La conexión fue deliberada: guarda el handle para reconectar sin picker
   // en la próxima sesión y que el autoguardado retome solo. Se espera a IDB
   // dentro: lectores inmediatos (pruebas, arranque) asumen registro escrito.
@@ -175,28 +215,19 @@ function handleName(handle) {
 
 /** @param {string | null} name */
 function setConnected(name) {
-  store.set({ file: { status: 'connected', name, error: null } });
+  store.set({ file: { ...store.get().file, status: 'connected', name, error: null } });
 }
 
 /** @param {unknown} err */
 function setFileError(err) {
   store.set({
-    file: { status: 'error', name: currentName(), error: errorMessage(err) },
+    file: { ...store.get().file, status: 'error', name: currentName(), error: formatError(err) },
   });
 }
 
-/** @param {unknown} err @returns {string} */
-function errorMessage(err) {
-  return err instanceof Error ? err.message : String(err);
-}
-
-/** @param {unknown} err @returns {boolean} */
-function isAbortError(err) {
-  return err instanceof Error && err.name === 'AbortError';
-}
-
 /**
- * Eleva conflicto real: guarda el pendiente, conecta la sesión y avisa a la UI.
+ * Eleva conflicto real: escribe el slice completo del enlace (estado
+ * conectado + conflicto pendiente observable) y avisa al handler registrado.
  * @param {string} fileText
  * @param {string} fileHash
  * @returns {LinkResult}
@@ -205,9 +236,17 @@ function raiseConflict(fileText, fileHash) {
   const parsed = validateDoc(fileText);
   if (!parsed.ok) return { status: 'error', error: parsed.reason };
   const handle = /** @type {WritableFileHandle | null} */ (getHandle());
-  pendingConflict = { fileText, fileHash, fileDoc: parsed.doc };
-  setConnected(handleName(handle));
-  conflictHandler(pendingConflict);
+  const conflict = /** @type {ConflictInfo} */ ({ fileText, fileHash, fileDoc: parsed.doc });
+  store.set({
+    file: {
+      ...store.get().file,
+      status: 'connected',
+      name: handleName(handle),
+      error: null,
+      conflict,
+    },
+  });
+  conflictHandler(conflict);
   return { status: 'conflict', fileDoc: parsed.doc };
 }
 
@@ -224,7 +263,7 @@ export async function pickAndConnect() {
     picked = await pickJsonText();
   } catch (err) {
     if (isAbortError(err)) return { status: 'cancelled' };
-    return { status: 'error', error: errorMessage(err) };
+    return { status: 'error', error: formatError(err) };
   }
   try {
     const hash = await sha256Hex(picked.text);
@@ -232,7 +271,7 @@ export async function pickAndConnect() {
   } catch (err) {
     // Un candidato inválido no deja handle colgando de sesión.
     setHandle(null);
-    return { status: 'error', error: errorMessage(err) };
+    return { status: 'error', error: formatError(err) };
   }
   setConnected(picked.name);
   const handle = getHandle();
@@ -281,14 +320,15 @@ export async function restoreSavedLink() {
     setFileError(err);
     return 'needs-gesture';
   }
-  if (fileHash === meta.lastSavedFileHash) {
+  const decision = decideLink(fileText, fileHash, meta);
+  if (decision.kind === 'same') {
     setConnected(name);
     if (meta.dirty) await saveNow();
     return 'connected';
   }
-  if (!meta.dirty) {
+  if (decision.kind === 'reload') {
     try {
-      await importDoc(fileText, { hash: fileHash, fileName: name });
+      await importDoc(decision.text, { hash: decision.hash, fileName: name });
     } catch (err) {
       setFileError(err);
       return 'needs-gesture';
@@ -296,7 +336,7 @@ export async function restoreSavedLink() {
     setConnected(name);
     return 'connected';
   }
-  raiseConflict(fileText, fileHash);
+  raiseConflict(decision.text, decision.hash);
   return 'connected';
 }
 
@@ -312,7 +352,7 @@ function pickViaInput() {
     // Android 11/Chrome: los providers suelen reportar .json como
     // application/octet-stream o text/plain; si solo filtramos por MIME estricto,
     // el picker los deja en gris. La validación real la hace importDoc.
-    input.accept = '.json,application/json,application/octet-stream,text/plain';
+    input.accept = JSON_ACCEPT;
     input.hidden = true;
     input.addEventListener(
       'change',
@@ -327,7 +367,7 @@ function pickViaInput() {
             await importDoc(text, { hash, fileName: file.name });
             resolve({ status: 'imported', name: file.name });
           } catch (err) {
-            resolve({ status: 'error', error: errorMessage(err) });
+            resolve({ status: 'error', error: formatError(err) });
           }
         })();
       },
@@ -352,7 +392,7 @@ export async function saveNow({ force = false } = {}) {
   const { doc, meta, file } = store.get();
   if (!handle || !doc || file.status === 'disconnected') return { status: 'skipped' };
   // Con conflicto pendiente solo el vuelco forzado (mantener locales) escribe.
-  if (pendingConflict && !force) return { status: 'skipped' };
+  if (pendingConflict() && !force) return { status: 'skipped' };
   if (saving) return { status: 'busy' };
   saving = true;
   try {
@@ -369,19 +409,21 @@ export async function saveNow({ force = false } = {}) {
         fileHash = await sha256Hex(fileText);
       } catch (err) {
         setFileError(err);
-        return { status: 'error', error: errorMessage(err) };
+        return { status: 'error', error: formatError(err) };
       }
-      if (fileHash !== meta.lastSavedFileHash) {
-        // Cambió fuera: con cambios locales → conflicto; limpio → manda el archivo.
-        if (meta.dirty) return raiseConflict(fileText, fileHash);
+      const decision = decideLink(fileText, fileHash, meta);
+      if (decision.kind === 'conflict') return raiseConflict(decision.text, decision.hash);
+      if (decision.kind === 'reload') {
+        // Limpio → manda el archivo.
         try {
-          await importDoc(fileText, { hash: fileHash, fileName: name });
+          await importDoc(decision.text, { hash: decision.hash, fileName: name });
         } catch (err) {
           setFileError(err);
-          return { status: 'error', error: errorMessage(err) };
+          return { status: 'error', error: formatError(err) };
         }
         return { status: 'reloaded' };
       }
+      // Igual: el vuelco continúa y escribe.
     }
     try {
       const writable = await handle.createWritable();
@@ -389,7 +431,7 @@ export async function saveNow({ force = false } = {}) {
       await writable.close();
     } catch (err) {
       setFileError(err);
-      return { status: 'error', error: errorMessage(err) };
+      return { status: 'error', error: formatError(err) };
     }
     await markSaved({ hash, now: new Date() });
     setConnected(name);
@@ -419,7 +461,7 @@ export async function reconnect() {
     if (permission !== 'granted') return { status: 'denied' };
   } catch (err) {
     if (isAbortError(err)) return { status: 'cancelled' };
-    return { status: 'error', error: errorMessage(err) };
+    return { status: 'error', error: formatError(err) };
   }
   const { meta } = store.get();
   let fileText;
@@ -431,24 +473,25 @@ export async function reconnect() {
   } catch (err) {
     if (isAbortError(err)) return { status: 'cancelled' };
     setFileError(err);
-    return { status: 'error', error: errorMessage(err) };
+    return { status: 'error', error: formatError(err) };
   }
-  if (fileHash === meta.lastSavedFileHash) {
+  const decision = decideLink(fileText, fileHash, meta);
+  if (decision.kind === 'same') {
     setConnected(handleName(session));
     if (meta.dirty) await saveNow();
     return { status: 'connected' };
   }
-  if (!meta.dirty) {
+  if (decision.kind === 'reload') {
     // Recarga limpia: elección implícita del contenido nuevo del archivo.
     try {
-      await importDoc(fileText, { hash: fileHash, fileName: handleName(session) });
+      await importDoc(decision.text, { hash: decision.hash, fileName: handleName(session) });
     } catch (err) {
       setFileError(err);
-      return { status: 'error', error: errorMessage(err) };
+      return { status: 'error', error: formatError(err) };
     }
     return { status: 'connected' };
   }
-  return raiseConflict(fileText, fileHash);
+  return raiseConflict(decision.text, decision.hash);
 }
 
 /**
@@ -459,7 +502,7 @@ export async function reconnect() {
 async function checkExternalChange() {
   const handle = /** @type {WritableFileHandle | null} */ (getHandle());
   const { doc, meta } = store.get();
-  if (!handle || !doc || !meta.lastSavedFileHash || pendingConflict) {
+  if (!handle || !doc || !meta.lastSavedFileHash || pendingConflict()) {
     return { status: 'skipped' };
   }
   let fileText;
@@ -469,29 +512,37 @@ async function checkExternalChange() {
     fileText = await file.text();
     fileHash = await sha256Hex(fileText);
   } catch (err) {
-    return { status: 'error', error: errorMessage(err) };
+    return { status: 'error', error: formatError(err) };
   }
-  if (fileHash === meta.lastSavedFileHash) return { status: 'same' };
-  if (meta.dirty) return raiseConflict(fileText, fileHash);
+  const decision = decideLink(fileText, fileHash, meta);
+  if (decision.kind === 'same') return { status: 'same' };
+  if (decision.kind === 'conflict') return raiseConflict(decision.text, decision.hash);
   try {
-    await importDoc(fileText, { hash: fileHash, fileName: handleName(handle) });
+    await importDoc(decision.text, { hash: decision.hash, fileName: handleName(handle) });
   } catch (err) {
-    return { status: 'error', error: errorMessage(err) };
+    return { status: 'error', error: formatError(err) };
   }
   return { status: 'reloaded' };
 }
 
 /**
  * Resuelve el conflicto pendiente (spec §5.5). «download» NO resuelve: deja el
- * pendiente para que la persona compare y elija de nuevo.
+ * pendiente en el estado para que la persona compare y elija de nuevo.
  * @param {'file' | 'local' | 'download'} choice
  * @returns {Promise<LinkResult>}
  */
 export async function resolveConflict(choice) {
-  const pending = pendingConflict;
+  const pending = pendingConflict();
   if (!pending) return { status: 'none' };
   if (choice === 'download') {
-    downloadLocalCopy();
+    // Descarga una copia local para comparar (nunca resuelve sola).
+    const { doc } = store.get();
+    if (doc) {
+      downloadTextBlob(
+        JSON.stringify(doc),
+        `game-tracker-conflicto-${new Date().toISOString().slice(0, 10)}.json`,
+      );
+    }
     return { status: 'downloaded' };
   }
   if (choice === 'file') {
@@ -501,32 +552,17 @@ export async function resolveConflict(choice) {
         fileName: store.get().meta.connectedFileName,
       });
     } catch (err) {
-      return { status: 'error', error: errorMessage(err) };
+      return { status: 'error', error: formatError(err) };
     }
-    pendingConflict = null;
+    clearPendingConflict();
     return { status: 'resolved', choice: 'file' };
   }
   const result = await saveNow({ force: true });
   if (result.status === 'saved') {
-    pendingConflict = null;
+    clearPendingConflict();
     return { status: 'resolved', choice: 'local' };
   }
   return result;
-}
-
-/** Descarga una copia del doc local para comparar (nunca resuelve sola). */
-function downloadLocalCopy() {
-  const { doc } = store.get();
-  if (!doc) return;
-  const blob = new Blob([JSON.stringify(doc)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `game-tracker-conflicto-${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 /** Vuelco diferido: solo si sigue la sesión conectada y pendiente algo. */
@@ -586,7 +622,7 @@ export function stopAutosave() {
 /** Limpieza total del módulo entre escenarios de prueba. */
 export function resetFilelink() {
   stopAutosave();
-  pendingConflict = null;
+  clearPendingConflict();
   saving = false;
   scheduled = false;
   setHandle(null);

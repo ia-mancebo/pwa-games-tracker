@@ -9,6 +9,8 @@ Glosario del dominio. Sin detalles de implementación: los términos y nada más
 - **Panel**: lista completa de los juegos de un mismo Estado del juego, con búsqueda y filtros aplicados.
 - **Ficha**: detalle de un Juego: sus datos compartidos y todas sus Jugadas juntas, donde se consulta y edita.
 - **Alta**: incorporación de un Juego a la Biblioteca, buscando en la Fuente de datos o creándolo manualmente; crea siempre la primera Jugada.
+- **Alta manual**: Alta creando el Juego a mano; solo el título es obligatorio.
+- **Alta desde la Fuente de datos**: Alta buscando el Juego en la Fuente de datos; conserva sus datos compartidos al crearlo.
 - **Juego**: una obra en la biblioteca, con sus datos compartidos: título, carátula, descripción, capturas, géneros, plataformas disponibles y etiquetas propias. Se guarda una sola vez aunque tenga varias jugadas.
 - **Jugada**: una partida de un juego, con su propio estado, valoración, plataforma jugada, fechas y notas. Todo juego tiene al menos una.
 - **Estado**: ciclo de vida de una jugada. Valores: **Quiero jugar**, **Jugando**, **Terminado**, **Abandonado**.

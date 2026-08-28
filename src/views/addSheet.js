@@ -8,12 +8,15 @@
  * §4.5 (abrir ficha existente o crear otro).
  */
 import { html, qs, qsa } from '../lib/dom.js';
+import { formatError } from '../lib/errors.js';
 import { debounce } from '../lib/debounce.js';
+import { splitCommaList } from '../lib/list.js';
 import { STATUSES, STATUS_LABELS, todayFrom } from '../domain/schema.js';
 import { findDuplicates, gameStatus } from '../domain/selectors.js';
+import { mapSourceToAddInput, toCoverGame } from '../domain/gateway.js';
 import { addGame } from '../data/library.js';
 import { store } from '../app.js';
-import { openGame } from './game.js';
+import * as nav from '../navigation.js';
 import { statusPillHtml } from '../ui/pill.js';
 import { coverHtml } from '../ui/cover.js';
 import { IGDB_SERVICE_ERROR, igdb } from '../services/igdb.js';
@@ -73,19 +76,6 @@ export function closeAddSheet() {
 }
 
 /**
- * Etiquetas propias desde texto separado por comas: recorta, descarta vacías,
- * conserva duplicados escritos deliberadamente.
- * @param {string|undefined} rawTags
- * @returns {string[]}
- */
-function parseTags(rawTags) {
-  return (rawTags ?? '')
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean);
-}
-
-/**
  * @param {unknown} status
  * @returns {import('../domain/schema.js').Status}
  */
@@ -96,10 +86,30 @@ function validStatus(status) {
 }
 
 /**
+ * Payload del alta manual (sin datos de la Fuente): título, Estado elegido,
+ * etiquetas en bruto y today — el camino online pasa por la pasarela.
+ * @param {{ title: string, status?: import('../domain/schema.js').Status, tagsRaw?: string }} input
+ * @param {string} today
+ * @returns {Parameters<typeof addGame>[0]}
+ */
+function manualPayload(input, today) {
+  const tags = splitCommaList(input.tagsRaw ?? '');
+  /** @type {Parameters<typeof addGame>[0]} */
+  const payload = {
+    title: input.title,
+    status: validStatus(input.status),
+    today,
+  };
+  if (tags.length > 0) payload.tags = tags;
+  return payload;
+}
+
+/**
  * Guarda un alta tras validar título y avisar de duplicados. Es la única pieza
  * que escribe: el camino manual llega del formulario y el camino online pasa
  * los datos compartidos ya resueltos con `confirmDuplicate` cuando el usuario
- * aceptó el aviso.
+ * aceptó el aviso. El camino online construye su payload con la pasarela
+ * (domain/gateway.js); el manual, directamente aquí.
  * @param {{
  *   title: string,
  *   status?: import('../domain/schema.js').Status,
@@ -125,20 +135,15 @@ export async function submitManual(input, opts = {}) {
     const duplicates = findDuplicates(doc, candidate);
     if (duplicates.length > 0) return { ok: false, duplicates };
   }
-  const tags = parseTags(input.tagsRaw);
+  const today = todayFrom(opts.now ?? new Date());
   /** @type {Parameters<typeof addGame>[0]} */
-  const payload = {
-    title,
-    status: validStatus(input.status),
-    today: todayFrom(opts.now ?? new Date()),
-  };
-  if (tags.length > 0) payload.tags = tags;
-  if (input.igdbId != null) payload.igdbId = input.igdbId;
-  if (input.coverUrl != null) payload.coverUrl = input.coverUrl;
-  if (input.description != null) payload.description = input.description;
-  if (input.screenshots != null) payload.screenshots = input.screenshots;
-  if (input.genres != null) payload.genres = input.genres;
-  if (input.platforms != null) payload.platforms = input.platforms;
+  const payload =
+    input.igdbId != null
+      ? mapSourceToAddInput(
+          { ...input, title },
+          { status: input.status, tagsRaw: input.tagsRaw, today }
+        )
+      : manualPayload(input, today);
   const saved = await addGame(payload);
   return { ok: true, game: saved.games[saved.games.length - 1] };
 }
@@ -150,18 +155,12 @@ export async function submitManual(input, opts = {}) {
  * @returns {string}
  */
 function resultItemHtml(result, index) {
-  const fakeGame = /** @type {import('../domain/schema.js').Game} */ ({
-    id: `igdb-${result.igdbId}`,
-    title: result.title,
-    coverUrl: result.coverUrl ?? undefined,
-    plays: [],
-  });
   const year = result.releaseDate ? result.releaseDate.slice(0, 4) : '';
   const platforms = (result.platforms ?? []).map((p) => p.name).join(', ');
   const sub = [year, platforms].filter(Boolean).join(' · ');
   return html`<li>
     <button type="button" class="add-result" data-result="${index}">
-      ${coverHtml(fakeGame)}
+      ${coverHtml(toCoverGame(result))}
       <span class="r-meta"
         ><span class="r-title">${result.title}</span>${sub
           ? html`<span class="r-sub">${sub}</span>`
@@ -178,12 +177,6 @@ function resultItemHtml(result, index) {
  * @returns {string}
  */
 function previewHtml(result) {
-  const fakeGame = /** @type {import('../domain/schema.js').Game} */ ({
-    id: `igdb-${result.igdbId}`,
-    title: result.title,
-    coverUrl: result.coverUrl ?? undefined,
-    plays: [],
-  });
   const year = result.releaseDate ? result.releaseDate.slice(0, 4) : '';
   const platforms = (result.platforms ?? []).map((p) => p.name).join(', ');
   const sub = [year, platforms].filter(Boolean).join(' · ');
@@ -191,7 +184,7 @@ function previewHtml(result) {
     html`<span class="chip static">${g.name}</span>`
   );
   return html`<div class="add-preview">
-    ${coverHtml(fakeGame)}
+    ${coverHtml(toCoverGame(result))}
     <div class="add-preview-info">
       <h3 class="add-preview-title">${result.title}</h3>
       ${sub ? html`<p class="r-sub">${sub}</p>` : ''}
@@ -506,7 +499,7 @@ export function openAddSheet(opts = {}) {
       state.online = {
         status: 'error',
         results: [],
-        error: error instanceof Error ? error.message : IGDB_SERVICE_ERROR,
+        error: error instanceof Error ? formatError(error) : IGDB_SERVICE_ERROR,
       };
     }
     paintOnline();
@@ -525,9 +518,11 @@ export function openAddSheet(opts = {}) {
     }
     const dupOpen = e.target.closest('[data-dup-open]');
     if (dupOpen && state.duplicates && state.duplicates.length > 0) {
+      // Cerrar hoja + intent de abrir-Ficha-cambiando-de-pestaña: una sola
+      // entrada de historial con pestaña y gameId (src/navigation.js); el
+      // atrás del móvil regresa al origen.
       closeAddSheet();
-      openGame(store, state.duplicates[0].id);
-      store.set({ tab: 'biblioteca' });
+      nav.openGameInTab(store, state.duplicates[0].id, 'biblioteca');
       return;
     }
     if (e.target.closest('[data-preview-back]')) {

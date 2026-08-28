@@ -10,7 +10,7 @@ import { computeStats, filterOptions } from '../domain/stats.js';
 import { formatAvg } from '../lib/format.js';
 import { coverHtml, starsHtml } from '../ui/cover.js';
 import { chipRowHtml } from '../ui/chips.js';
-import { navigate } from '../backnav.js';
+import * as nav from '../navigation.js';
 
 /** Filas visibles por distribución (spec §8.7). */
 const BAR_LIMIT = 8;
@@ -171,13 +171,11 @@ function wire(container, store) {
       return;
     }
     // Único elemento clicable del dashboard: abrir la Ficha (spec §8.7).
-    // Cambio de pestaña + Ficha = pantalla nueva: empuja entrada (src/backnav.js).
+    // Cambio de pestaña + Ficha = pantalla nueva: push único con pestaña y
+    // gameId para que el atrás del móvil regrese al origen (src/navigation.js).
     const row = clicked.closest('[data-game-id]');
     if (row) {
-      navigate(store, 'push', {
-        tab: 'biblioteca',
-        library: { ...store.get().library, gameId: row.getAttribute('data-game-id') ?? '' },
-      });
+      nav.openGameInTab(store, row.getAttribute('data-game-id') ?? '', 'biblioteca');
     }
   });
 }

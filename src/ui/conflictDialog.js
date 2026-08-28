@@ -1,6 +1,9 @@
 /**
  * Diálogo de conflicto real (ticket 18, spec §5.5): tres opciones explícitas
- * con la fecha de ambas versiones; jamás sobrescribe en silencio. Es un
+ * con la fecha de ambas versiones; jamás sobrescribe en silencio. Render puro
+ * del estado (ticket 03, ADR-0004): abre cuando `file.conflict` se fija y
+ * cierra cuando desaparece, así que los conflictos en segundo plano (foco,
+ * ocultar pestaña, autoguardado) abren solos vía suscripción al store. Es un
  * adaptador de la hoja profunda (src/ui/sheet.js): el módulo pinta la capa,
  * el fondo y la cabecera, y es dueño de ✕/fondo/Escape; aquí solo viven el
  * contenido y los repintados del .sheet-body.
@@ -35,13 +38,14 @@ function stamp(iso) {
 }
 
 /**
- * Abre el diálogo para el doc leído del archivo; la versión local se toma del
- * store en el momento de abrir.
- * @param {import('../domain/schema.js').Doc} fileDoc
+ * Abre el diálogo con el conflicto pendiente del estado; la versión local se
+ * toma del store en el momento de pintar. Idempotente (cierra primero) y sin
+ * efecto si no hay conflicto pendiente o no hay doc.
  */
-export function openConflict(fileDoc) {
+export function openConflict() {
   closeConflict();
-  if (!store.get().doc) return;
+  const conflict = store.get().file.conflict ?? null;
+  if (!conflict || !store.get().doc) return;
   const handle = openSheet({
     title: 'Conflicto de versiones',
     closeAttr: 'data-close',
@@ -53,14 +57,14 @@ export function openConflict(fileDoc) {
   });
   layer = handle.layer;
   closeSheet = handle.close;
-  paint(fileDoc);
+  paint(conflict);
 }
 
 /**
- * @param {import('../domain/schema.js').Doc} fileDoc
+ * @param {import('../app.js').ConflictInfo} conflict
  * @param {{ armed?: boolean, note?: string, error?: string }} [opts]
  */
-function paint(fileDoc, { armed = false, note = '', error = '' } = {}) {
+function paint(conflict, { armed = false, note = '', error = '' } = {}) {
   const layerEl = layer;
   if (!layerEl) return;
   const localUpdatedAt = store.get().doc?.updatedAt ?? null;
@@ -88,25 +92,25 @@ function paint(fileDoc, { armed = false, note = '', error = '' } = {}) {
         </div>
         <div class="cardbox tight">
           <span class="lbl">Versión del archivo</span>
-          <b class="mono">${stamp(fileDoc.updatedAt)}</b>
+          <b class="mono">${stamp(conflict.fileDoc.updatedAt)}</b>
         </div>
       </div>
       ${actions}
       ${note ? html`<p class="conflict-note">${note}</p>` : ''}
       ${error ? html`<p class="form-error" role="alert">${error}</p>` : ''}`;
   }
-  wire(layerEl, fileDoc);
+  wire(layerEl, conflict);
 }
 
 /** Resuelve y cierra; los fallos se muestran inline sin cerrar.
  * @param {'file' | 'local'} choice
- * @param {import('../domain/schema.js').Doc} fileDoc
+ * @param {import('../app.js').ConflictInfo} conflict
  * @returns {Promise<void>}
  */
-async function finish(choice, fileDoc) {
+async function finish(choice, conflict) {
   const res = await resolveConflict(choice);
   if (res.status === 'error') {
-    paint(fileDoc, { error: res.error ?? 'No se pudo resolver el conflicto.' });
+    paint(conflict, { error: res.error ?? 'No se pudo resolver el conflicto.' });
     return;
   }
   closeConflict();
@@ -114,21 +118,34 @@ async function finish(choice, fileDoc) {
 
 /**
  * @param {HTMLElement} layerEl
- * @param {import('../domain/schema.js').Doc} fileDoc
+ * @param {import('../app.js').ConflictInfo} conflict
  */
-function wire(layerEl, fileDoc) {
-  qs('[data-choice="file"]', layerEl)?.addEventListener('click', () => paint(fileDoc, { armed: true }));
-  qs('[data-choice="local"]', layerEl)?.addEventListener('click', () => void finish('local', fileDoc));
+function wire(layerEl, conflict) {
+  qs('[data-choice="file"]', layerEl)?.addEventListener('click', () => paint(conflict, { armed: true }));
+  qs('[data-choice="local"]', layerEl)?.addEventListener('click', () => void finish('local', conflict));
   qs('[data-choice="download"]', layerEl)?.addEventListener('click', () => {
     void resolveConflict('download').then((res) => {
       if (res.status === 'error') {
-        paint(fileDoc, { error: res.error ?? 'No se pudo descargar la copia.' });
+        paint(conflict, { error: res.error ?? 'No se pudo descargar la copia.' });
         return;
       }
       // No resuelve: sigue abierta para que elija tras comparar (spec §5.5).
-      paint(fileDoc, { note: 'Copia local descargada. Compárala y vuelve a elegir.' });
+      paint(conflict, { note: 'Copia local descargada. Compárala y vuelve a elegir.' });
     });
   });
-  qs('[data-confirm="yes"]', layerEl)?.addEventListener('click', () => void finish('file', fileDoc));
-  qs('[data-confirm="no"]', layerEl)?.addEventListener('click', () => paint(fileDoc));
+  qs('[data-confirm="yes"]', layerEl)?.addEventListener('click', () => void finish('file', conflict));
+  qs('[data-confirm="no"]', layerEl)?.addEventListener('click', () => paint(conflict));
 }
+
+// El diálogo sigue al estado (ADR-0004): abre cuando aparece un conflicto
+// pendiente — también desde segundo plano, sin cableado por import — y cierra
+// cuando se resuelve. La resolución de «file»/«local» borra el campo y la
+// suscripción cierra; «download» no escribe estado y deja la hoja con la nota.
+store.subscribe((state) => {
+  const pending = state.file?.conflict ?? null;
+  if (pending) {
+    if (!isConflictOpen()) openConflict();
+    return;
+  }
+  if (isConflictOpen()) closeConflict();
+});

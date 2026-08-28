@@ -7,80 +7,27 @@
  * solo si el alta fue manual (sin `igdbId`).
  */
 import { html, qs, raw } from '../lib/dom.js';
+import { formatError } from '../lib/errors.js';
 import { STATUSES, STATUS_LABELS, todayFrom } from '../domain/schema.js';
 import { latestPlay, gameStatus } from '../domain/selectors.js';
 import {
-  LibraryError,
   addPlay,
   deleteGame,
   deletePlay,
   ratePlay,
-  setGameStatus,
-  updateGame,
-  updatePlay,
-} from '../data/library.js';
+  setPlayDate,
+  setPlayNotes,
+  setPlayPlatform,
+  setSharedField,
+  setStatus,
+  setTitle,
+} from '../data/ficha.js';
 import { coverHtml } from '../ui/cover.js';
 import { statusPillHtml } from '../ui/pill.js';
 import { addTag, removeTag, tagEditorHtml } from '../ui/tags.js';
-import { navigate } from '../backnav.js';
-
-/**
- * Estado efímero de edición de la Ficha (qué formulario está abierto, qué
- * confirmaciones pendientes, errores inline). Se reinicia al abrir otro juego
- * vía {@link openGame}; sobrevive a los re-render que dispara cada mutación.
- * @typedef {{
- *   gameId: string|null,
- *   editTitle: boolean,
- *   field: string|null,
- *   fieldError: string|null,
- *   customPlatform: string|null,
- *   confirmPlay: string|null,
- *   playError: string|null,
- *   confirmGame: boolean,
- *   error: string|null,
- * }} FichaUi
- */
-
-/**
- * @param {string|null} gameId
- * @returns {FichaUi}
- */
-function freshUi(gameId) {
-  return {
-    gameId,
-    editTitle: false,
-    field: null,
-    fieldError: null,
-    customPlatform: null,
-    confirmPlay: null,
-    playError: null,
-    confirmGame: false,
-    error: null,
-  };
-}
-
-/** @type {FichaUi} */
-let ui = freshUi(null);
-
-/**
- * Abre la Ficha de un juego desde estantería o panel; conserva la vista y los
- * filtros para que «← Volver» regrese donde estaba el usuario. Pantalla
- * nueva: empuja entrada de historial (botón atrás del móvil, src/backnav.js).
- * @param {import('../app.js').Store} store
- * @param {string} gameId
- */
-export function openGame(store, gameId) {
-  ui = freshUi(gameId);
-  navigate(store, 'push', { library: { ...store.get().library, gameId } });
-}
-
-/**
- * Cierra la Ficha volviendo a la superficie anterior (estantería o panel).
- * @param {import('../app.js').Store} store
- */
-function closeGame(store) {
-  store.set({ library: { ...store.get().library, gameId: null } });
-}
+import { openLightbox } from '../ui/lightbox.js';
+import * as nav from '../navigation.js';
+import { freshFicha } from '../app.js';
 
 /**
  * Jugadas ordenadas de más reciente a más antigua: desc por `addedAt`,
@@ -93,77 +40,6 @@ function playsNewestFirst(game) {
     .map((play, idx) => ({ play, idx }))
     .sort((a, b) => b.play.addedAt.localeCompare(a.play.addedAt) || b.idx - a.idx)
     .map((entry) => entry.play);
-}
-
-/**
- * Id numérico estable derivado del nombre (géneros/plataformas de alta manual
- * carecen de id IGDB; el esquema solo exige un number).
- * @param {string} name
- * @returns {number}
- */
-function idFromName(name) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-  return (hash % 2147483646) + 1;
-}
-
-/**
- * @param {string} s
- */
-function norm(s) {
-  return s.trim().toLowerCase();
-}
-
-/**
- * Lista {id,name} desde texto separado por comas; conserva el id de las
- * entradas cuyo nombre ya existía y genera uno estable para las nuevas.
- * @param {{id:number,name:string}[]} current
- * @param {string} text
- * @returns {{id:number,name:string}[]}
- */
-function namedListFromText(current, text) {
-  /** @type {{id:number,name:string}[]} */
-  const out = [];
-  for (const part of text.split(',')) {
-    const name = part.trim();
-    if (!name) continue;
-    if (out.some((item) => norm(item.name) === norm(name))) continue;
-    const existing = current.find((item) => norm(item.name) === norm(name));
-    out.push(existing ? { id: existing.id, name } : { id: idFromName(norm(name)), name });
-  }
-  return out;
-}
-
-/**
- * URLs desde texto separado por comas.
- * @param {string} text
- * @returns {string[]}
- */
-function urlsFromText(text) {
-  return text
-    .split(',')
-    .map((u) => u.trim())
-    .filter(Boolean);
-}
-
-/**
- * Lista vacía → campo ausente (spec §4: los arrays vacíos se omiten).
- * @template T
- * @param {T[]} list
- * @returns {T[]|undefined}
- */
-function undefinedIfEmpty(list) {
-  return list.length === 0 ? undefined : list;
-}
-
-/**
- * Mensaje español para errores de biblioteca u otros fallos.
- * @param {unknown} err
- * @returns {string}
- */
-function errorMessage(err) {
-  if (err instanceof LibraryError) return err.message;
-  return err instanceof Error ? err.message : String(err);
 }
 
 /** Campos compartidos editables y su presentación.
@@ -217,9 +93,9 @@ function sharedBodyHtml(game, name) {
     case 'genres': {
       const genres = game.genres ?? [];
       if (genres.length === 0) return html`<p class="d-meta">—</p>`;
-      return html`<div class="d-status"
-        >${genres.map((g) => html`<span class="chip static">${g.name}</span>`)}</div
-      >`;
+      return html`<div class="d-status">
+        ${genres.map((g) => html`<span class="chip static">${g.name}</span>`)}
+      </div>`;
     }
     case 'platforms': {
       const platforms = game.platforms ?? [];
@@ -254,34 +130,36 @@ function fieldValueText(game, name) {
 
 /**
  * Formulario inline genérico para un campo editable de datos compartidos.
- * El error se escribe sobre [data-field-error] sin repintar (no se pierde lo
- * tecleado).
+ * El error se lee del slice ficha: cada escritura del slice re-renderiza la
+ * app, así un guardado fallido pinta el error visible (antes quedaba oculto
+ * en el global del módulo sin repintar).
  * @param {'description'|'coverUrl'|'genres'|'platforms'|'screenshots'} name
  * @param {'text'|'textarea'} kind
  * @param {string} value
+ * @param {import('../app.js').FichaUi} ficha
  * @returns {string}
  */
-function fieldFormHtml(name, kind, value) {
+function fieldFormHtml(name, kind, value, ficha) {
   const label = SHARED_FIELDS[name].label;
   const control =
     kind === 'textarea'
       ? html`<textarea rows="4" data-field-input aria-label="${label}">${value}</textarea>`
       : html`<input
-            type="text"
-            data-field-input
-            value="${value}"
-            aria-label="${label}"
-            placeholder="${label}…"
-          />`;
+          type="text"
+          data-field-input
+          value="${value}"
+          aria-label="${label}"
+          placeholder="${label}…"
+        />`;
   return html`<div class="inline-form" data-field-form="${name}">
     ${control}
     <span class="inline-actions">
       <button type="button" class="chip" data-field-save>Guardar</button>
       <button type="button" class="chip" data-field-cancel>Cancelar</button>
     </span>
-    <p class="form-error" role="alert" data-field-error${
-      ui.fieldError ? '' : ' hidden'
-    }>${ui.fieldError ?? ''}</p>
+    <p class="form-error" role="alert" data-field-error${ficha.fieldError ? '' : ' hidden'}>
+      ${ficha.fieldError ?? ''}
+    </p>
   </div>`;
 }
 
@@ -289,18 +167,19 @@ function fieldFormHtml(name, kind, value) {
  * Sección de dato compartido con su acceso a edición (solo altas manuales).
  * @param {import('../domain/schema.js').Game} game
  * @param {'description'|'coverUrl'|'genres'|'platforms'|'screenshots'} name
+ * @param {import('../app.js').FichaUi} ficha
  * @returns {string}
  */
-function sharedSecHtml(game, name) {
-  const editing = ui.field === name;
+function sharedSecHtml(game, name, ficha) {
+  const editing = ficha.field === name;
   const inner = editing
-    ? fieldFormHtml(name, SHARED_FIELDS[name].kind, fieldValueText(game, name))
+    ? fieldFormHtml(name, SHARED_FIELDS[name].kind, fieldValueText(game, name), ficha)
     : html`<div class="d-body">${sharedBodyHtml(game, name)}</div>
         ${
           game.igdbId == null
-            ? html`<button type="button" class="chip chip-xs" data-edit-field="${name}"
-                  >Editar</button
-                >`
+            ? html`<button type="button" class="chip chip-xs" data-edit-field="${name}">
+                Editar
+              </button>`
             : ''
         }`;
   return html`<section class="d-sec" data-sec="${name}">
@@ -318,21 +197,24 @@ function sharedSecHtml(game, name) {
 function starPickerHtml({ rating, rateAttr, clearAttr, playId, small }) {
   const cls = small ? 'star sm' : 'star';
   const idAttr = playId != null ? html` data-play-id="${playId}"` : '';
-  const stars = [1, 2, 3, 4, 5].map((i) =>
-    html`<button
+  const stars = [1, 2, 3, 4, 5].map(
+    (i) =>
+      html`<button
         type="button"
         class="${cls}${rating != null && i <= rating ? ' on' : ''}"
         data-${rateAttr}="${i}"
         ${idAttr}
-        aria-label="Valorar con ${i}">★</button
-      >`
+        aria-label="Valorar con ${i}"
+      >
+        ★
+      </button>`
   );
   const clear =
     rating != null
       ? [
-          html`<button type="button" class="chip chip-xs" data-${clearAttr} ${idAttr}
-              >quitar</button
-            >`,
+          html`<button type="button" class="chip chip-xs" data-${clearAttr} ${idAttr}>
+            quitar
+          </button>`,
         ]
       : [];
   return html`${stars}${clear}`;
@@ -341,10 +223,11 @@ function starPickerHtml({ rating, rateAttr, clearAttr, playId, small }) {
 /**
  * Título: texto clicable que abre la edición inline, o editor activo.
  * @param {import('../domain/schema.js').Game} game
+ * @param {import('../app.js').FichaUi} ficha
  * @returns {string}
  */
-function titleHtml(game) {
-  if (!ui.editTitle) {
+function titleHtml(game, ficha) {
+  if (!ficha.editTitle) {
     return html`<h2 class="d-title">
       <button type="button" class="d-title-btn" data-edit-title title="Editar título">
         ${game.title}
@@ -365,22 +248,22 @@ function titleHtml(game) {
  * Héroe: portada, píldora del Estado del juego, título y estrellas clicables
  * que valoran la jugada más reciente (spec §8.5).
  * @param {import('../domain/schema.js').Game} game
+ * @param {import('../app.js').FichaUi} ficha
  * @returns {string}
  */
-function heroHtml(game) {
+function heroHtml(game, ficha) {
   const status = gameStatus(game);
   const latest = latestPlay(game);
   return html`<div class="d-hero">
     <span class="d-cover">${coverHtml(game)}</span>
     <div class="d-head">
-      ${statusPillHtml(status)}
-      ${titleHtml(game)}
+      ${statusPillHtml(status)} ${titleHtml(game, ficha)}
       <div class="d-stars" role="group" aria-label="Valoración de la jugada más reciente">
         ${starPickerHtml({
-            rating: latest.rating ?? null,
-            rateAttr: 'hero-rate',
-            clearAttr: 'hero-rate-clear',
-          })}
+          rating: latest.rating ?? null,
+          rateAttr: 'hero-rate',
+          clearAttr: 'hero-rate-clear',
+        })}
       </div>
       <p class="d-meta">Edita la valoración de la jugada más reciente (${latest.addedAt}).</p>
     </div>
@@ -392,36 +275,40 @@ function heroHtml(game) {
  * «Otra (propia)…», que revela un campo para el nombre propio (id: null).
  * @param {import('../domain/schema.js').Game} game
  * @param {import('../domain/schema.js').Play} play
+ * @param {import('../app.js').FichaUi} ficha
  * @returns {string}
  */
-function platformSelectHtml(game, play) {
+function platformSelectHtml(game, play, ficha) {
   const options = game.platforms ?? [];
   const own = play.platform != null && play.platform.id === null ? play.platform : null;
   const opts = [
     html`<option value="" ${play.platform == null ? 'selected' : ''}>Sin plataforma</option>`,
-    ...options.map((o) =>
-      html`<option value="${o.id}" ${play.platform?.id === o.id ? 'selected' : ''}
-          >${o.name}</option
-        >`
+    ...options.map(
+      (o) =>
+        html`<option value="${o.id}" ${play.platform?.id === o.id ? 'selected' : ''}>
+          ${o.name}
+        </option>`
     ),
-    html`<option value="__own__" ${own != null ? 'selected' : ''}
-        >${own != null ? `Propia: ${own.name}` : 'Otra (propia)…'}</option
-      >`,
+    html`<option value="__own__" ${own != null ? 'selected' : ''}>
+      ${own != null ? `Propia: ${own.name}` : 'Otra (propia)…'}
+    </option>`,
   ];
   const customInput =
-    ui.customPlatform === play.id || own != null
+    ficha.customPlatform === play.id || own != null
       ? html`<input
-            type="text"
-            data-platform-name
-            data-play-id="${play.id}"
-            value="${own?.name ?? ''}"
-            placeholder="Nombre de tu plataforma (p. ej. emulador)…"
-            aria-label="Nombre de la plataforma propia"
-          />`
+          type="text"
+          data-platform-name
+          data-play-id="${play.id}"
+          value="${own?.name ?? ''}"
+          placeholder="Nombre de tu plataforma (p. ej. emulador)…"
+          aria-label="Nombre de la plataforma propia"
+        />`
       : '';
   return html`<label class="p-pf">
     <span class="lbl">Plataforma efectiva</span>
-    <select data-play-platform data-play-id="${play.id}">${opts}</select>
+    <select data-play-platform data-play-id="${play.id}">
+      ${opts}
+    </select>
     ${customInput}
   </label>`;
 }
@@ -431,11 +318,12 @@ function platformSelectHtml(game, play) {
  * valoración propia y borrado con confirmación inline (spec §8.5).
  * @param {import('../domain/schema.js').Game} game
  * @param {import('../domain/schema.js').Play} play
+ * @param {import('../app.js').FichaUi} ficha
  * @returns {string}
  */
-function playCardHtml(game, play) {
+function playCardHtml(game, play, ficha) {
   const isLast = game.plays.length <= 1;
-  const confirming = ui.confirmPlay === play.id;
+  const confirming = ficha.confirmPlay === play.id;
   const dates = html`<span class="p-dates">
     <label class="p-date">
       <span class="lbl">Inicio</span>
@@ -464,41 +352,38 @@ function playCardHtml(game, play) {
       data-play-notes
       data-play-id="${play.id}"
       placeholder="Notas de esta jugada…"
-      >${play.notes ?? ''}</textarea
     >
+${play.notes ?? ''}</textarea>
   </label>`;
   const foot = confirming
     ? html`<span class="p-confirm">¿Seguro?</span>
-          <button type="button" class="chip danger" data-del-play-yes data-play-id="${play.id}"
-            >Sí</button
-          >
-          <button type="button" class="chip" data-del-play-no data-play-id="${play.id}"
-            >No</button
-          >`
+        <button type="button" class="chip danger" data-del-play-yes data-play-id="${play.id}">
+          Sí
+        </button>
+        <button type="button" class="chip" data-del-play-no data-play-id="${play.id}">No</button>`
     : html`<button
-          type="button"
-          class="chip danger"
-          data-del-play
-          data-play-id="${play.id}"
-          ${isLast ? raw(' disabled title="Un juego necesita al menos una jugada"') : ''}
-          >Borrar jugada</button
-        >`;
+        type="button"
+        class="chip danger"
+        data-del-play
+        data-play-id="${play.id}"
+        ${isLast ? raw(' disabled title="Un juego necesita al menos una jugada"') : ''}
+      >
+        Borrar jugada
+      </button>`;
   return html`<article class="play-card" data-play-card="${play.id}">
     <header class="p-head">
       ${statusPillHtml(play.status)}
       <span class="p-stars" role="group" aria-label="Valoración de esta jugada"
         >${starPickerHtml({
-            rating: play.rating ?? null,
-            rateAttr: 'play-rate',
-            clearAttr: 'play-rate-clear',
-            playId: play.id,
-            small: true,
-          })}</span
+          rating: play.rating ?? null,
+          rateAttr: 'play-rate',
+          clearAttr: 'play-rate-clear',
+          playId: play.id,
+          small: true,
+        })}</span
       >
     </header>
-    ${dates}
-    ${platformSelectHtml(game, play)}
-    ${notes}
+    ${dates} ${platformSelectHtml(game, play, ficha)} ${notes}
     <footer class="p-foot">${foot}</footer>
   </article>`;
 }
@@ -512,74 +397,28 @@ function playCardHtml(game, play) {
 function galleryHtml(shots) {
   return html`<section class="d-sec" data-sec="gallery">
     <h3>Galería</h3>
-    <div class="d-gallery"
-      >${shots.map(
+    <div class="d-gallery">
+      ${shots.map(
         (url) =>
-          html`<button
-              type="button"
-              class="d-shot"
-              data-shot="${url}"
-              aria-label="Ampliar captura"
-              ><img loading="lazy" src="${url}" alt="" /></button
-            >`
-      )}</div
-    >
+          html`<button type="button" class="d-shot" data-shot="${url}" aria-label="Ampliar captura">
+            <img loading="lazy" src="${url}" alt="" />
+          </button>`
+      )}
+    </div>
   </section>`;
 }
 
 /* ------------------------------------------------------------------ */
-/* Visor de capturas (lightbox)                                        */
+/* Marcado completo de la Ficha                                         */
 /* ------------------------------------------------------------------ */
-
-/** Capa del visor abierta. @type {HTMLElement|null} */
-let lightboxLayer = null;
-
-/** @type {((e: KeyboardEvent) => void)|null} */
-let lightboxKeyHandler = null;
-
-/**
- * Abre el visor a pantalla completa con una captura ampliada.
- * @param {string} url
- */
-export function openLightbox(url) {
-  if (!url || lightboxLayer?.isConnected) return;
-  lightboxLayer = document.createElement('div');
-  lightboxLayer.className = 'lightbox fade';
-  lightboxLayer.setAttribute('role', 'dialog');
-  lightboxLayer.setAttribute('aria-modal', 'true');
-  lightboxLayer.setAttribute('aria-label', 'Captura ampliada');
-  lightboxLayer.innerHTML = html`<img src="${url}" alt="Captura ampliada" />
-    <button type="button" class="chip lightbox-close" data-close-lightbox aria-label="Cerrar">
-      ✕
-    </button>`;
-  document.body.appendChild(lightboxLayer);
-  // Cualquier toque fuera (fondo o imagen) cierra; es un visor, no un formulario.
-  lightboxLayer.addEventListener('click', () => closeLightbox());
-  lightboxKeyHandler = (e) => {
-    if (e.key === 'Escape' && lightboxLayer?.isConnected) {
-      e.preventDefault();
-      closeLightbox();
-    }
-  };
-  document.addEventListener('keydown', lightboxKeyHandler);
-}
-
-/** Cierra el visor y retira sus listeners globales. */
-export function closeLightbox() {
-  if (lightboxKeyHandler) {
-    document.removeEventListener('keydown', lightboxKeyHandler);
-    lightboxKeyHandler = null;
-  }
-  lightboxLayer?.remove();
-  lightboxLayer = null;
-}
 
 /**
  * Marcado completo de la Ficha.
  * @param {import('../domain/schema.js').Game} game
+ * @param {import('../app.js').FichaUi} ficha
  * @returns {string}
  */
-function fichaHtml(game) {
+function fichaHtml(game, ficha) {
   const SHARED_NAMES = /** @type {const} */ ([
     'description',
     'coverUrl',
@@ -591,11 +430,11 @@ function fichaHtml(game) {
   return html`<div class="fade ficha">
     <div class="toolbar">
       <button type="button" class="chip" data-back-ficha>← Volver</button>
-      ${ui.error ? html`<p class="form-error" role="alert">${ui.error}</p>` : ''}
+      ${ficha.error ? html`<p class="form-error" role="alert">${ficha.error}</p>` : ''}
     </div>
-    ${heroHtml(game)}
+    ${heroHtml(game, ficha)}
     ${SHARED_NAMES.filter((name) => sharedSectionVisible(game, name)).map((name) =>
-      sharedSecHtml(game, name)
+      sharedSecHtml(game, name, ficha)
     )}
     <section class="d-sec" data-sec="tags">
       <h3>Etiquetas propias</h3>
@@ -603,44 +442,41 @@ function fichaHtml(game) {
     </section>
     <section class="d-sec" data-sec="status">
       <h3>Estado</h3>
-      <div class="d-status"
-        >${STATUSES.map(
+      <div class="d-status">
+        ${STATUSES.map(
           (st) =>
             html`<button
-                type="button"
-                class="chip${st === gameStatus(game) ? ' on' : ''}"
-                data-set-status="${st}"
-                >${STATUS_LABELS[st]}</button
-              >`
-        )}</div
-      >
+              type="button"
+              class="chip${st === gameStatus(game) ? ' on' : ''}"
+              data-set-status="${st}"
+            >
+              ${STATUS_LABELS[st]}
+            </button>`
+        )}
+      </div>
     </section>
     ${shots.length > 0 ? galleryHtml(shots) : ''}
     <section class="d-sec" data-sec="plays">
       <h3>Jugadas (${game.plays.length})</h3>
       ${
-        ui.playError
-          ? html`<p class="form-error" role="alert" data-play-error>${ui.playError}</p>`
+        ficha.playError
+          ? html`<p class="form-error" role="alert" data-play-error>${ficha.playError}</p>`
           : ''
       }
-      <div class="plays"
-        >${playsNewestFirst(game).map((play) => playCardHtml(game, play))}</div
-      >
+      <div class="plays">${playsNewestFirst(game).map((play) => playCardHtml(game, play, ficha))}</div>
       <button type="button" class="chip" data-add-play>➕ Añadir jugada</button>
     </section>
     <section class="d-sec danger-zone" data-sec="danger">
       <h3>Zona de riesgo</h3>
       ${
-        ui.confirmGame
-          ? html`<p class="danger-msg"
-                  >Se borrarán el juego y todas sus jugadas. Sin deshacer.</p
-                >
-                <span class="inline-actions">
-                  <button type="button" class="chip danger" data-del-game-yes
-                    >Sí, borrar juego</button
-                  >
-                  <button type="button" class="chip" data-del-game-no>Cancelar</button>
-                </span>`
+        ficha.confirmGame
+          ? html`<p class="danger-msg">Se borrarán el juego y todas sus jugadas. Sin deshacer.</p>
+              <span class="inline-actions">
+                <button type="button" class="chip danger" data-del-game-yes>
+                  Sí, borrar juego
+                </button>
+                <button type="button" class="chip" data-del-game-no>Cancelar</button>
+              </span>`
           : html`<button type="button" class="chip danger" data-del-game>Borrar juego</button>`
       }
     </section>
@@ -649,32 +485,28 @@ function fichaHtml(game) {
 
 /**
  * Pinta la Ficha del juego abierto; si el juego ya no existe (borrado),
- * devuelve al usuario a la estantería.
+ * devuelve al usuario a la estantería. El guard de re-render ante un gameId
+ * distinto re-siembra el slice ficha (ADR-0006): cubre el botón atrás del
+ * móvil y los cierres de Ficha — restaurar el historial nunca resucita un
+ * formulario abierto ni una confirmación de borrado.
  * @param {Element} container
  * @param {import('../app.js').Store} store
  */
 export function renderGame(container, store) {
   const state = store.get();
-  const lib = state.library;
-  const gameId = lib.gameId ?? null;
-  if (ui.gameId !== gameId) ui = freshUi(gameId);
+  const gameId = state.library.gameId ?? null;
+  if (state.ficha.gameId !== gameId) {
+    store.set({ ficha: freshFicha(gameId) });
+    return;
+  }
   const game = state.doc?.games.find((g) => g.id === gameId) ?? null;
   if (!game) {
-    if (gameId != null) closeGame(store);
+    if (gameId != null) nav.closeGame(store);
     else container.innerHTML = '';
     return;
   }
-  container.innerHTML = fichaHtml(game);
+  container.innerHTML = fichaHtml(game, state.ficha);
   wire(container, store);
-}
-
-/**
- * Repaint local sin cambio de estado (abrir/cerrar formularios efímeros).
- * @param {Element} container
- * @param {import('../app.js').Store} store
- */
-function paint(container, store) {
-  renderGame(container, store);
 }
 
 /**
@@ -687,6 +519,17 @@ function currentGame(store) {
   const gameId = library.gameId ?? null;
   if (gameId == null) return null;
   return doc?.games.find((g) => g.id === gameId) ?? null;
+}
+
+/**
+ * Escribe campos del estado efímero de la Ficha (slice ficha, ADR-0006).
+ * Cada escritura dispara el render de la app, que repinta la vista entera;
+ * antes este estado era un global de módulo repintado a mano.
+ * @param {import('../app.js').Store} store
+ * @param {Partial<import('../app.js').FichaUi>} patch
+ */
+function patchFicha(store, patch) {
+  store.set({ ficha: { ...store.get().ficha, ...patch } });
 }
 
 /**
@@ -711,44 +554,27 @@ function setInlineError(surface, selector, message) {
  */
 async function commitTitle(surface, store) {
   const game = currentGame(store);
-  if (!game || !ui.editTitle) return;
+  if (!game || !store.get().ficha.editTitle) return;
   const input = qs('[data-title-input]', surface);
-  const value = input instanceof HTMLInputElement ? input.value.trim() : '';
+  const raw = input instanceof HTMLInputElement ? input.value : '';
+  const value = raw.trim();
   if (!value) {
     setInlineError(surface, '[data-title-error]', 'El título es obligatorio');
     return;
   }
-  ui.editTitle = false;
+  patchFicha(store, { editTitle: false });
   try {
-    await updateGame(game.id, { title: value });
+    await setTitle(game.id, value);
   } catch (err) {
-    ui.editTitle = true;
+    patchFicha(store, { editTitle: true });
+    // El repinto reconstruye el formulario desde el doc: se restaura lo
+    // tecleado para que el fallo no lo borre (comportamiento previo).
+    const fresh = qs('[data-title-input]', surface);
+    if (fresh instanceof HTMLInputElement) {
+      fresh.value = raw;
+      fresh.focus();
+    }
     throw err;
-  }
-}
-
-/**
- * Parche de actualización para un dato compartido editado como texto; null si
- * el campo es desconocido.
- * @param {import('../domain/schema.js').Game} game
- * @param {string} name
- * @param {string} value
- * @returns {Partial<import('../domain/schema.js').Game>|null}
- */
-function sharedPatch(game, name, value) {
-  switch (name) {
-    case 'description':
-      return { description: value.trim() || undefined };
-    case 'coverUrl':
-      return { coverUrl: value.trim() || undefined };
-    case 'genres':
-      return { genres: undefinedIfEmpty(namedListFromText(game.genres ?? [], value)) };
-    case 'platforms':
-      return { platforms: undefinedIfEmpty(namedListFromText(game.platforms ?? [], value)) };
-    case 'screenshots':
-      return { screenshots: undefinedIfEmpty(urlsFromText(value)) };
-    default:
-      return null;
   }
 }
 
@@ -759,23 +585,30 @@ function sharedPatch(game, name, value) {
  */
 async function commitField(surface, store) {
   const game = currentGame(store);
-  const name = ui.field;
+  const name = store.get().ficha.field;
   if (!game || !name) return;
   const form = qs(`[data-field-form="${name}"]`, surface);
   const control = form ? qs('[data-field-input]', form) : null;
-  const value =
+  const raw =
     control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement
       ? control.value
       : '';
-  ui.field = null;
-  ui.fieldError = null;
-  const patch = sharedPatch(game, name, value);
-  if (!patch) return;
+  patchFicha(store, { field: null, fieldError: null });
   try {
-    await updateGame(game.id, patch);
+    await setSharedField(
+      game.id,
+      /** @type {'description'|'coverUrl'|'genres'|'platforms'|'screenshots'} */ (name),
+      raw
+    );
   } catch (err) {
-    ui.field = name;
-    ui.fieldError = errorMessage(err);
+    patchFicha(store, { field: name, fieldError: formatError(err) });
+    // El repinto reconstruye el formulario desde el doc: se restaura lo
+    // tecleado para que el fallo no lo borre (comportamiento previo).
+    const fresh = qs(`[data-field-form="${name}"] [data-field-input]`, surface);
+    if (fresh instanceof HTMLInputElement || fresh instanceof HTMLTextAreaElement) {
+      fresh.value = raw;
+      fresh.focus();
+    }
     throw err;
   }
 }
@@ -790,7 +623,7 @@ async function commitOwnPlatform(input, store) {
   const playId = input.getAttribute('data-play-id');
   const name = input.value.trim();
   if (!game || !playId || !name) return;
-  await updatePlay(game.id, playId, { platform: { id: null, name } });
+  await setPlayPlatform(game.id, playId, { id: null, name });
 }
 
 /**
@@ -816,7 +649,7 @@ function wire(container, store) {
     if (pick('[data-back-ficha]')) {
       // Aplica el cierre al instante y consume la entrada de historial de la
       // Ficha (src/backnav.js): el botón atrás del sistema no la repite.
-      navigate(store, 'back', { library: { ...store.get().library, gameId: null } });
+      nav.closeGame(store);
       return;
     }
     const shot = pick('[data-shot]');
@@ -826,8 +659,7 @@ function wire(container, store) {
       return;
     }
     if (pick('[data-edit-title]')) {
-      ui.editTitle = true;
-      paint(container, store);
+      patchFicha(store, { editTitle: true });
       const input = qs('[data-title-input]', surface.isConnected ? surface : container);
       if (input instanceof HTMLInputElement) {
         input.focus();
@@ -836,8 +668,7 @@ function wire(container, store) {
       return;
     }
     if (pick('[data-title-cancel]')) {
-      ui.editTitle = false;
-      paint(container, store);
+      patchFicha(store, { editTitle: false });
       return;
     }
     if (pick('[data-title-save]')) {
@@ -852,38 +683,33 @@ function wire(container, store) {
     }
     const editField = pick('[data-edit-field]');
     if (editField) {
-      ui.field = editField.getAttribute('data-edit-field');
-      ui.fieldError = null;
-      paint(container, store);
+      patchFicha(store, { field: editField.getAttribute('data-edit-field'), fieldError: null });
       const input = qs('[data-field-input]', container);
       if (input instanceof HTMLElement) input.focus();
       return;
     }
     if (pick('[data-field-cancel]')) {
-      ui.field = null;
-      ui.fieldError = null;
-      paint(container, store);
+      patchFicha(store, { field: null, fieldError: null });
       return;
     }
     if (pick('[data-field-save]')) {
       void commitField(container, store).catch(() => {});
       return;
     }
-    const setStatus = pick('[data-set-status]');
-    if (setStatus) {
-      const status = setStatus.getAttribute('data-set-status');
+    const statusBtn = pick('[data-set-status]');
+    if (statusBtn) {
+      const status = statusBtn.getAttribute('data-set-status');
       if (
         status &&
         STATUSES.includes(/** @type {import('../domain/schema.js').Status} */ (status))
       ) {
-        ui.playError = null;
-        void setGameStatus(
+        patchFicha(store, { playError: null });
+        void setStatus(
           game.id,
           /** @type {import('../domain/schema.js').Status} */ (status),
           todayFrom(new Date())
         ).catch((err) => {
-          ui.playError = errorMessage(err);
-          paint(container, store);
+          patchFicha(store, { playError: formatError(err) });
         });
       }
       return;
@@ -913,46 +739,38 @@ function wire(container, store) {
       return;
     }
     if (pick('[data-add-play]')) {
-      const inherited = latestPlay(game).platform;
-      ui.playError = null;
-      void addPlay(game.id, {
-        status: 'playing',
-        today: todayFrom(new Date()),
-        ...(inherited ? { platform: inherited } : {}),
-      }).catch((err) => {
-        ui.playError = errorMessage(err);
-        paint(container, store);
+      patchFicha(store, { playError: null });
+      void addPlay(game.id, todayFrom(new Date())).catch((err) => {
+        patchFicha(store, { playError: formatError(err) });
       });
       return;
     }
     const delPlay = pick('[data-del-play]');
     if (delPlay && !delPlay.hasAttribute('disabled')) {
-      ui.confirmPlay = delPlay.getAttribute('data-play-id');
-      ui.playError = null;
-      paint(container, store);
+      patchFicha(store, {
+        confirmPlay: delPlay.getAttribute('data-play-id'),
+        playError: null,
+      });
       return;
     }
     const delYes = pick('[data-del-play-yes]');
     if (delYes) {
-      ui.confirmPlay = null;
+      patchFicha(store, { confirmPlay: null });
       void deletePlay(game.id, delYes.getAttribute('data-play-id') ?? '')
         .then(() => {
-          ui.playError = null;
+          patchFicha(store, { playError: null });
         })
         .catch((err) => {
-          ui.playError = errorMessage(err);
-          paint(container, store);
+          patchFicha(store, { playError: formatError(err) });
         });
       return;
     }
     if (pick('[data-del-play-no]')) {
-      ui.confirmPlay = null;
-      paint(container, store);
+      patchFicha(store, { confirmPlay: null });
       return;
     }
     if (pick('[data-del-game]')) {
-      ui.confirmGame = true;
-      paint(container, store);
+      patchFicha(store, { confirmGame: true });
       return;
     }
     if (pick('[data-del-game-yes]')) {
@@ -961,24 +779,15 @@ function wire(container, store) {
           // La Ficha ya no existe: su entrada de historial se sustituye por
           // la estantería (src/backnav.js); el back del sistema salta al
           // Panel previo, nunca a la Ficha borrada.
-          navigate(store, 'replace', {
-            library: {
-              ...store.get().library,
-              view: 'shelves',
-              panelStatus: null,
-              gameId: null,
-            },
-          });
+          nav.repositionAfterDelete(store);
         })
         .catch((err) => {
-          ui.error = errorMessage(err);
-          paint(container, store);
+          patchFicha(store, { error: formatError(err) });
         });
       return;
     }
     if (pick('[data-del-game-no]')) {
-      ui.confirmGame = false;
-      paint(container, store);
+      patchFicha(store, { confirmGame: false });
     }
   });
 
@@ -993,29 +802,25 @@ function wire(container, store) {
       const playId = target.getAttribute('data-play-id') ?? '';
       const value = /** @type {HTMLInputElement} */ (target).value;
       if (kind !== 'startedAt' && kind !== 'finishedAt') return;
-      const patch = /** @type {Partial<import('../domain/schema.js').Play>} */ (
-        { [kind]: value || undefined }
-      );
-      void updatePlay(game.id, playId, patch).catch(() => {});
+      void setPlayDate(game.id, playId, kind, value).catch(() => {});
       return;
     }
     if (target.matches('select[data-play-platform]')) {
       const playId = target.getAttribute('data-play-id') ?? '';
       const select = /** @type {HTMLSelectElement} */ (target);
       if (select.value === '') {
-        ui.customPlatform = null;
-        void updatePlay(game.id, playId, { platform: undefined }).catch(() => {});
+        patchFicha(store, { customPlatform: null });
+        void setPlayPlatform(game.id, playId, null).catch(() => {});
         return;
       }
       if (select.value === '__own__') {
-        ui.customPlatform = playId;
-        paint(container, store);
+        patchFicha(store, { customPlatform: playId });
         return;
       }
       const chosen = (game.platforms ?? []).find((o) => String(o.id) === select.value);
       if (chosen) {
-        ui.customPlatform = null;
-        void updatePlay(game.id, playId, { platform: chosen }).catch(() => {});
+        patchFicha(store, { customPlatform: null });
+        void setPlayPlatform(game.id, playId, chosen).catch(() => {});
       }
       return;
     }
@@ -1026,9 +831,7 @@ function wire(container, store) {
     if (target.matches('textarea[data-play-notes]')) {
       const playId = target.getAttribute('data-play-id') ?? '';
       const value = /** @type {HTMLTextAreaElement} */ (target).value;
-      void updatePlay(game.id, playId, { notes: value === '' ? undefined : value }).catch(
-        () => {}
-      );
+      void setPlayNotes(game.id, playId, value).catch(() => {});
     }
   });
 
@@ -1053,15 +856,12 @@ function wire(container, store) {
         e.preventDefault();
         void commitTitle(container, store).catch(() => {});
       } else if (e.key === 'Escape') {
-        ui.editTitle = false;
-        paint(container, store);
+        patchFicha(store, { editTitle: false });
       }
       return;
     }
     if (target.closest('[data-field-form]') && e.key === 'Escape') {
-      ui.field = null;
-      ui.fieldError = null;
-      paint(container, store);
+      patchFicha(store, { field: null, fieldError: null });
     }
   });
 

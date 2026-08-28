@@ -4,11 +4,12 @@
  * `ready && !doc`; con biblioteca cargada esta vista nunca aparece.
  */
 import { html, qs } from '../lib/dom.js';
+import { formatError, isAbortError } from '../lib/errors.js';
 import { store } from '../app.js';
 import { importDoc, newLibrary } from '../data/library.js';
 import { markConnected } from '../data/filelink.js';
 import { sha256Hex } from '../services/hash.js';
-import { hasFsa, pickJsonText } from '../services/fsa.js';
+import { hasFsa, JSON_ACCEPT, pickJsonText } from '../services/fsa.js';
 
 /** Motivo del último intento fallido; se pinta inline hasta el próximo intento. @type {string|null} */
 let importError = null;
@@ -42,7 +43,7 @@ export async function handleImportText(text, fileName) {
     await importDoc(text, { hash, fileName });
     return true;
   } catch (err) {
-    importError = err instanceof Error ? err.message : 'No se pudo importar el archivo.';
+    importError = err instanceof Error ? formatError(err) : 'No se pudo importar el archivo.';
     repaint();
     return false;
   }
@@ -73,8 +74,8 @@ export async function handleImportPick() {
     // Con handle real la sesión nace conectada (elección deliberada, §5.5).
     if (imported) markConnected(picked.name);
   } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') return;
-    importError = err instanceof Error ? err.message : 'No se pudo abrir el archivo.';
+    if (isAbortError(err)) return;
+    importError = err instanceof Error ? formatError(err) : 'No se pudo abrir el archivo.';
     repaint();
   }
 }
@@ -108,7 +109,7 @@ export function render(container, _store) {
       ? ''
       : html`<input
           type="file"
-          accept=".json,application/json,application/octet-stream,text/plain"
+          accept="${JSON_ACCEPT}"
           hidden
           data-import-input
         />`}

@@ -6,7 +6,8 @@ import * as welcome from './views/welcome.js';
 import { renderFilebar } from './ui/filebar.js';
 import { openDataDialog } from './views/dataDialog.js';
 import { autoRefreshIfNeeded } from './data/novedades.js';
-import { installBackNav, navigate } from './backnav.js';
+import { installBackNav } from './backnav.js';
+import { switchTab } from './navigation.js';
 
 /**
  * Meta del espejo IndexedDB (spec §5.1). `exportFileName` y `persistAsked` son
@@ -22,12 +23,26 @@ import { installBackNav, navigate } from './backnav.js';
  */
 
 /**
+ * Conflicto real pendiente de resolver (spec §5.5): la versión externa del
+ * archivo, lista para que el diálogo la pinte y la resuelva (ADR-0004).
+ * @typedef {{
+ *   fileText: string,
+ *   fileHash: string,
+ *   fileDoc: import('./domain/schema.js').Doc,
+ * }} ConflictInfo
+ */
+
+/**
  * Estado de sesión del enlace al archivo .json (ticket 18). El nombre
- * persistente vive en meta.connectedFileName; esto es solo sesión.
+ * persistente vive en meta.connectedFileName; esto es solo sesión. El
+ * conflicto pendiente es observable aquí (ADR-0004): los guards del enlace
+ * (omitir vuelco y chequeo externo mientras hay conflicto) son lo que
+ * mantiene vivo ese campo.
  * @typedef {{
  *   status: 'disconnected'|'connected'|'error',
  *   name: string|null,
  *   error: string|null,
+ *   conflict: ConflictInfo | null,
  * }} FileLinkState
  */
 
@@ -72,6 +87,46 @@ import { installBackNav, navigate } from './backnav.js';
  */
 
 /**
+ * Estado efímero de edición de la Ficha (qué formulario está abierto, qué
+ * confirmaciones pendientes, errores inline; ADR-0006). Slice top-level
+ * sembrado por los intents de abrir Ficha (src/navigation.js) y FUERA del
+ * snapshot de historial: restaurar el historial nunca resucita un formulario
+ * abierto ni una confirmación de borrado pendiente. El guard de re-render de
+ * la vista (src/views/game.js) re-siembra el slice ante un gameId distinto
+ * (botón atrás del móvil, cambio de pestaña).
+ * @typedef {{
+ *   gameId: string|null,
+ *   editTitle: boolean,
+ *   field: string|null,
+ *   fieldError: string|null,
+ *   customPlatform: string|null,
+ *   confirmPlay: string|null,
+ *   playError: string|null,
+ *   confirmGame: boolean,
+ *   error: string|null,
+ * }} FichaUi
+ */
+
+/**
+ * Ficha nueva limpia: sin formularios, confirmaciones ni errores pendientes.
+ * @param {string|null} gameId
+ * @returns {FichaUi}
+ */
+export function freshFicha(gameId) {
+  return {
+    gameId,
+    editTitle: false,
+    field: null,
+    fieldError: null,
+    customPlatform: null,
+    confirmPlay: null,
+    playError: null,
+    confirmGame: false,
+    error: null,
+  };
+}
+
+/**
  * Estado global de la app. Las vistas son client-side (sin rutas de URL).
  * @typedef {{
  *   tab: string,
@@ -83,6 +138,7 @@ import { installBackNav, navigate } from './backnav.js';
  *   library: LibraryState,
  *   stats: StatsState,
  *   novedades: NovedadesState,
+ *   ficha: FichaUi,
  * }} AppState
  */
 
@@ -105,7 +161,7 @@ let state = {
   tab: 'biblioteca',
   doc: null,
   meta: { dirty: false, updatedAt: null, lastSavedFileHash: null, connectedFileName: null },
-  file: { status: 'disconnected', name: null, error: null },
+  file: { status: 'disconnected', name: null, error: null, conflict: null },
   ready: false,
   tabRole: 'primary',
   library: {
@@ -119,6 +175,7 @@ let state = {
   },
   stats: { platform: null, genre: null, tag: null },
   novedades: { section: null, genre: null, detail: null },
+  ficha: freshFicha(null),
 };
 
 /** @type {Set<Listener>} */
@@ -236,19 +293,11 @@ export function createApp(root) {
     if (!tab || !(tab in views) || isGated()) return;
     e.preventDefault();
     const previous = store.get().tab;
-    // Volver a Biblioteca desde otra pestaña repone la estantería (ticket 14);
-    // la búsqueda y los filtros persisten (barra común del ticket 15).
-    // Cambiar de pestaña cierra siempre la Ficha abierta (ticket 17). Cambio
-    // de pestaña = pantalla nueva: el botón atrás del móvil regresa a la
-    // pestaña anterior (src/backnav.js).
-    if (tab === 'biblioteca' && previous !== 'biblioteca') {
-      navigate(store, 'push', {
-        tab,
-        library: { ...store.get().library, view: 'shelves', panelStatus: null, gameId: null },
-      });
-    } else {
-      navigate(store, 'push', { tab, library: { ...store.get().library, gameId: null } });
-    }
+    // Cambio de pestaña = pantalla nueva: el botón atrás del móvil regresa a
+    // la pestaña anterior. Las dos reglas (volver a Biblioteca repone la
+    // estantería conservando búsqueda/filtros — ticket 14; cualquier cambio
+    // cierra la Ficha — ticket 17) viven en el intent (src/navigation.js).
+    switchTab(store, tab);
     // Entrar en Novedades dispara el refresco automático silencioso
     // (>12 h y con conexión; ticket 23, spec §7.3), fire-and-forget.
     if (tab === 'novedades' && previous !== 'novedades') {

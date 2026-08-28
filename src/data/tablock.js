@@ -4,6 +4,7 @@
  * pueden hacerse activas en cuanto el lock quede libre.
  */
 import { store } from '../app.js';
+import { isAbortError } from '../lib/errors.js';
 
 const LOCK_NAME = 'game-tracker-primary';
 const RETRY_MS = 150;
@@ -82,7 +83,7 @@ async function watchLoop() {
       });
       return;
     } catch (err) {
-      if (err instanceof Error && (err.name === 'AbortError' || err.name === 'NotSupportedError')) {
+      if (isAbortError(err) || (err instanceof Error && err.name === 'NotSupportedError')) {
         // Sin remedio: se abandona la vigilancia (y el rol secundario se mantiene).
         watching = false;
         pendingNotify = null;
