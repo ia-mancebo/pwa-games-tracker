@@ -13,7 +13,9 @@ body {
   background: var(--bg0);
   color: var(--ink);
   font-family: var(--sans);
+  /* dvh cuando exista: en móvil 100vh incluye la barra de URL y sobra scroll */
   min-height: 100vh;
+  min-height: 100dvh;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
