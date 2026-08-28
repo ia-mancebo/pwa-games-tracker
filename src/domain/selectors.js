@@ -109,11 +109,37 @@ export function findDuplicates(doc, { title, igdbId }) {
 }
 
 /**
+ * @param {import('./schema.js').Game[]} games
+ * @returns {string[]} etiquetas propias únicas, orden alfabético es
+ */
+function tagsOfGames(games) {
+  return uniqueSorted(games.flatMap((g) => g.tags ?? []));
+}
+
+/**
+ * @param {import('./schema.js').Game[]} games
+ * @returns {{id: number, name: string}[]} géneros únicos por id, por nombre
+ */
+function genresOfGames(games) {
+  return uniqueByKeySorted(games.flatMap((g) => g.genres ?? []));
+}
+
+/**
+ * Plataformas del catálogo de los juegos (`platforms[]`); excluye las propias
+ * (`id: null`), que solo existen en jugadas.
+ * @param {import('./schema.js').Game[]} games
+ * @returns {{id: number, name: string}[]}
+ */
+function platformsOfGames(games) {
+  return uniqueByKeySorted(games.flatMap((g) => g.platforms ?? []));
+}
+
+/**
  * @param {import('./schema.js').Doc} doc
  * @returns {string[]} etiquetas propias únicas, orden alfabético es
  */
 export function allTags(doc) {
-  return uniqueSorted(doc.games.flatMap((g) => g.tags ?? []));
+  return tagsOfGames(doc.games);
 }
 
 /**
@@ -121,7 +147,7 @@ export function allTags(doc) {
  * @returns {{id: number, name: string}[]} géneros únicos por id, por nombre
  */
 export function allGenres(doc) {
-  return uniqueByKeySorted(doc.games.flatMap((g) => g.genres ?? []));
+  return genresOfGames(doc.games);
 }
 
 /**
@@ -131,7 +157,20 @@ export function allGenres(doc) {
  * @returns {{id: number, name: string}[]}
  */
 export function allPlatforms(doc) {
-  return uniqueByKeySorted(doc.games.flatMap((g) => g.platforms ?? []));
+  return platformsOfGames(doc.games);
+}
+
+/**
+ * Chips de las filas de filtros para una lista de juegos: solo nombres.
+ * @param {import('./schema.js').Game[]} games
+ * @returns {{ genres: string[], platforms: string[], tags: string[] }}
+ */
+export function chipsForGames(games) {
+  return {
+    genres: genresOfGames(games).map((g) => g.name),
+    platforms: platformsOfGames(games).map((p) => p.name),
+    tags: tagsOfGames(games),
+  };
 }
 
 /**
@@ -140,11 +179,7 @@ export function allPlatforms(doc) {
  * @returns {{ genres: string[], platforms: string[], tags: string[] }}
  */
 export function chipsForDoc(doc) {
-  return {
-    genres: allGenres(doc).map((g) => g.name),
-    platforms: allPlatforms(doc).map((p) => p.name),
-    tags: allTags(doc),
-  };
+  return chipsForGames(doc.games);
 }
 
 /**

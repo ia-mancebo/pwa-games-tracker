@@ -9,7 +9,7 @@ import { html, qs, raw } from '../lib/dom.js';
 import { STATUSES, STATUS_LABELS } from '../domain/schema.js';
 import { gameRating, shelfData } from '../domain/selectors.js';
 import { filterGames } from '../domain/search.js';
-import { chipsForDoc } from '../domain/selectors.js';
+import { chipsForDoc, chipsForGames } from '../domain/selectors.js';
 import { debounce } from '../lib/debounce.js';
 import { formatAvg } from '../lib/format.js';
 import { coverHtml, starsHtml } from '../ui/cover.js';
@@ -268,8 +268,10 @@ function panelRowHtml(game, status) {
 function panelHtml(doc, lib) {
   const f = normFilters(lib);
   const status = lib.panelStatus;
-  // Filtra dentro del estado abierto; el orden recencia se conserva.
-  const games = filterGames(shelfData(doc).find((s) => s.status === status)?.games ?? [], f);
+  // Filtra dentro del estado abierto; el orden recencia se conserva. Los
+  // chips salen de la lista completa del estado, no de toda la biblioteca.
+  const scoped = shelfData(doc).find((s) => s.status === status)?.games ?? [];
+  const games = filterGames(scoped, f);
   const visible = games.slice(0, panelShown);
   const remaining = games.length - visible.length;
   const empty =
@@ -282,7 +284,7 @@ function panelHtml(doc, lib) {
     <div class="toolbar">
       <button type="button" class="chip" data-back-shelves>← Estantería</button>
       <strong>${status != null ? STATUS_LABELS[status] : ''}</strong>
-      ${searchBoxHtml(f.query)} ${filtersHtml(chipsForDoc(doc), f)}
+      ${searchBoxHtml(f.query)} ${filtersHtml(chipsForGames(scoped), f)}
     </div>
     <div class="cardbox tight">
       <div class="b-thead">

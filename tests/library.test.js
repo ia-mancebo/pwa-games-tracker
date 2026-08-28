@@ -323,6 +323,16 @@ describe('búsqueda y filtros (ticket 15)', () => {
   }
 
   /**
+   * Textos de todos los chips visibles de una dimensión.
+   * @param {Element} root
+   * @param {string} dim
+   * @returns {string[]}
+   */
+  function chipTexts(root, dim) {
+    return qsa(`.chip-row[data-dim="${dim}"] .chip`, root).map((c) => c.textContent?.trim() ?? '');
+  }
+
+  /**
    * Chip por dimensión y texto.
    * @param {Element} root
    * @param {string} dim
@@ -449,6 +459,72 @@ describe('búsqueda y filtros (ticket 15)', () => {
     expect(chip(root, 'genre', 'RPG').classList.contains('on')).toBe(false);
     expect(store.get().library.genre).toBeNull();
     expect(store.get().library.platform).toBeNull();
+  });
+
+  it('los chips del panel salen solo de los juegos de su lista', async () => {
+    await seed([
+      {
+        id: 'g1',
+        title: 'Hades',
+        genres: [{ id: 1, name: 'Roguelike' }],
+        platforms: [{ id: 6, name: 'PC (Microsoft Windows)' }],
+        tags: ['dificil'],
+        plays: [{ id: 'g1-p1', status: 'playing', addedAt: '2026-07-01' }],
+      },
+      {
+        id: 'g2',
+        title: 'Pokémon Esmeralda',
+        genres: [{ id: 2, name: 'RPG' }],
+        platforms: [{ id: 130, name: 'Nintendo Switch' }],
+        tags: ['rol'],
+        plays: [{ id: 'g2-p1', status: 'backlog', addedAt: '2026-06-01' }],
+      },
+      {
+        id: 'g3',
+        title: 'Celeste',
+        genres: [{ id: 3, name: 'Plataformas' }],
+        platforms: [{ id: 49, name: 'PlayStation 5' }],
+        tags: ['terror'],
+        plays: [{ id: 'g3-p1', status: 'abandoned', addedAt: '2026-05-01' }],
+      },
+    ]);
+    const root = mount();
+    createApp(root);
+
+    btn(qs('.plate[data-open-panel="backlog"]', root)).click();
+
+    // El panel de «Quiero jugar» solo ofrece valores de sus juegos.
+    expect(chipTexts(root, 'genre')).toContain('RPG');
+    expect(chipTexts(root, 'genre')).not.toContain('Roguelike');
+    expect(chipTexts(root, 'genre')).not.toContain('Plataformas');
+    expect(chipTexts(root, 'platform')).toContain('Nintendo Switch');
+    expect(chipTexts(root, 'platform')).not.toContain('PC (Microsoft Windows)');
+    expect(chipTexts(root, 'platform')).not.toContain('PlayStation 5');
+    expect(chipTexts(root, 'tag')).toContain('rol');
+    expect(chipTexts(root, 'tag')).not.toContain('dificil');
+    expect(chipTexts(root, 'tag')).not.toContain('terror');
+  });
+
+  it('en la estantería los chips siguen saliendo de toda la biblioteca', async () => {
+    await seed([
+      {
+        id: 'g1',
+        title: 'Hades',
+        genres: [{ id: 1, name: 'Roguelike' }],
+        plays: [{ id: 'g1-p1', status: 'playing', addedAt: '2026-07-01' }],
+      },
+      {
+        id: 'g2',
+        title: 'Pokémon Esmeralda',
+        genres: [{ id: 2, name: 'RPG' }],
+        plays: [{ id: 'g2-p1', status: 'backlog', addedAt: '2026-06-01' }],
+      },
+    ]);
+    const root = mount();
+    createApp(root);
+
+    expect(chipTexts(root, 'genre')).toContain('Roguelike');
+    expect(chipTexts(root, 'genre')).toContain('RPG');
   });
 
   it('la fila de etiquetas no aparece si el documento no tiene etiquetas propias', async () => {
