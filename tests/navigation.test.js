@@ -19,7 +19,7 @@ import {
   repositionAfterDelete,
   switchTab,
 } from '../src/navigation.js';
-import { installBackNav, resetBackNav } from '../src/backnav.js';
+import { installBackNav, navigate, resetBackNav } from '../src/backnav.js';
 // El cierre de hoja real (ticket 2): resetBackNav lo anula y el flujo del
 // duplicado del Alta abre la hoja.
 import { resetSheet } from '../src/ui/sheet.js';
@@ -128,12 +128,15 @@ describe('switchTab · costura directa', () => {
     expect(store.get().library.platform).toBe('PC');
     expect(store.get().library.tag).toBe('indie');
 
-    // Pantalla nueva: el atrás del sistema regresa a la pestaña anterior.
+    // Pestaña raíz: el atrás del sistema no regresa a la pestaña anterior.
     history.back();
-    await vi.waitFor(() => expect(store.get().tab).toBe('novedades'));
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(store.get().tab).toBe('biblioteca');
+    expect(store.get().library.view).toBe('shelves');
+    expect(store.get().library.gameId).toBeNull();
   });
 
-  it('cambiar a otra pestaña con la Ficha abierta la cierra y empuja (push)', async () => {
+  it('cambiar a otra pestaña con la Ficha abierta la cierra (pestaña raíz: el atrás no regresa)', async () => {
     installBackNav(store);
     store.set({ library: libraryWithOpenFicha() });
     switchTab(store, 'estadisticas');
@@ -146,7 +149,40 @@ describe('switchTab · costura directa', () => {
     expect(store.get().library.query).toBe('hades');
 
     history.back();
-    await vi.waitFor(() => expect(store.get().tab).toBe('biblioteca'));
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(store.get().tab).toBe('estadisticas');
+    expect(store.get().library.gameId).toBeNull();
+  });
+
+  it('pila profunda: cambiar de pestaña reinicia la pila y la navegación interna sigue funcionando', async () => {
+    installBackNav(store);
+    openPanel(store, 'playing');
+    openGame(store, 'g1');
+    expect(store.get().library.gameId).toBe('g1');
+
+    switchTab(store, 'novedades');
+    expect(store.get().tab).toBe('novedades');
+    expect(store.get().library.gameId).toBeNull();
+
+    // El rebobinado del reset (go(-n)) es asíncrono en jsdom: esperar a que
+    // termine antes de pulsar atrás.
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    // El atrás del sistema no recorre el Panel ni la Ficha previos.
+    history.back();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(store.get().tab).toBe('novedades');
+    expect(store.get().library.gameId).toBeNull();
+
+    // La navegación interna de la pestaña vuelve a funcionar: un push
+    // posterior y su back restauran la raíz de esa pestaña.
+    navigate(store, 'push', {
+      novedades: { section: 'recientes', genre: null, detail: null },
+    });
+    expect(store.get().novedades.section).toBe('recientes');
+    history.back();
+    await vi.waitFor(() => expect(store.get().novedades.section).toBeNull());
+    expect(store.get().tab).toBe('novedades');
   });
 });
 

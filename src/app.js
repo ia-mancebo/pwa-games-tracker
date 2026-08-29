@@ -293,10 +293,11 @@ export function createApp(root) {
     if (!tab || !(tab in views) || isGated()) return;
     e.preventDefault();
     const previous = store.get().tab;
-    // Cambio de pestaña = pantalla nueva: el botón atrás del móvil regresa a
-    // la pestaña anterior. Las dos reglas (volver a Biblioteca repone la
-    // estantería conservando búsqueda/filtros — ticket 14; cualquier cambio
-    // cierra la Ficha — ticket 17) viven en el intent (src/navigation.js).
+    // Cambio de pestaña = pestaña raíz: la pila se reinicia y el botón atrás
+    // del móvil no recorre las pantallas previas (ADR-0007). Las dos reglas
+    // (volver a Biblioteca repone la estantería conservando búsqueda/filtros
+    // — ticket 14; cualquier cambio cierra la Ficha — ticket 17) viven en el
+    // intent (src/navigation.js).
     switchTab(store, tab);
     // Entrar en Novedades dispara el refresco automático silencioso
     // (>12 h y con conexión; ticket 23, spec §7.3), fire-and-forget.

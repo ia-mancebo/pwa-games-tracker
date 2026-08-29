@@ -65,10 +65,26 @@ async function seed() {
   });
 }
 
+/**
+ * jsdom acumula el historial entre pruebas del mismo archivo (no hay API para
+ * vaciarlo): rebobina a la entrada raíz para que cada prueba parta de la pila
+ * limpia (pestañas raíz: la pulsada debe ser la primera entrada). Se llama
+ * ANTES de createApp, cuando ningún handler de popstate está instalado.
+ * pushState sube al final del historial (currentIndex == length - 1) y
+ * go(-(length - 1)) llega a la entrada 0.
+ */
+async function rewindToRoot() {
+  if (history.length <= 1) return;
+  history.pushState({}, '');
+  history.go(-(history.length - 1));
+  await new Promise((resolve) => setTimeout(resolve, 25));
+}
+
 beforeEach(async () => {
   document.body.innerHTML = '';
   resetBackNav();
   resetSheet();
+  await rewindToRoot();
   store.set({
     tab: 'biblioteca',
     doc: null,
@@ -129,7 +145,7 @@ describe('atrás del sistema', () => {
     expect(store.get().library.view).toBe('shelves');
   });
 
-  it('desde otra pestaña vuelve a la pestaña anterior', async () => {
+  it('al cambiar de pestaña la pila se reinicia: el atrás no vuelve a la pestaña anterior', async () => {
     const root = mount();
     createApp(root);
 
@@ -137,8 +153,9 @@ describe('atrás del sistema', () => {
     expect(store.get().tab).toBe('novedades');
 
     history.back();
-    await vi.waitFor(() => expect(store.get().tab).toBe('biblioteca'));
-    // Volver a Biblioteca desde otra pestaña repone la estantería (ticket 14).
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(store.get().tab).toBe('novedades');
+    // La estantería de Biblioteca sigue intacta (ticket 14).
     expect(store.get().library.view).toBe('shelves');
   });
 
@@ -163,6 +180,10 @@ describe('atrás del sistema', () => {
     createApp(root);
 
     btn(qs('[data-tab="novedades"]', root)).click();
+    await vi.waitFor(() => expect(qs('[data-nsection="recientes"]', root)).toBeTruthy());
+    // Drill-down con entrada de historial propia: el atrás del sistema tiene
+    // una entrada que consumir al cerrar la Ficha (la pestaña es raíz).
+    btn(qs('[data-nsection="recientes"]', root)).click();
     await vi.waitFor(() => expect(qs('[data-ndetail="recientes:0"]', root)).toBeTruthy());
     btn(qs('[data-ndetail="recientes:0"]', root)).click();
     expect(store.get().novedades.detail).toBe('recientes:0');
@@ -172,6 +193,7 @@ describe('atrás del sistema', () => {
     history.back();
     await vi.waitFor(() => expect(store.get().novedades.detail).toBeNull());
     expect(store.get().tab).toBe('novedades');
+    expect(store.get().novedades.section).toBe('recientes');
     await vi.waitFor(() => expect(qs('.add-layer', document.body)).toBeNull());
   });
 
@@ -322,6 +344,31 @@ describe('navigate · costura directa', () => {
     history.back();
     await vi.waitFor(() => expect(store.get().library.view).toBe('shelves'));
     expect(closer).toHaveBeenCalled();
+  });
+
+  it('reset rebobina a la raíz: el atrás ya no restaura las pantallas empujadas y conserva el estado aplicado', async () => {
+    installBackNav(store);
+    navigate(store, 'push', {
+      library: { ...store.get().library, view: 'panel', panelStatus: 'playing' },
+    });
+    navigate(store, 'push', { library: { ...store.get().library, gameId: 'g1' } });
+    expect(store.get().library.gameId).toBe('g1');
+
+    navigate(store, 'reset', {
+      library: { ...store.get().library, view: 'shelves', panelStatus: null, gameId: null },
+    });
+    expect(store.get().library.view).toBe('shelves');
+    expect(store.get().library.gameId).toBeNull();
+
+    // El rebobinado del reset (go(-n)) es asíncrono en jsdom: esperar a que
+    // termine antes de pulsar atrás.
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    // El atrás del sistema ya no restaura el Panel ni la Ficha empujados.
+    history.back();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(store.get().library.view).toBe('shelves');
+    expect(store.get().library.gameId).toBeNull();
   });
 
   it('back con depth 0 aplica la transición sin tocar el historial', async () => {

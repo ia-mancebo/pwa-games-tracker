@@ -1,38 +1,41 @@
 /**
  * Intents de las transiciones de la Biblioteca (ADR-0005): única interface que
- * posee las reglas de navegación — cambiar de pestaña (volver a Biblioteca
- * repone la estantería conservando búsqueda y filtros; cualquier cambio de
- * pestaña cierra la Ficha), abrir Panel, volver a Estantería, abrir la Ficha
- * en la misma pestaña o cambiando de pestaña (push único), cerrar la Ficha
- * (siempre navigate-back, que degrada a set sin profundidad) y la reposición
- * a estantería tras borrar un juego (replace). Cada intent es el único punto
- * que patchea el slice de Biblioteca para navegar: el módulo mecánico de
- * backnav (src/backnav.js) no conoce estas reglas y las vistas no las
- * re-encodan.
+ * posee las reglas de navegación — cambiar de pestaña (las tres pestañas del
+ * raíl son pestañas raíz: pulsarlas reinicia la pila y el atrás del sistema no
+ * recorre las pantallas previas; volver a Biblioteca repone la estantería
+ * conservando búsqueda y filtros; cualquier cambio de pestaña cierra la
+ * Ficha), abrir Panel, volver a Estantería, abrir la Ficha en la misma pestaña
+ * o cambiando de pestaña (push único), cerrar la Ficha (siempre navigate-back,
+ * que degrada a set sin profundidad) y la reposición a estantería tras borrar
+ * un juego (replace). Cada intent es el único punto que patchea el slice de
+ * Biblioteca para navegar: el módulo mecánico de backnav (src/backnav.js) no
+ * conoce estas reglas y las vistas no las re-encodan.
  */
 import { navigate } from './backnav.js';
 import { freshFicha } from './app.js';
 
 /**
- * Cambia de pestaña. Pantalla nueva: empuja entrada de historial (el botón
- * atrás del móvil regresa a la pestaña anterior). Dos reglas (tickets 14/17):
- * (a) pulsar Biblioteca repone la estantería conservando búsqueda y filtros,
- * venga de otra pestaña o ya estando en ella con Panel o Ficha abiertos;
- * (b) cualquier cambio de pestaña cierra la Ficha abierta. Solo llamar con
- * pestañas válidas: el guard vive en la vista (app.js).
+ * Cambia de pestaña. Las pestañas del raíl son pestañas raíz: cambiar de
+ * pestaña reinicia la pila (kind 'reset' en backnav, ADR-0007) — la pestaña
+ * pulsada pasa a ser la primera entrada y el atrás del sistema no recorre las
+ * pantallas previas. Dos reglas (tickets 14/17): (a) pulsar Biblioteca repone
+ * la estantería conservando búsqueda y filtros, venga de otra pestaña o ya
+ * estando en ella con Panel o Ficha abiertos; (b) cualquier cambio de pestaña
+ * cierra la Ficha abierta. Solo llamar con pestañas válidas: el guard vive en
+ * la vista (app.js).
  * @param {import('./app.js').Store} store
  * @param {string} tab
  */
 export function switchTab(store, tab) {
   const library = store.get().library;
   if (tab === 'biblioteca') {
-    navigate(store, 'push', {
+    navigate(store, 'reset', {
       tab,
       library: { ...library, view: 'shelves', panelStatus: null, gameId: null },
     });
     return;
   }
-  navigate(store, 'push', { tab, library: { ...library, gameId: null } });
+  navigate(store, 'reset', { tab, library: { ...library, gameId: null } });
 }
 
 /**
