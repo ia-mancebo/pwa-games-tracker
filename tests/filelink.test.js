@@ -8,10 +8,8 @@ import {
   resetFilelink,
   resolveConflict,
   saveNow,
-  scheduleAutosave,
   setConflictHandler,
   startAutosave,
-  stopAutosave,
 } from '../src/data/filelink.js';
 import { setHandle, getHandle } from '../src/services/fsa.js';
 import { sha256Hex } from '../src/services/hash.js';
@@ -162,7 +160,6 @@ beforeEach(() => {
 
 afterEach(() => {
   closeConflict();
-  stopAutosave();
   resetFilelink();
   revokeFsa();
   vi.useRealTimers();
@@ -216,6 +213,30 @@ describe('pickAndConnect (elección deliberada, §5.5)', () => {
     expect(store.get().doc).toBeNull();
     expect(getHandle()).toBeNull();
     expect(store.get().file.status).toBe('disconnected');
+  });
+
+  it('sin FSA cae al input universal: importa y devuelve imported sin conectar', async () => {
+    revokeFsa();
+    const file = new File([FILE_V1_TEXT], 'game-tracker.json', { type: 'application/json' });
+    const originalAppend = document.body.appendChild.bind(document.body);
+    const appendSpy = vi.spyOn(document.body, 'appendChild').mockImplementation((el) => {
+      if (el instanceof HTMLInputElement && el.type === 'file') {
+        Object.defineProperty(el, 'files', { value: [file], configurable: true });
+        realSetTimeout(() => el.dispatchEvent(new Event('change')), 0);
+      }
+      return originalAppend(el);
+    });
+    try {
+      const res = await pickAndConnect();
+
+      expect(res.status).toBe('imported');
+      expect(res.name).toBe('game-tracker.json');
+      expect(store.get().doc?.games.map((g) => g.title)).toEqual(['Hades']);
+      // Sin handle no hay vuelco posible: la sesión NO queda conectada.
+      expect(store.get().file.status).toBe('disconnected');
+    } finally {
+      appendSpy.mockRestore();
+    }
   });
 });
 
@@ -296,6 +317,33 @@ describe('saveNow (vuelco verificado, §5.4)', () => {
     expect(res.status).toBe('skipped');
     expect(store.get().meta.dirty).toBe(true);
     expect(store.get().file.status).toBe('connected');
+  });
+
+  it('mientras un vuelco está en marcha, otro saveNow devuelve busy', async () => {
+    const handle = makeHandle(FILE_V1_TEXT);
+    await connectFile(FILE_V1_TEXT, handle);
+    let release = () => {};
+    const gate = new Promise((r) => {
+      release = /** @type {() => void} */ (r);
+    });
+    const originalGetFile = handle.getFile.bind(handle);
+    handle.getFile = async () => {
+      await gate;
+      return originalGetFile();
+    };
+
+    await addGame({ title: 'Hades II', today: TODAY });
+    const first = saveNow();
+    await settle();
+    expect(store.get().file.saving).toBe(true);
+
+    const res = await saveNow();
+    expect(res.status).toBe('busy');
+
+    release();
+    await settle();
+    expect((await first).status).toBe('saved');
+    expect(store.get().file.saving).toBe(false);
   });
 });
 
@@ -664,20 +712,16 @@ describe('autoguardado (§5.4)', () => {
   it('sin archivo conectado no agenda ningún vuelco', async () => {
     const handle = makeHandle(FILE_V1_TEXT);
     await connectFile(FILE_V1_TEXT, handle);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    startAutosave();
+
+    // Mutar conectado agenda el vuelco; desconectar antes de que venza el
+    // debounce deja el vuelco sin ejecutar (guard de runScheduledSave).
+    await addGame({ title: 'Hades II', today: TODAY });
     setHandle(null);
     store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false } });
-    await addGame({ title: 'Hades II', today: TODAY });
-
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    try {
-      startAutosave();
-      scheduleAutosave();
-      vi.advanceTimersByTime(60000);
-      await settle();
-    } finally {
-      vi.useRealTimers();
-      stopAutosave();
-    }
+    vi.advanceTimersByTime(60000);
+    await settle();
 
     expect(store.get().meta.dirty).toBe(true);
     expect(handle.captured).toBeNull();

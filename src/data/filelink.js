@@ -95,18 +95,52 @@ export function setHandleStore(next) {
  */
 
 /**
- * Resultado uniforme de las operaciones de enlace.
+ * Resultado de {@link pickAndConnect}: elección deliberada de archivo.
  * @typedef {{
- *   status:
- *     | 'saved' | 'skipped' | 'busy'
- *     | 'connected' | 'imported' | 'cancelled' | 'denied' | 'error'
- *     | 'conflict' | 'resolved' | 'downloaded' | 'none' | 'same' | 'reloaded',
- *   fileDoc?: import('../domain/schema.js').Doc,
- *   choice?: 'file' | 'local',
+ *   status: 'connected' | 'imported' | 'cancelled' | 'error',
  *   name?: string | null,
+ *   error?: string,
+ * }} PickAndConnectResult
+ */
+
+/**
+ * Resultado de {@link reconnect}: reconexión en un tap.
+ * @typedef {{
+ *   status: 'connected' | 'conflict' | 'denied' | 'skipped' | 'cancelled' | 'error' | 'imported',
+ *   name?: string | null,
+ *   fileDoc?: import('../domain/schema.js').Doc,
+ *   error?: string,
+ * }} ReconnectResult
+ */
+
+/**
+ * Resultado de {@link saveNow}: vuelco verificado.
+ * @typedef {{
+ *   status: 'saved' | 'reloaded' | 'skipped' | 'busy' | 'conflict' | 'error',
+ *   fileDoc?: import('../domain/schema.js').Doc,
  *   hash?: string,
  *   error?: string,
- * }} LinkResult
+ * }} SaveNowResult
+ */
+
+/**
+ * Resultado de {@link resolveConflict}: resolución del conflicto pendiente.
+ * @typedef {{
+ *   status: 'resolved' | 'downloaded' | 'none' | 'skipped' | 'busy' | 'error',
+ *   choice?: 'file' | 'local',
+ *   fileDoc?: import('../domain/schema.js').Doc,
+ *   hash?: string,
+ *   error?: string,
+ * }} ResolveConflictResult
+ */
+
+/**
+ * Resultado del chequeo externo al recuperar foco (interno, no exportado).
+ * @typedef {{
+ *   status: 'skipped' | 'error' | 'same' | 'reloaded' | 'conflict',
+ *   fileDoc?: import('../domain/schema.js').Doc,
+ *   error?: string,
+ * }} CheckResult
  */
 
 /**
@@ -152,7 +186,7 @@ let scheduled = false;
 let started = false;
 
 /** Promesa del vuelco en curso: identidad para que un vuelco abandonado (p. ej.
- *  al recuperar visibilidad tras una congelación) no limpie el flag de otro. @type {Promise<LinkResult> | null} */
+ *  al recuperar visibilidad tras una congelación) no limpie el flag de otro. @type {Promise<SaveNowResult> | null} */
 let savePromise = null;
 
 /** Desuscripción del store mientras corre el autoguardado. @type {(() => boolean) | null} */
@@ -234,7 +268,13 @@ function setFileError(err) {
  * conectado + conflicto pendiente observable) y avisa al handler registrado.
  * @param {string} fileText
  * @param {string} fileHash
- * @returns {LinkResult}
+ * @returns {{
+ *   status: 'conflict',
+ *   fileDoc: import('../domain/schema.js').Doc,
+ * } | {
+ *   status: 'error',
+ *   error: string,
+ * }}
  */
 function raiseConflict(fileText, fileHash) {
   const parsed = validateDoc(fileText);
@@ -258,7 +298,7 @@ function raiseConflict(fileText, fileHash) {
  * Elección deliberada de archivo (bienvenida o futuro Datos): picker FSA →
  * leer → hash → importDoc. SIN lógica de conflicto (decisión de spec §5.5).
  * Cancelar (AbortError) es silencioso.
- * @returns {Promise<LinkResult>}
+ * @returns {Promise<PickAndConnectResult>}
  */
 export async function pickAndConnect() {
   if (!hasFsa()) return pickViaInput();
@@ -347,7 +387,7 @@ export async function restoreSavedLink() {
 /**
  * Respaldo universal `<input type="file">` cuando no hay FSA. Importa y fija
  * hash base pero NO marca sesión conectada: sin handle no hay vuelco posible.
- * @returns {Promise<LinkResult>}
+ * @returns {Promise<PickAndConnectResult>}
  */
 function pickViaInput() {
   return new Promise((resolve) => {
@@ -392,7 +432,7 @@ function pickViaInput() {
  * visibilidad no pisa el flag de otro que corre después.
  * @param {{ force?: boolean }} [options] `force` salta el pre-chequeo (resolver
  *   conflicto manteniendo locales).
- * @returns {Promise<LinkResult>}
+ * @returns {Promise<SaveNowResult>}
  */
 export async function saveNow({ force = false } = {}) {
   if (!assertWritable()) return { status: 'skipped' };
@@ -426,7 +466,7 @@ export async function saveNow({ force = false } = {}) {
  *   meta: import('../app.js').Meta,
  *   file: import('../app.js').FileLinkState,
  * }} input
- * @returns {Promise<LinkResult>}
+ * @returns {Promise<SaveNowResult>}
  */
 async function doSave({ force, handle, doc, meta, file }) {
   const name = file.name ?? meta.connectedFileName;
@@ -480,7 +520,7 @@ async function doSave({ force, handle, doc, meta, file }) {
  * sesión y comparación de hashes contra `meta.lastSavedFileHash`:
  * igual → sesión normal volcando pendientes; distinto + limpio → recarga
  * limpia; distinto + dirty → conflicto real.
- * @returns {Promise<LinkResult>}
+ * @returns {Promise<ReconnectResult>}
  */
 export async function reconnect() {
   if (!assertWritable()) return { status: 'skipped' };
@@ -527,7 +567,7 @@ export async function reconnect() {
 /**
  * Comprueba si el archivo cambió fuera (al recuperar foco): changed + limpio →
  * recarga limpia; changed + dirty → conflicto real. Igual → nada.
- * @returns {Promise<LinkResult>}
+ * @returns {Promise<CheckResult>}
  */
 async function checkExternalChange() {
   const handle = /** @type {WritableFileHandle | null} */ (getHandle());
@@ -559,7 +599,7 @@ async function checkExternalChange() {
  * Resuelve el conflicto pendiente (spec §5.5). «download» NO resuelve: deja el
  * pendiente en el estado para que la persona compare y elija de nuevo.
  * @param {'file' | 'local' | 'download'} choice
- * @returns {Promise<LinkResult>}
+ * @returns {Promise<ResolveConflictResult>}
  */
 export async function resolveConflict(choice) {
   const pending = pendingConflict();
@@ -592,7 +632,9 @@ export async function resolveConflict(choice) {
     clearPendingConflict();
     return { status: 'resolved', choice: 'local' };
   }
-  return result;
+  // Con `force` el vuelco nunca devuelve 'reloaded' ni 'conflict' (salta el
+  // pre-chequeo): lo que queda cabe en la unión de resolveConflict.
+  return /** @type {ResolveConflictResult} */ (result);
 }
 
 /** Vuelco diferido: solo si sigue la sesión conectada y pendiente algo. */
@@ -608,7 +650,7 @@ function runScheduledSave() {
  * Agenda el vuelco 3 s después de la ÚLTIMA llamada (debounce, spec §5.4).
  * En secundaria no se agenda nada: la pestaña activa es quien vuelca.
  */
-export function scheduleAutosave() {
+function scheduleAutosave() {
   if (!assertWritable()) return;
   scheduled = true;
   debouncedSave();
@@ -651,7 +693,7 @@ export function startAutosave() {
 }
 
 /** Desactiva todo lo activado por {@link startAutosave} (aislación en pruebas). */
-export function stopAutosave() {
+function stopAutosave() {
   if (!started) return;
   started = false;
   scheduled = false;
