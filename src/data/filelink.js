@@ -1,7 +1,7 @@
 /**
  * Orquestación archivo ↔ espejo (ticket 18, spec §5.3–§5.5): conexión del
  * .json, vuelco verificado con pre-chequeo de hash, autoguardado con debounce
- * de 15 s, recarga al recuperar foco y conflicto real a tres opciones.
+ * de 3 s, recarga al recuperar foco y conflicto real a tres opciones.
  *
  * El conflicto pendiente vive en el slice `file` del estado (ADR-0004):
  * elevarlo escribe el slice completo y avisa al handler registrado en el
@@ -142,7 +142,7 @@ export function decideLink(fileText, fileHash, meta) {
   return { kind: 'reload', text: fileText, hash: fileHash };
 }
 
-const AUTOSAVE_MS = 15000;
+const AUTOSAVE_MS = 3000;
 
 /** Puente hacia la UI: quien pinta el diálogo de conflicto. @type {(info: ConflictInfo) => void} */
 let conflictHandler = () => {};
@@ -150,6 +150,10 @@ let conflictHandler = () => {};
 let saving = false;
 let scheduled = false;
 let started = false;
+
+/** Promesa del vuelco en curso: identidad para que un vuelco abandonado (p. ej.
+ *  al recuperar visibilidad tras una congelación) no limpie el flag de otro. @type {Promise<LinkResult> | null} */
+let savePromise = null;
 
 /** Desuscripción del store mientras corre el autoguardado. @type {(() => boolean) | null} */
 let unsubscribe = null;
@@ -382,6 +386,10 @@ function pickViaInput() {
  * Vuelco al archivo (spec §5.4): serializa el doc, pre-chequea el hash del
  * archivo y escribe de forma atómica; solo tras el éxito marca `markSaved`.
  * Un fallo deja la sesión en error y el espejo sigue dirty (la app funciona).
+ * Mientras corre, el slice `file.saving` queda visible para la pastilla
+ * («volcando…»); el flag solo se limpia si este vuelco sigue siendo el último
+ * en curso (identidad de promesa): un vuelco abandonado al recuperar
+ * visibilidad no pisa el flag de otro que corre después.
  * @param {{ force?: boolean }} [options] `force` salta el pre-chequeo (resolver
  *   conflicto manteniendo locales).
  * @returns {Promise<LinkResult>}
@@ -395,54 +403,76 @@ export async function saveNow({ force = false } = {}) {
   if (pendingConflict() && !force) return { status: 'skipped' };
   if (saving) return { status: 'busy' };
   saving = true;
+  store.set({ file: { ...store.get().file, saving: true } });
+  const run = doSave({ force, handle, doc, meta, file });
+  savePromise = run;
   try {
-    const name = file.name ?? meta.connectedFileName;
-    const text = JSON.stringify(doc);
-    const hash = await sha256Hex(text);
-    if (!force && meta.lastSavedFileHash != null) {
-      // Comprobación de hash justo antes de CADA vuelco (spec §5.5), limpio o no.
-      let fileText;
-      let fileHash;
-      try {
-        const current = await handle.getFile();
-        fileText = await current.text();
-        fileHash = await sha256Hex(fileText);
-      } catch (err) {
-        setFileError(err);
-        return { status: 'error', error: formatError(err) };
-      }
-      const decision = decideLink(fileText, fileHash, meta);
-      if (decision.kind === 'conflict') return raiseConflict(decision.text, decision.hash);
-      if (decision.kind === 'reload') {
-        // Limpio → manda el archivo.
-        try {
-          await importDoc(decision.text, { hash: decision.hash, fileName: name });
-        } catch (err) {
-          setFileError(err);
-          return { status: 'error', error: formatError(err) };
-        }
-        return { status: 'reloaded' };
-      }
-      // Igual: el vuelco continúa y escribe.
+    return await run;
+  } finally {
+    if (savePromise === run) {
+      saving = false;
+      savePromise = null;
+      store.set({ file: { ...store.get().file, saving: false } });
     }
+  }
+}
+
+/**
+ * Cuerpo del vuelco con los valores capturados al llamar a {@link saveNow}.
+ * @param {{
+ *   force: boolean,
+ *   handle: WritableFileHandle,
+ *   doc: import('../domain/schema.js').Doc,
+ *   meta: import('../app.js').Meta,
+ *   file: import('../app.js').FileLinkState,
+ * }} input
+ * @returns {Promise<LinkResult>}
+ */
+async function doSave({ force, handle, doc, meta, file }) {
+  const name = file.name ?? meta.connectedFileName;
+  const text = JSON.stringify(doc);
+  const hash = await sha256Hex(text);
+  if (!force && meta.lastSavedFileHash != null) {
+    // Comprobación de hash justo antes de CADA vuelco (spec §5.5), limpio o no.
+    let fileText;
+    let fileHash;
     try {
-      const writable = await handle.createWritable();
-      await writable.write(text);
-      await writable.close();
+      const current = await handle.getFile();
+      fileText = await current.text();
+      fileHash = await sha256Hex(fileText);
     } catch (err) {
       setFileError(err);
       return { status: 'error', error: formatError(err) };
     }
-    await markSaved({ hash, now: new Date() });
-    setConnected(name);
-    // Copia rotativa OPFS y petición de persistencia: fire-and-forget (§5.6),
-    // nunca bloquean ni rompen el vuelco ya completado.
-    void snapshotBackup(/** @type {import('../domain/schema.js').Doc} */ (store.get().doc ?? doc));
-    void requestPersistOnce();
-    return { status: 'saved', hash };
-  } finally {
-    saving = false;
+    const decision = decideLink(fileText, fileHash, meta);
+    if (decision.kind === 'conflict') return raiseConflict(decision.text, decision.hash);
+    if (decision.kind === 'reload') {
+      // Limpio → manda el archivo.
+      try {
+        await importDoc(decision.text, { hash: decision.hash, fileName: name });
+      } catch (err) {
+        setFileError(err);
+        return { status: 'error', error: formatError(err) };
+      }
+      return { status: 'reloaded' };
+    }
+    // Igual: el vuelco continúa y escribe.
   }
+  try {
+    const writable = await handle.createWritable();
+    await writable.write(text);
+    await writable.close();
+  } catch (err) {
+    setFileError(err);
+    return { status: 'error', error: formatError(err) };
+  }
+  await markSaved({ hash, now: new Date(), doc });
+  setConnected(name);
+  // Copia rotativa OPFS y petición de persistencia: fire-and-forget (§5.6),
+  // nunca bloquean ni rompen el vuelco ya completado.
+  void snapshotBackup(/** @type {import('../domain/schema.js').Doc} */ (store.get().doc ?? doc));
+  void requestPersistOnce();
+  return { status: 'saved', hash };
 }
 
 /**
@@ -575,7 +605,7 @@ function runScheduledSave() {
 }
 
 /**
- * Agenda el vuelco 15 s después de la ÚLTIMA llamada (debounce, spec §5.4).
+ * Agenda el vuelco 3 s después de la ÚLTIMA llamada (debounce, spec §5.4).
  * En secundaria no se agenda nada: la pestaña activa es quien vuelca.
  */
 export function scheduleAutosave() {
@@ -597,8 +627,10 @@ function onVisibilityChange() {
   }
   // Al volver visible: un vuelco oculto congelado (Chrome Android) puede haber
   // dejado `saving` colgado para siempre; se libera para no bloquear la sesión
-  // y se retoma el vuelco pendiente sin esperar al debounce.
+  // y se retoma el vuelco pendiente sin esperar al debounce. El vuelco
+  // abandonado ya no puede limpiar el flag del retoma (identidad de promesa).
   saving = false;
+  savePromise = null;
   const { meta, file } = store.get();
   if (meta.dirty && file.status === 'connected' && !pendingConflict()) void saveNow();
 }
@@ -634,6 +666,7 @@ export function resetFilelink() {
   stopAutosave();
   clearPendingConflict();
   saving = false;
+  savePromise = null;
   scheduled = false;
   setHandle(null);
   void handleStore.clear().catch(() => {});

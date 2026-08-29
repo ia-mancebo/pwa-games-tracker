@@ -113,13 +113,16 @@ function hasSavePicker() {
   return typeof self !== 'undefined' && 'showSaveFilePicker' in self;
 }
 
-/** Doc actual serializado y validado, o motivo de error. @returns {{ ok: true, text: string } | { ok: false, reason: string }} */
+/** Doc actual serializado y validado, o motivo de error. Devuelve la
+ * referencia del store (no el clon validado): markSaved la compara por
+ * identidad para detectar mutaciones intercaladas durante el export.
+ * @returns {{ ok: true, text: string, doc: import('../domain/schema.js').Doc } | { ok: false, reason: string }} */
 function serializeDoc() {
   const { doc } = store.get();
   if (!doc) return { ok: false, reason: 'No hay biblioteca que exportar.' };
   const res = validateDoc(doc);
   if (!res.ok) return { ok: false, reason: res.reason };
-  return { ok: true, text: JSON.stringify(res.doc) };
+  return { ok: true, text: JSON.stringify(res.doc), doc };
 }
 
 async function doConnect() {
@@ -178,7 +181,7 @@ async function doExport() {
     return;
   }
   try {
-    await markSaved({ hash: await sha256Hex(text), now: new Date() });
+    await markSaved({ hash: await sha256Hex(text), now: new Date(), doc: serialized.doc });
     void requestPersistOnce();
   } catch (err) {
     paint({ note: '', error: `Copia exportada como «${name}», pero no se pudo registrar el vuelco: ${formatError(err)}` });

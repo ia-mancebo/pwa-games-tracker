@@ -34,7 +34,7 @@ beforeEach(async () => {
     meta: { dirty: false, updatedAt: null, lastSavedFileHash: null, connectedFileName: null },
     ready: false,
     tabRole: 'primary',
-    file: { status: 'disconnected', name: null, error: null, conflict: null },
+    file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false },
   });
   await initLibrary();
 });
@@ -68,7 +68,7 @@ describe('modal de reconexión', () => {
     await newLibrary(new Date());
     openReconnectModal();
     expect(qs('.reconnect-layer', document.body)).toBeTruthy();
-    store.set({ file: { status: 'connected', name: 'game-tracker.json', error: null, conflict: null } });
+    store.set({ file: { status: 'connected', name: 'game-tracker.json', error: null, conflict: null, saving: false } });
     expect(qs('.reconnect-layer', document.body)).toBeNull();
   });
 

@@ -87,6 +87,9 @@ function makeHandle(initialText, options = {}) {
       return {
         async write(data) {
           state.captured = data;
+          // El archivo en disco refleja la escritura (como createWritable real):
+          // los vuelcos siguientes pre-chequean el hash contra este contenido.
+          state.text = data;
         },
         async close() {},
       };
@@ -151,7 +154,7 @@ beforeEach(() => {
     tab: 'biblioteca',
     doc: null,
     meta: { dirty: false, updatedAt: null, lastSavedFileHash: null, connectedFileName: null },
-    file: { status: 'disconnected', name: null, error: null, conflict: null },
+    file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false },
     ready: false,
   });
   resetFilelink();
@@ -185,6 +188,7 @@ describe('pickAndConnect (elección deliberada, §5.5)', () => {
       name: 'game-tracker.json',
       error: null,
       conflict: null,
+      saving: false,
     });
   });
 
@@ -460,18 +464,18 @@ describe('autoguardado (§5.4)', () => {
     vi.useRealTimers();
   });
 
-  it('agenda el vuelco 15 s tras el ÚLTIMO cambio y escribe una sola vez', async () => {
+  it('agenda el vuelco 3 s tras el ÚLTIMO cambio y escribe una sola vez', async () => {
     const handle = makeHandle(FILE_V1_TEXT);
     await connectFile(FILE_V1_TEXT, handle);
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     startAutosave();
 
     await addGame({ title: 'Hades II', today: TODAY });
-    vi.advanceTimersByTime(10000);
+    vi.advanceTimersByTime(2000);
     expect(handle.writes).toBe(0);
 
     await addGame({ title: 'Hades III', today: TODAY });
-    vi.advanceTimersByTime(14999);
+    vi.advanceTimersByTime(2999);
     expect(handle.writes).toBe(0);
 
     vi.advanceTimersByTime(1);
@@ -508,9 +512,9 @@ describe('autoguardado (§5.4)', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     startAutosave();
 
-    // Camino sano: el debounce de 15 s vuelca sin intervención.
+    // Camino sano: el debounce de 3 s vuelca sin intervención.
     await addGame({ title: 'Hades II', today: TODAY });
-    vi.advanceTimersByTime(15000);
+    vi.advanceTimersByTime(3000);
     await settle();
     expect(handle.writes).toBe(1);
     expect(store.get().meta.dirty).toBe(false);
@@ -551,13 +555,117 @@ describe('autoguardado (§5.4)', () => {
     // Sin intervención humana, el archivo debe volcarse.
     expect(handle.writes).toBe(2);
     expect(store.get().meta.dirty).toBe(false);
+    expect(store.get().file.saving).toBe(false);
+  });
+
+  it('una mutación durante el vuelco NO se marca como volcada: dirty sigue y el siguiente autoguardado la vuelca', async () => {
+    const handle = makeHandle(FILE_V1_TEXT);
+    await connectFile(FILE_V1_TEXT, handle);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    startAutosave();
+
+    // Puerta en getFile: el vuelco queda en marcha hasta que la abramos.
+    let release = () => {};
+    const gate = new Promise((r) => {
+      release = /** @type {() => void} */ (r);
+    });
+    const originalGetFile = handle.getFile.bind(handle);
+    handle.getFile = async () => {
+      await gate;
+      return originalGetFile();
+    };
+
+    await addGame({ title: 'Hades II', today: TODAY });
+    vi.advanceTimersByTime(3000);
+    await settle();
+    // El vuelco está en marcha (getFile esperando a la puerta).
+    expect(store.get().file.saving).toBe(true);
+
+    // Mutación intercalada a mitad del vuelco.
+    await addGame({ title: 'Hades III', today: TODAY });
+    expect(store.get().meta.dirty).toBe(true);
+
+    // El vuelco termina: escribió la versión anterior, pero dirty NO se limpia.
+    release();
+    await settle();
+    expect(handle.writes).toBe(1);
+    expect(store.get().meta.dirty).toBe(true);
+    const dumped = parseDump(/** @type {string} */ (handle.captured));
+    expect(dumped.games.map((g) => g.title)).toEqual(['Hades', 'Hades II']);
+
+    // El siguiente autoguardado vuelca la mutación intercalada.
+    vi.advanceTimersByTime(3000);
+    await settle();
+    expect(handle.writes).toBe(2);
+    expect(store.get().meta.dirty).toBe(false);
+    const dumped2 = parseDump(/** @type {string} */ (handle.captured));
+    expect(dumped2.games.map((g) => g.title)).toEqual(['Hades', 'Hades II', 'Hades III']);
+  });
+
+  it('un vuelco oculto que termina después del retoma no pisa el flag del vuelco nuevo', async () => {
+    const handle = makeHandle(FILE_V1_TEXT);
+    await connectFile(FILE_V1_TEXT, handle);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    startAutosave();
+
+    // Puertas por llamada a getFile: controlamos el intercalado de los dos
+    // vuelcos (el oculto congelado y el retoma al volver visible).
+    let calls = 0;
+    let release1 = () => {};
+    let release2 = () => {};
+    const gate1 = new Promise((r) => {
+      release1 = /** @type {() => void} */ (r);
+    });
+    const gate2 = new Promise((r) => {
+      release2 = /** @type {() => void} */ (r);
+    });
+    const originalGetFile = handle.getFile.bind(handle);
+    handle.getFile = async () => {
+      calls += 1;
+      if (calls === 1) await gate1;
+      if (calls === 2) await gate2;
+      return originalGetFile();
+    };
+
+    await addGame({ title: 'Hades II', today: TODAY });
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    try {
+      document.dispatchEvent(new Event('visibilitychange'));
+    } finally {
+      delete /** @type {any} */ (document).visibilityState;
+    }
+    await settle();
+    expect(store.get().file.saving).toBe(true);
+
+    // Volver visible: se abandona el vuelco oculto y arranca el retoma.
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    try {
+      document.dispatchEvent(new Event('visibilitychange'));
+    } finally {
+      delete /** @type {any} */ (document).visibilityState;
+    }
+    await settle();
+    expect(store.get().file.saving).toBe(true);
+
+    // El vuelco oculto termina al fin: su finally NO debe limpiar el flag del
+    // retoma (identidad de promesa), que sigue en marcha.
+    release1();
+    await settle();
+    expect(store.get().file.saving).toBe(true);
+
+    // El retoma termina y limpia el flag.
+    release2();
+    await settle();
+    expect(store.get().file.saving).toBe(false);
+    expect(store.get().meta.dirty).toBe(false);
+    expect(handle.writes).toBe(2);
   });
 
   it('sin archivo conectado no agenda ningún vuelco', async () => {
     const handle = makeHandle(FILE_V1_TEXT);
     await connectFile(FILE_V1_TEXT, handle);
     setHandle(null);
-    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null } });
+    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false } });
     await addGame({ title: 'Hades II', today: TODAY });
 
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -621,7 +729,7 @@ describe('pastilla de archivo (chrome de la app)', () => {
     const handle = makeHandle(FILE_V1_TEXT);
     await connectFile(FILE_V1_TEXT, handle);
     setHandle(null);
-    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null } });
+    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false } });
 
     const root = mountApp();
     const connect = qs('[data-connect]', root);
@@ -654,6 +762,37 @@ describe('pastilla de archivo (chrome de la app)', () => {
     expect(qs('.file-dirty', root)).toBeNull();
   });
 
+  it('mientras corre el vuelco la pastilla muestra «volcando…» y desaparece al terminar', async () => {
+    grantFsa();
+    const handle = makeHandle(FILE_V1_TEXT);
+    await connectFile(FILE_V1_TEXT, handle);
+    const root = mountApp();
+
+    // Puerta en getFile: el vuelco queda en marcha hasta que la abramos.
+    let release = () => {};
+    const gate = new Promise((r) => {
+      release = /** @type {() => void} */ (r);
+    });
+    const originalGetFile = handle.getFile.bind(handle);
+    handle.getFile = async () => {
+      await gate;
+      return originalGetFile();
+    };
+
+    await addGame({ title: 'Hades II', today: TODAY });
+    expect(qs('.file-dirty', root)?.textContent).toContain('cambios sin volcar');
+
+    btn(qs('[data-save-now]', root)).click();
+    await settle();
+    expect(qs('.file-dirty', root)?.textContent).toContain('volcando…');
+
+    release();
+    await settle();
+    expect(handle.writes).toBe(1);
+    expect(store.get().meta.dirty).toBe(false);
+    expect(qs('.file-dirty', root)).toBeNull();
+  });
+
   it('error muestra la pastilla de reintento y Recuperar vuelve a conectado', async () => {
     grantFsa();
     const handle = makeHandle(FILE_V1_TEXT, { failWrites: true });
@@ -680,7 +819,7 @@ describe('pastilla de archivo (chrome de la app)', () => {
     grantFsa();
     const LONG_ERROR =
       'SecurityError: The operation is insecure. No se pudo escribir el archivo en el sistema de archivos.';
-    store.set({ file: { status: 'error', name: null, error: LONG_ERROR, conflict: null } });
+    store.set({ file: { status: 'error', name: null, error: LONG_ERROR, conflict: null, saving: false } });
 
     const root = mountApp();
     const pill = qs('.filebar .pill-btn', root);

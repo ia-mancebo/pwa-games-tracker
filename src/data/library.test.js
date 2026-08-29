@@ -250,11 +250,25 @@ describe('markSaved', () => {
   it('limpia dirty y guarda hash', async () => {
     await newLibrary(NOW);
     await addGame({ title: 'A', today: TODAY });
+    const doc = store.get().doc;
+    if (!doc) throw new Error('sin doc');
     expect(store.get().meta.dirty).toBe(true);
-    await markSaved({ hash: 'deadbeef', now: NOW });
+    await markSaved({ hash: 'deadbeef', now: NOW, doc });
     expect(store.get().meta.dirty).toBe(false);
     expect(store.get().meta.lastSavedFileHash).toBe('deadbeef');
     const meta = await getMeta();
     expect(meta?.dirty).toBe(false);
+  });
+
+  it('si el documento cambió durante el vuelco, NO limpia dirty', async () => {
+    await newLibrary(NOW);
+    await addGame({ title: 'A', today: TODAY });
+    const docAtSave = store.get().doc;
+    if (!docAtSave) throw new Error('sin doc');
+    // Mutación intercalada: el doc del vuelco queda desactualizado.
+    await addGame({ title: 'B', today: TODAY });
+    await markSaved({ hash: 'deadbeef', now: NOW, doc: docAtSave });
+    expect(store.get().meta.dirty).toBe(true);
+    expect(store.get().meta.lastSavedFileHash).toBe('deadbeef');
   });
 });

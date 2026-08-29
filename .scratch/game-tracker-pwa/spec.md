@@ -119,7 +119,7 @@ Pantalla de bienvenida con dos caminos:
 
 ### 5.4 Vuelco al archivo
 
-- **Autoguardado con debounce de 15 s** tras el último cambio cuando hay archivo conectado, más intento extra al ocultar la pestaña (mejor esfuerzo).
+- **Autoguardado con debounce de 3 s** tras el último cambio cuando hay archivo conectado, más intento extra al ocultar la pestaña (mejor esfuerzo).
 - Botón «Guardar ahora» e indicador «cambios sin volcar» siempre visibles. Sin FSA, el vuelco es manual por exportación.
 - Escritura atómica (`createWritable()` hace swap al `close()`); solo si terminó bien se actualiza `meta{hash, dirty:false}` en transacción `strict`. Nunca marcar éxito antes de que el fichero esté fuera.
 - **Un fallo de escritura no bloquea la app**: pastilla de error + reintento automático en el próximo cambio o al recuperar foco; el estado sigue `dirty`.

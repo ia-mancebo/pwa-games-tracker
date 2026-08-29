@@ -79,6 +79,7 @@ describe('guard de conflicto pendiente (lee el estado)', () => {
           fileHash: 'hash-v2',
           fileDoc: /** @type {import('../domain/schema.js').Doc} */ (JSON.parse(DOC_TEXT)),
         },
+        saving: false,
       },
     });
     await expect(saveNow()).resolves.toMatchObject({ status: 'skipped' });

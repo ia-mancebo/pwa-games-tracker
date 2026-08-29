@@ -43,6 +43,7 @@ import { switchTab } from './navigation.js';
  *   name: string|null,
  *   error: string|null,
  *   conflict: ConflictInfo | null,
+ *   saving: boolean,
  * }} FileLinkState
  */
 
@@ -161,7 +162,7 @@ let state = {
   tab: 'biblioteca',
   doc: null,
   meta: { dirty: false, updatedAt: null, lastSavedFileHash: null, connectedFileName: null },
-  file: { status: 'disconnected', name: null, error: null, conflict: null },
+  file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false },
   ready: false,
   tabRole: 'primary',
   library: {

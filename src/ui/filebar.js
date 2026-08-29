@@ -44,9 +44,16 @@ export function renderFilebar(container, _store) {
     return;
   }
   if (file.status === 'connected') {
+    // Mientras corre el vuelco la pastilla informa del estado en vivo; al
+    // terminar con éxito `markSaved` limpia `dirty` y desaparece sola.
+    const dirtyPill = meta.dirty
+      ? file.saving
+        ? '<span class="file-dirty mono">● volcando…</span>'
+        : '<span class="file-dirty mono">● cambios sin volcar</span>'
+      : '';
     container.innerHTML = html`${banner}<div class="filebar">
       <span class="file-name">Archivo: ${file.name ?? meta.connectedFileName ?? '—'}</span>
-      ${raw(meta.dirty ? '<span class="file-dirty mono">● cambios sin volcar</span>' : '')}
+      ${raw(dirtyPill)}
       ${ro ? raw(RO_PILL) : raw('<button type="button" class="chip chip-xs" data-save-now>Guardar ahora</button>')}
       ${raw(DATOS_BTN)}
     </div>`;

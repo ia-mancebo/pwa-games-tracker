@@ -138,7 +138,7 @@ beforeEach(async () => {
     meta: { dirty: false, updatedAt: null, lastSavedFileHash: null, connectedFileName: null },
     ready: false,
     tabRole: 'primary',
-    file: { status: 'disconnected', name: null, error: null, conflict: null },
+    file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false },
   });
   await initLibrary();
 });
@@ -182,7 +182,7 @@ describe('restoreSavedLink', () => {
       async clear() {},
     });
     setHandle(null);
-    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null } });
+    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false } });
     expect(await restoreSavedLink()).toBe('none');
     expect(store.get().file.status).toBe('disconnected');
   });
@@ -191,7 +191,7 @@ describe('restoreSavedLink', () => {
     const handle = makeHandle(FILE_V1_TEXT);
     await connectFile(FILE_V1_TEXT, handle);
     setHandle(null);
-    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null } });
+    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false } });
 
     expect(await restoreSavedLink()).toBe('connected');
     expect(store.get().file.status).toBe('connected');
@@ -204,7 +204,7 @@ describe('restoreSavedLink', () => {
     const handle = makeHandle(FILE_V1_TEXT);
     await connectFile(FILE_V1_TEXT, handle);
     setHandle(null); // nueva sesión sin handle en memoria
-    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null } });
+    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false } });
     await addGame({ title: 'Extra', today: TODAY });
     expect(store.get().meta.dirty).toBe(true);
 
@@ -228,7 +228,7 @@ describe('restoreSavedLink', () => {
     await connectFile(FILE_V1_TEXT, handle);
     handle.setText(FILE_V2_TEXT); // cambió fuera mientras no mirábamos
     setHandle(null);
-    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null } });
+    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false } });
     await addGame({ title: 'Extra', today: TODAY });
 
     expect(await restoreSavedLink()).toBe('connected');
@@ -242,7 +242,7 @@ describe('restoreSavedLink', () => {
     await connectFile(FILE_V1_TEXT, handle);
     handle.setText(FILE_V2_TEXT);
     setHandle(null);
-    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null } });
+    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false } });
 
     expect(await restoreSavedLink()).toBe('connected');
     expect(store.get().doc?.games[0]?.title).toBe('Celeste');
@@ -253,7 +253,7 @@ describe('restoreSavedLink', () => {
     const handle = makeHandle(FILE_V1_TEXT, 'prompt');
     await connectFile(FILE_V1_TEXT, handle);
     setHandle(null);
-    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null } });
+    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false } });
 
     expect(await restoreSavedLink()).toBe('needs-gesture');
     expect(store.get().file.status).toBe('disconnected');

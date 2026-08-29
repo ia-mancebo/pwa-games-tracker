@@ -246,12 +246,19 @@ export function ratePlay(gameId, playId, rating) {
 
 /**
  * Vuelco verificado: limpia `dirty` y fija el hash del archivo (ticket 18).
- * @param {{ hash: string|null, now: Date }} input
+ * Si el documento cambió DURANTE el vuelco (mutación intercalada en el hueco
+ * asíncrono), NO limpia `dirty`: el vuelco escribió una versión anterior y el
+ * pendiente se retoma con el siguiente autoguardado. Sin esto, el indicador
+ * «cambios sin volcar» desaparecería con el archivo desactualizado. Toda
+ * mutación reemplaza el doc por una referencia nueva (mutate clona), así que
+ * la comparación por identidad detecta cualquier cambio intercalado.
+ * @param {{ hash: string|null, now: Date, doc: import('../domain/schema.js').Doc }} input
  */
-export async function markSaved({ hash, now }) {
+export async function markSaved({ hash, now, doc }) {
+  const current = store.get();
   const meta = {
-    ...store.get().meta,
-    dirty: false,
+    ...current.meta,
+    dirty: current.meta.dirty && current.doc !== doc,
     lastSavedFileHash: hash,
     updatedAt: now.toISOString(),
   };
