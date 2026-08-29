@@ -1,0 +1,16 @@
+# El estado de sesión de Novedades vive en el slice `novedadesUi` y su navegación pasa por intents
+
+Contexto: el estado de Novedades vivía repartido en tres sitios — el slice de navegación `novedades` (`{section, genre, detail}`), nueve globals de módulo en la vista (`snapshotCache`, `snapshotLoaded`, `refreshing`, `lastStatus`, `hostEl`, `loadSeq`, `sheet`, `paintedRef`, `adding`) y la Instantánea en IDB — con el slice re-encodeado a mano en cada call site, el refresco automático disparado fuera de toda regla de transición y un `resetNovedadesView` que existía solo como seam de test. Decisión: el estado de sesión pasa a un slice top-level `novedadesUi` (`{ snapshot, loading, refreshing, degraded, adding }`, tipado `NovedadesUi`, factory `freshNovedadesUi` en `src/app.js`, patrón ADR-0006) FUERA del snapshot de historial (backnav sigue copiando solo `tab`, `library` y `novedades`): ningún push clona la Instantánea y un restore antiguo no la aplasta. La navegación de Novedades pasa a intents en `src/navigation.js` — `openNovedadesSection` (push), `backToNovedadesBoard` (back), `toggleNovedadesGenre`, `openNovedadesDetail` y `closeNovedadesDetail` (sin historial) — y el intent `switchTab` gana el trigger del refresco automático silencioso (`void autoRefreshIfNeeded().catch(() => {})`, fire-and-forget). El ciclo de la Instantánea vive en `src/data/novedades.js`: `ensureNovedadesContent` (idempotente) siembra `loading`, carga desde IDB y escribe el slice; el refresco escribe `refreshing` y `degraded` (Modo degradado) en el slice. La vista pinta puramente del estado y la hoja/paintedRef quedan como internos de primitiva de UI (patrón lightbox). La supervivencia de la Ficha externa entre pestañas queda congelada (el reset de pestaña no cierra hojas, comportamiento actual).
+
+## Considered options
+
+- Mantener los globals de la vista y solo testear mejor: rechazado porque el refresco/repinto seguiría siendo testeable solo por DOM, un repinto tardío seguiría necesitando guardia manual de superficie (`hostEl`/`loadSeq`) y el estado seguiría repartido en tres casas sin ninguna observable.
+- Extender el slice de navegación `novedades` con los campos de sesión: rechazado porque backnav copia los slices por referencia en cada push — todo campo nuevo del slice `novedades` viajaría al historial (clonando la Instantánea en cada push) y un restore antiguo la aplastaría.
+- Intents fuera de `src/navigation.js` (casa propia de Novedades): rechazado porque la única casa que patchea slices de navegación debe seguir siendo una; abrir una segunda crearía dos vocabularios de transición.
+
+## Consequences
+
+- Toda escritura de navegación de Novedades pasa por los intents; la vista deja de hacer `store.set` crudo de navegación y app.js deja de saber de refrescos.
+- Un refresco tardío ya no puede aplastar otra pestaña como clase: el render solo pinta la pestaña viva y `snapshotCache`/`snapshotLoaded`/`refreshing`/`lastStatus`/`hostEl`/`loadSeq` desaparecen.
+- `resetNovedadesView` desaparece: las suites reponen el estado escribiendo los slices; la suite de intents (history fake) y la del módulo de datos cubren transiciones, profundidad de historial y refresco/degradado sin DOM.
+- La guarda de re-entrada del alta local vive en `novedadesUi.adding`; el «➕ Quiero jugarlo» sigue siendo lógica de la vista con la pasarela de Alta.

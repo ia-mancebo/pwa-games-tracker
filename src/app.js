@@ -104,6 +104,7 @@ import { switchTab } from './navigation.js';
  *   playError: string|null,
  *   confirmGame: boolean,
  *   error: string|null,
+ *   titleError: string|null,
  * }} FichaUi
  */
 
@@ -138,6 +139,7 @@ export function freshFicha(gameId) {
     playError: null,
     confirmGame: false,
     error: null,
+    titleError: null,
   };
 }
 

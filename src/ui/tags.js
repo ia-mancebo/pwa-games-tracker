@@ -63,7 +63,7 @@ export function tagEditorHtml(tags) {
  * promesa del comando, o undefined si no hay nada que añadir.
  * @param {import('../domain/schema.js').Game} game
  * @param {HTMLInputElement} input
- * @returns {Promise<import('../domain/schema.js').Doc | undefined>}
+ * @returns {Promise<import('../data/ficha.js').Result | undefined>}
  */
 export async function addTag(game, input) {
   const tag = input.value.trim();
@@ -77,7 +77,7 @@ export async function addTag(game, input) {
  * resultante se escribe tal cual. Devuelve la promesa.
  * @param {import('../domain/schema.js').Game} game
  * @param {string} tag
- * @returns {Promise<import('../domain/schema.js').Doc>}
+ * @returns {Promise<import('../data/ficha.js').Result>}
  */
 export async function removeTag(game, tag) {
   return removeTagCommand(game.id, tag);

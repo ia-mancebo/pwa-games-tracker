@@ -8,19 +8,20 @@
  */
 import { html, qs, raw } from '../lib/dom.js';
 import { formatError } from '../lib/errors.js';
-import { STATUSES, STATUS_LABELS, todayFrom } from '../domain/schema.js';
+import { STATUSES, STATUS_LABELS } from '../domain/schema.js';
 import { latestPlay, gameStatus } from '../domain/selectors.js';
 import {
   addPlay,
+  commitSharedField as commitSharedFieldCommand,
+  commitTitle as commitTitleCommand,
   deleteGame,
   deletePlay,
+  rateHero,
   ratePlay,
   setPlayDate,
   setPlayNotes,
   setPlayPlatform,
-  setSharedField,
   setStatus,
-  setTitle,
 } from '../data/ficha.js';
 import { coverHtml } from '../ui/cover.js';
 import { statusPillHtml } from '../ui/pill.js';
@@ -240,7 +241,9 @@ function titleHtml(game, ficha) {
       <button type="button" class="chip" data-title-save>Guardar</button>
       <button type="button" class="chip" data-title-cancel>Cancelar</button>
     </span>
-    <p class="form-error" role="alert" data-title-error hidden></p>
+    <p class="form-error" role="alert" data-title-error${ficha.titleError ? '' : ' hidden'}>
+      ${ficha.titleError ?? ''}
+    </p>
   </div>`;
 }
 
@@ -533,22 +536,29 @@ function patchFicha(store, patch) {
 }
 
 /**
- * Escribe (o limpia) un error inline sin repintar la vista: así no se pierde
- * lo tecleado en el formulario activo.
- * @param {Element} surface
- * @param {string} selector
- * @param {string|null} message
+ * Ejecuta un comando del motor (Promise<Result>) y, si falla, escribe el
+ * error en el slot del slice que corresponda y conserva lo tecleado en el
+ * formulario activo: el repinto reconstruye el formulario desde el doc, así
+ * que `restore` rellena el input nuevo con lo tecleado (comportamiento
+ * previo). Devuelve el Result para que el llamador pueda encadenar.
+ * @param {import('../app.js').Store} store
+ * @param {() => Promise<import('../data/ficha.js').Result>} command
+ * @param {(message: string) => void} onError escribe el error en el slice
+ * @param {() => void} [restore] restaura lo tecleado tras el repinto
+ * @returns {Promise<import('../data/ficha.js').Result>}
  */
-function setInlineError(surface, selector, message) {
-  const box = qs(selector, surface);
-  if (!box) return;
-  box.textContent = message ?? '';
-  if (message) box.removeAttribute('hidden');
-  else box.setAttribute('hidden', '');
+async function runCommand(store, command, onError, restore) {
+  const res = await command();
+  if (res.ok) return res;
+  onError(formatError(res.error));
+  restore?.();
+  return res;
 }
 
 /**
- * Guarda el título tras la edición inline (Guardar, Enter o blur fuera).
+ * Guarda el título tras la edición inline (Guardar, Enter o blur fuera). La
+ * obligatoriedad la valida el motor (commitTitle): el error vive en el slice
+ * `ficha.titleError`, no en un parche directo al DOM.
  * @param {Element} surface
  * @param {import('../app.js').Store} store
  */
@@ -557,25 +567,19 @@ async function commitTitle(surface, store) {
   if (!game || !store.get().ficha.editTitle) return;
   const input = qs('[data-title-input]', surface);
   const raw = input instanceof HTMLInputElement ? input.value : '';
-  const value = raw.trim();
-  if (!value) {
-    setInlineError(surface, '[data-title-error]', 'El título es obligatorio');
-    return;
-  }
-  patchFicha(store, { editTitle: false });
-  try {
-    await setTitle(game.id, value);
-  } catch (err) {
-    patchFicha(store, { editTitle: true });
-    // El repinto reconstruye el formulario desde el doc: se restaura lo
-    // tecleado para que el fallo no lo borre (comportamiento previo).
-    const fresh = qs('[data-title-input]', surface);
-    if (fresh instanceof HTMLInputElement) {
-      fresh.value = raw;
-      fresh.focus();
+  patchFicha(store, { editTitle: false, titleError: null });
+  await runCommand(
+    store,
+    () => commitTitleCommand(game.id, raw),
+    (message) => patchFicha(store, { editTitle: true, titleError: message }),
+    () => {
+      const fresh = qs('[data-title-input]', surface);
+      if (fresh instanceof HTMLInputElement) {
+        fresh.value = raw;
+        fresh.focus();
+      }
     }
-    throw err;
-  }
+  );
 }
 
 /**
@@ -594,23 +598,23 @@ async function commitField(surface, store) {
       ? control.value
       : '';
   patchFicha(store, { field: null, fieldError: null });
-  try {
-    await setSharedField(
-      game.id,
-      /** @type {'description'|'coverUrl'|'genres'|'platforms'|'screenshots'} */ (name),
-      raw
-    );
-  } catch (err) {
-    patchFicha(store, { field: name, fieldError: formatError(err) });
-    // El repinto reconstruye el formulario desde el doc: se restaura lo
-    // tecleado para que el fallo no lo borre (comportamiento previo).
-    const fresh = qs(`[data-field-form="${name}"] [data-field-input]`, surface);
-    if (fresh instanceof HTMLInputElement || fresh instanceof HTMLTextAreaElement) {
-      fresh.value = raw;
-      fresh.focus();
+  await runCommand(
+    store,
+    () =>
+      commitSharedFieldCommand(
+        game.id,
+        /** @type {'description'|'coverUrl'|'genres'|'platforms'|'screenshots'} */ (name),
+        raw
+      ),
+    (message) => patchFicha(store, { field: name, fieldError: message }),
+    () => {
+      const fresh = qs(`[data-field-form="${name}"] [data-field-input]`, surface);
+      if (fresh instanceof HTMLInputElement || fresh instanceof HTMLTextAreaElement) {
+        fresh.value = raw;
+        fresh.focus();
+      }
     }
-    throw err;
-  }
+  );
 }
 
 /**
@@ -659,7 +663,7 @@ function wire(container, store) {
       return;
     }
     if (pick('[data-edit-title]')) {
-      patchFicha(store, { editTitle: true });
+      patchFicha(store, { editTitle: true, titleError: null });
       const input = qs('[data-title-input]', surface.isConnected ? surface : container);
       if (input instanceof HTMLInputElement) {
         input.focus();
@@ -668,17 +672,17 @@ function wire(container, store) {
       return;
     }
     if (pick('[data-title-cancel]')) {
-      patchFicha(store, { editTitle: false });
+      patchFicha(store, { editTitle: false, titleError: null });
       return;
     }
     if (pick('[data-title-save]')) {
-      void commitTitle(container, store).catch(() => {});
+      void commitTitle(container, store);
       return;
     }
     const tagRemove = pick('[data-tag-remove]');
     if (tagRemove) {
       const tag = tagRemove.getAttribute('data-tag-remove') ?? '';
-      void removeTag(game, tag).catch(() => {});
+      void removeTag(game, tag);
       return;
     }
     const editField = pick('[data-edit-field]');
@@ -693,56 +697,49 @@ function wire(container, store) {
       return;
     }
     if (pick('[data-field-save]')) {
-      void commitField(container, store).catch(() => {});
+      void commitField(container, store);
       return;
     }
     const statusBtn = pick('[data-set-status]');
     if (statusBtn) {
       const status = statusBtn.getAttribute('data-set-status');
-      if (
-        status &&
-        STATUSES.includes(/** @type {import('../domain/schema.js').Status} */ (status))
-      ) {
+      if (status) {
         patchFicha(store, { playError: null });
-        void setStatus(
-          game.id,
-          /** @type {import('../domain/schema.js').Status} */ (status),
-          todayFrom(new Date())
-        ).catch((err) => {
-          patchFicha(store, { playError: formatError(err) });
-        });
+        void runCommand(
+          store,
+          () => setStatus(game.id, /** @type {import('../domain/schema.js').Status} */ (status)),
+          (message) => patchFicha(store, { playError: message })
+        );
       }
       return;
     }
     const heroRate = pick('[data-hero-rate]');
     if (heroRate) {
       const value = Number(heroRate.getAttribute('data-hero-rate'));
-      void ratePlay(game.id, latestPlay(game).id, value).catch(() => {});
+      void rateHero(game.id, value);
       return;
     }
     if (pick('[data-hero-rate-clear]')) {
-      void ratePlay(game.id, latestPlay(game).id, null).catch(() => {});
+      void rateHero(game.id, null);
       return;
     }
     const playRate = pick('[data-play-rate]');
     if (playRate) {
       const playId = playRate.getAttribute('data-play-id') ?? '';
       const value = Number(playRate.getAttribute('data-play-rate'));
-      void ratePlay(game.id, playId, value).catch(() => {});
+      void ratePlay(game.id, playId, value);
       return;
     }
     const playRateClear = pick('[data-play-rate-clear]');
     if (playRateClear) {
-      void ratePlay(game.id, playRateClear.getAttribute('data-play-id') ?? '', null).catch(
-        () => {}
-      );
+      void ratePlay(game.id, playRateClear.getAttribute('data-play-id') ?? '', null);
       return;
     }
     if (pick('[data-add-play]')) {
       patchFicha(store, { playError: null });
-      void addPlay(game.id, todayFrom(new Date())).catch((err) => {
-        patchFicha(store, { playError: formatError(err) });
-      });
+      void runCommand(store, () => addPlay(game.id), (message) =>
+        patchFicha(store, { playError: message })
+      );
       return;
     }
     const delPlay = pick('[data-del-play]');
@@ -756,13 +753,11 @@ function wire(container, store) {
     const delYes = pick('[data-del-play-yes]');
     if (delYes) {
       patchFicha(store, { confirmPlay: null });
-      void deletePlay(game.id, delYes.getAttribute('data-play-id') ?? '')
-        .then(() => {
-          patchFicha(store, { playError: null });
-        })
-        .catch((err) => {
-          patchFicha(store, { playError: formatError(err) });
-        });
+      void runCommand(
+        store,
+        () => deletePlay(game.id, delYes.getAttribute('data-play-id') ?? ''),
+        (message) => patchFicha(store, { playError: message })
+      );
       return;
     }
     if (pick('[data-del-play-no]')) {
@@ -774,16 +769,16 @@ function wire(container, store) {
       return;
     }
     if (pick('[data-del-game-yes]')) {
-      void deleteGame(game.id)
-        .then(() => {
+      void runCommand(store, () => deleteGame(game.id), (message) =>
+        patchFicha(store, { error: message })
+      ).then((res) => {
+        if (res.ok) {
           // La Ficha ya no existe: su entrada de historial se sustituye por
           // la estantería (src/backnav.js); el back del sistema salta al
           // Panel previo, nunca a la Ficha borrada.
           nav.repositionAfterDelete(store);
-        })
-        .catch((err) => {
-          patchFicha(store, { error: formatError(err) });
-        });
+        }
+      });
       return;
     }
     if (pick('[data-del-game-no]')) {
@@ -802,7 +797,7 @@ function wire(container, store) {
       const playId = target.getAttribute('data-play-id') ?? '';
       const value = /** @type {HTMLInputElement} */ (target).value;
       if (kind !== 'startedAt' && kind !== 'finishedAt') return;
-      void setPlayDate(game.id, playId, kind, value).catch(() => {});
+      void setPlayDate(game.id, playId, kind, value);
       return;
     }
     if (target.matches('select[data-play-platform]')) {
@@ -810,7 +805,7 @@ function wire(container, store) {
       const select = /** @type {HTMLSelectElement} */ (target);
       if (select.value === '') {
         patchFicha(store, { customPlatform: null });
-        void setPlayPlatform(game.id, playId, null).catch(() => {});
+        void setPlayPlatform(game.id, playId, null);
         return;
       }
       if (select.value === '__own__') {
@@ -820,18 +815,18 @@ function wire(container, store) {
       const chosen = (game.platforms ?? []).find((o) => String(o.id) === select.value);
       if (chosen) {
         patchFicha(store, { customPlatform: null });
-        void setPlayPlatform(game.id, playId, chosen).catch(() => {});
+        void setPlayPlatform(game.id, playId, chosen);
       }
       return;
     }
     if (target.matches('input[data-platform-name]')) {
-      void commitOwnPlatform(/** @type {HTMLInputElement} */ (target), store).catch(() => {});
+      void commitOwnPlatform(/** @type {HTMLInputElement} */ (target), store);
       return;
     }
     if (target.matches('textarea[data-play-notes]')) {
       const playId = target.getAttribute('data-play-id') ?? '';
       const value = /** @type {HTMLTextAreaElement} */ (target).value;
-      void setPlayNotes(game.id, playId, value).catch(() => {});
+      void setPlayNotes(game.id, playId, value);
     }
   });
 
@@ -843,20 +838,20 @@ function wire(container, store) {
 
     if (target.matches('[data-tag-add]') && e.key === 'Enter') {
       e.preventDefault();
-      void addTag(game, /** @type {HTMLInputElement} */ (target)).catch(() => {});
+      void addTag(game, /** @type {HTMLInputElement} */ (target));
       return;
     }
     if (target.matches('[data-platform-name]') && e.key === 'Enter') {
       e.preventDefault();
-      void commitOwnPlatform(/** @type {HTMLInputElement} */ (target), store).catch(() => {});
+      void commitOwnPlatform(/** @type {HTMLInputElement} */ (target), store);
       return;
     }
     if (target.matches('[data-title-input]')) {
       if (e.key === 'Enter') {
         e.preventDefault();
-        void commitTitle(container, store).catch(() => {});
+        void commitTitle(container, store);
       } else if (e.key === 'Escape') {
-        patchFicha(store, { editTitle: false });
+        patchFicha(store, { editTitle: false, titleError: null });
       }
       return;
     }
@@ -873,6 +868,6 @@ function wire(container, store) {
     const form = target.closest('[data-title-form]');
     const to = e.relatedTarget;
     if (form && to instanceof HTMLElement && form.contains(to)) return;
-    void commitTitle(container, store).catch(() => {});
+    void commitTitle(container, store);
   });
 }
