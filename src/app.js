@@ -5,7 +5,6 @@ import { views } from './views/index.js';
 import * as welcome from './views/welcome.js';
 import { renderFilebar } from './ui/filebar.js';
 import { openDataDialog } from './views/dataDialog.js';
-import { autoRefreshIfNeeded } from './data/novedades.js';
 import { installBackNav } from './backnav.js';
 import { switchTab } from './navigation.js';
 
@@ -109,6 +108,21 @@ import { switchTab } from './navigation.js';
  */
 
 /**
+ * Estado de sesión del tablón Novedades (ticket 23, ADR-0008): la Instantánea
+ * cargada, la carga en vuelo, el refresco en vuelo, el modo degradado y la
+ * guarda de re-entrada del alta local. Slice top-level sembrado por la vista
+ * (src/views/novedades.js) y FUERA del snapshot de historial: restaurar el
+ * historial nunca aplasta la Instantánea viva.
+ * @typedef {{
+ *   snapshot: import('./data/snapshot.js').SavedSnapshot|null,
+ *   loading: boolean,
+ *   refreshing: boolean,
+ *   degraded: 'unconfigured'|'offline'|'service-error'|null,
+ *   adding: boolean,
+ * }} NovedadesUi
+ */
+
+/**
  * Ficha nueva limpia: sin formularios, confirmaciones ni errores pendientes.
  * @param {string|null} gameId
  * @returns {FichaUi}
@@ -128,6 +142,21 @@ export function freshFicha(gameId) {
 }
 
 /**
+ * Tablón Novedades limpio: sin Instantánea, sin cargas ni refrescos en vuelo,
+ * sin modo degradado y sin alta local en curso.
+ * @returns {NovedadesUi}
+ */
+export function freshNovedadesUi() {
+  return {
+    snapshot: null,
+    loading: false,
+    refreshing: false,
+    degraded: null,
+    adding: false,
+  };
+}
+
+/**
  * Estado global de la app. Las vistas son client-side (sin rutas de URL).
  * @typedef {{
  *   tab: string,
@@ -139,6 +168,7 @@ export function freshFicha(gameId) {
  *   library: LibraryState,
  *   stats: StatsState,
  *   novedades: NovedadesState,
+ *   novedadesUi: NovedadesUi,
  *   ficha: FichaUi,
  * }} AppState
  */
@@ -176,6 +206,7 @@ let state = {
   },
   stats: { platform: null, genre: null, tag: null },
   novedades: { section: null, genre: null, detail: null },
+  novedadesUi: freshNovedadesUi(),
   ficha: freshFicha(null),
 };
 
@@ -293,18 +324,13 @@ export function createApp(root) {
     const tab = trigger.getAttribute('data-tab');
     if (!tab || !(tab in views) || isGated()) return;
     e.preventDefault();
-    const previous = store.get().tab;
     // Cambio de pestaña = pestaña raíz: la pila se reinicia y el botón atrás
-    // del móvil no recorre las pantallas previas (ADR-0007). Las dos reglas
+    // del móvil no recorre las pantallas previas (ADR-0007). Las reglas
     // (volver a Biblioteca repone la estantería conservando búsqueda/filtros
-    // — ticket 14; cualquier cambio cierra la Ficha — ticket 17) viven en el
-    // intent (src/navigation.js).
+    // — ticket 14; cualquier cambio cierra la Ficha — ticket 17; el refresco
+    // automático de Novedades al entrar — spec §7.3) viven en el intent
+    // (src/navigation.js).
     switchTab(store, tab);
-    // Entrar en Novedades dispara el refresco automático silencioso
-    // (>12 h y con conexión; ticket 23, spec §7.3), fire-and-forget.
-    if (tab === 'novedades' && previous !== 'novedades') {
-      void autoRefreshIfNeeded().catch(() => {});
-    }
   });
 
   const renderCurrent = () => {

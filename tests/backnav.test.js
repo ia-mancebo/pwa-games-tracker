@@ -6,8 +6,9 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import './support/storage.js';
-import { createApp, store } from '../src/app.js';
+import { createApp, store, freshNovedadesUi } from '../src/app.js';
 import { importDoc, initLibrary } from '../src/data/library.js';
+import { resetNovedadesRefresh } from '../src/data/novedades.js';
 import {
   installBackNav,
   navigate,
@@ -84,6 +85,7 @@ beforeEach(async () => {
   document.body.innerHTML = '';
   resetBackNav();
   resetSheet();
+  resetNovedadesRefresh();
   await rewindToRoot();
   store.set({
     tab: 'biblioteca',
@@ -101,6 +103,7 @@ beforeEach(async () => {
       gameId: null,
     },
     novedades: { section: null, genre: null, detail: null },
+    novedadesUi: freshNovedadesUi(),
   });
   await initLibrary();
   await seed();

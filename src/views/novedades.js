@@ -1,8 +1,10 @@
 /**
  * Tablón Novedades (ticket 23, spec §7.2–§7.3 y §8.6): tira de meses, cuatro
  * baldas 12/12/6/6, drill-down por sección con filtro de género y ficha
- * externa con «➕ Quiero jugarlo» (alta 100 % local). El tablón SIEMPRE se
- * pinta desde la instantánea IDB; las bandas explican el modo degradado.
+ * externa con «➕ Quiero jugarlo» (alta 100 % local). La vista pinta PURAMENTE
+ * del estado: el slice novedadesUi (ADR-0008) es la única fuente del tablón,
+ * la carga, el refresco y el modo degradado; la navegación pasa por los
+ * intents de src/navigation.js.
  */
 import { html, raw, qs } from '../lib/dom.js';
 import { todayFrom } from '../domain/schema.js';
@@ -10,12 +12,17 @@ import { findDuplicates } from '../domain/selectors.js';
 import { mapSourceToAddInput, toCoverGame } from '../domain/gateway.js';
 import { coverHtml } from '../ui/cover.js';
 import { addGame } from '../data/library.js';
-import { getSnapshot } from '../data/snapshot.js';
-import { refreshNovedades } from '../data/novedades.js';
+import { ensureNovedadesContent, refreshNovedades } from '../data/novedades.js';
 import { IGDB_SERVICE_ERROR, igdb } from '../services/igdb.js';
 import { store } from '../app.js';
-import { navigate } from '../backnav.js';
 import { openSheet, SHEET_BODY_SELECTOR } from '../ui/sheet.js';
+import {
+  backToNovedadesBoard,
+  closeNovedadesDetail,
+  openNovedadesDetail,
+  openNovedadesSection,
+  toggleNovedadesGenre,
+} from '../navigation.js';
 
 /** Composición fija del tablón (spec §7.2). @type {{key: SectionKey, label: string}[]} */
 const SECTIONS = [
@@ -31,22 +38,6 @@ const STALE_MS = 7 * 24 * 60 * 60 * 1000;
 /** @typedef {'recientes'|'proximos'|'populares'|'esperados'} SectionKey */
 /** @typedef {import('../data/snapshot.js').SavedSnapshot} SavedSnapshot */
 /** @typedef {import('../services/igdb.js').IgdbGame} IgdbGame */
-
-/**
- * Estado local de la vista: instantánea cargada, refresco en vuelo y último
- * resultado de intento (para la banda del servicio).
- * @type {SavedSnapshot|null}
- */
-let snapshotCache = null;
-
-let snapshotLoaded = false;
-let refreshing = false;
-/** @type {'ok'|'unconfigured'|'offline'|'service-error'|null} */
-let lastStatus = null;
-
-/** Contenedor actual (main) y guard contra cargas obsoletas. @type {Element|null} */
-let hostEl = null;
-let loadSeq = 0;
 
 /* ------------------------------------------------------------------ */
 /* Formato                                                             */
@@ -219,9 +210,10 @@ function unconfiguredEmptyHtml() {
 /**
  * Cabecera: título, sello permanente «Actualizado: …» y botón manual.
  * @param {SavedSnapshot|null} snap
+ * @param {boolean} refreshing
  * @returns {string}
  */
-function headHtml(snap) {
+function headHtml(snap, refreshing) {
   const configured = igdb.isConfigured();
   const stamp = snap ? formatStamp(snap.savedAt) : '—';
   return html`<header class="view-head nov-head">
@@ -251,7 +243,7 @@ function headHtml(snap) {
  * @returns {string}
  */
 function drillDownHtml(sectionKey, genre) {
-  const snap = snapshotCache;
+  const snap = store.get().novedadesUi.snapshot;
   const meta = sectionKey ? SECTIONS.find((s) => s.key === sectionKey) : null;
   if (!snap || !meta || !sectionKey) return '';
   const all = /** @type {IgdbGame[]} */ (snap[sectionKey] ?? []);
@@ -304,14 +296,14 @@ function drillDownHtml(sectionKey, genre) {
 }
 
 /**
- * Cuerpo completo del tablón desde la instantánea.
+ * Cuerpo completo del tablón desde el slice novedadesUi.
  * @returns {string}
  */
 function boardHtml() {
-  const snap = snapshotCache;
+  const { snapshot: snap, loading, refreshing, degraded } = store.get().novedadesUi;
   const nv = store.get().novedades ?? { section: null, genre: null, detail: null };
-  const head = headHtml(snap);
-  if (!snapshotLoaded) {
+  const head = headHtml(snap, refreshing);
+  if (loading) {
     return html`<div class="fade" data-nov-loading><p class="empty">Cargando…</p></div>`;
   }
   if (nv.section && snap) {
@@ -327,7 +319,7 @@ function boardHtml() {
       : bannerHtml({ kind: 'unconfigured' }) + unconfiguredEmptyHtml();
     return out + '</div>';
   }
-  if (lastStatus === 'service-error') out += bannerHtml({ kind: 'service-error' });
+  if (degraded === 'service-error') out += bannerHtml({ kind: 'service-error' });
   else if (!navigator.onLine) out += bannerHtml({ kind: 'offline' });
   else if (isStale(snap)) out += bannerHtml({ kind: 'stale' });
   else if (!igdb.isConfigured()) out += bannerHtml({ kind: 'unconfigured' });
@@ -348,8 +340,6 @@ let sheet = null;
 /** Referencia «sección:índice» pintada en la hoja abierta. @type {string|null} */
 let paintedRef = null;
 
-let adding = false;
-
 /**
  * Referencia «sección:índice» de la Ficha abierta según el estado. La Ficha
  * ya NO es una pantalla (Q12): sin entrada de historial; el botón atrás del
@@ -365,17 +355,6 @@ export function closeDetail() {
   sheet?.close();
   sheet = null;
   paintedRef = null;
-}
-
-/**
- * Cierre con gesto (✕, fondo, Escape, botón atrás): aplica el cambio al
- * instante; el historial lo gestiona el módulo de hojas (sin entrada propia).
- */
-function requestCloseDetail() {
-  const nv = store.get().novedades ?? { section: null, genre: null, detail: null };
-  store.set({
-    novedades: { section: nv.section ?? null, genre: nv.genre ?? null, detail: null },
-  });
 }
 
 /** Sincroniza la hoja de la Ficha con el estado: la abre, la cierra o nada. */
@@ -400,14 +379,14 @@ function openDetailLayer(ref) {
     title: 'Ficha',
     closeAttr: 'data-close-detail',
     backdropAttr: 'data-close-detail',
-    onClose: requestCloseDetail,
+    onClose: () => closeNovedadesDetail(store),
     content: '',
   });
   sheet = handle;
   handle.layer.addEventListener('click', (e) => {
     if (!(e.target instanceof HTMLElement)) return;
     if (e.target.closest('[data-want-play]')) {
-      const snap = snapshotCache;
+      const snap = store.get().novedadesUi.snapshot;
       const parts = (currentDetailRef() ?? '').split(':');
       const game = snap
         ? /** @type {IgdbGame[]} */ (snap[/** @type {SectionKey} */ (parts[0])] ?? [])[
@@ -448,7 +427,7 @@ function releaseTextHtml(game) {
 /** Repinta solo el cuerpo de la hoja abierta (el botón cambia tras añadir). */
 function paintDetail() {
   const sheetEl = sheet?.layer ?? null;
-  const snap = snapshotCache;
+  const snap = store.get().novedadesUi.snapshot;
   const ref = currentDetailRef();
   const body = sheetEl ? qs(SHEET_BODY_SELECTOR, sheetEl) : null;
   if (!body || !ref || !snap) return;
@@ -458,7 +437,7 @@ function paintDetail() {
   ];
   if (!game) {
     // La instantánea ya no contiene la referencia: cerrar de verdad.
-    requestCloseDetail();
+    closeNovedadesDetail(store);
     return;
   }
   const inLibrary = isInLibrary(game);
@@ -513,16 +492,17 @@ function paintDetail() {
 
 /**
  * Alta local como Quiero jugar conservando los datos compartidos; luego el
- * botón voltea solo (findDuplicates pasa a coincidir).
+ * botón voltea solo (findDuplicates pasa a coincidir). La guarda de
+ * re-entrada vive en el slice (novedadesUi.adding).
  * @param {IgdbGame} game
  */
 async function wantToPlay(game) {
-  if (adding) return;
-  adding = true;
+  if (store.get().novedadesUi.adding) return;
+  store.set({ novedadesUi: { ...store.get().novedadesUi, adding: true } });
   try {
     await addGame(mapSourceToAddInput(game, { status: 'backlog', today: todayFrom(new Date()) }));
   } finally {
-    adding = false;
+    store.set({ novedadesUi: { ...store.get().novedadesUi, adding: false } });
   }
   paintDetail();
 }
@@ -531,38 +511,16 @@ async function wantToPlay(game) {
 /* Render y eventos                                                    */
 /* ------------------------------------------------------------------ */
 
-/** Refresco manual o Reintentar: repinta al terminar con el nuevo estado. */
+/** Refresco manual o Reintentar: el módulo de datos escribe el slice. */
 async function runRefresh() {
-  if (refreshing) return;
-  refreshing = true;
-  repaint();
-  lastStatus = (await refreshNovedades()).status;
-  refreshing = false;
-  await reloadSnapshot();
-}
-
-/** Recarga la instantánea desde IDB y repinta si el host sigue vivo. */
-async function reloadSnapshot() {
-  const seq = ++loadSeq;
-  const snap = await getSnapshot();
-  if (seq !== loadSeq) return;
-  snapshotCache = snap;
-  snapshotLoaded = true;
-  repaint();
-}
-
-function repaint() {
-  // Solo si el tablón sigue siendo la superficie viva del main: un repinto
-  // tardío (refresco asíncrono) no debe aplastar otra pestaña ya renderizada.
-  const surface = hostEl?.firstElementChild ?? null;
-  if (hostEl && hostEl.isConnected && surface?.matches('[data-nov],[data-nov-loading]')) {
-    paintSync(hostEl);
-  }
+  if (store.get().novedadesUi.refreshing) return;
+  await refreshNovedades();
 }
 
 /**
  * Pinta síncronamente y cablea la superficie recién creada (los listeners
- * mueren con cada re-render, igual que en Biblioteca).
+ * mueren con cada re-render, igual que en Biblioteca). Toda la navegación
+ * pasa por los intents de src/navigation.js.
  * @param {Element} container
  */
 function paintSync(container) {
@@ -580,77 +538,36 @@ function paintSync(container) {
       return;
     }
     if (target.hasAttribute('data-nback')) {
-      // Cierra el drill-down al instante y consume su entrada de historial
-      // (src/backnav.js): el botón atrás del sistema no la repite.
-      navigate(store, 'back', { novedades: { section: null, genre: null, detail: null } });
+      backToNovedadesBoard(store);
       return;
     }
     if (target.hasAttribute('data-nsection')) {
-      // Sección nueva: pantalla propia para el botón atrás del móvil.
-      navigate(store, 'push', {
-        novedades: {
-          section: target.getAttribute('data-nsection'),
-          genre: null,
-          detail: null,
-        },
-      });
+      openNovedadesSection(store, target.getAttribute('data-nsection') ?? '');
       return;
     }
     if (target.hasAttribute('data-ngenre')) {
-      const value = target.getAttribute('data-ngenre');
-      const current = store.get().novedades ?? { section: null, genre: null, detail: null };
-      store.set({
-        novedades: {
-          section: current.section ?? null,
-          genre: current.genre === value ? null : value,
-          detail: current.detail ?? null,
-        },
-      });
+      toggleNovedadesGenre(store, target.getAttribute('data-ngenre') ?? '');
       return;
     }
     const detailRef = target.getAttribute('data-ndetail');
-    if (detailRef && snapshotCache) {
-      // La Ficha ya NO es una pantalla (Q12): sin entrada de historial. El
-      // botón atrás del móvil la cierra vía el módulo de hojas, que re-empuja
-      // la instantánea al consumir la pulsación (src/backnav.js).
-      const nv = store.get().novedades ?? { section: null, genre: null, detail: null };
-      store.set({
-        novedades: {
-          section: nv.section ?? null,
-          genre: nv.genre ?? null,
-          detail: detailRef,
-        },
-      });
-      syncDetail();
+    if (detailRef && store.get().novedadesUi.snapshot) {
+      openNovedadesDetail(store, detailRef);
     }
   });
 }
 
 /**
- * Vista Novedades: pinta siempre desde la instantánea IDB (nunca desde red).
- * Contenedores fuera del documento se ignoran: el render es estado de la
- * vista activa y un main desconectado no debe tocar nada. La capa de la
- * Ficha se sincroniza con el estado aquí: un popstate que restaure una
- * instantánea sin ficha la cierra; una con ficha la reabre (src/backnav.js).
+ * Vista Novedades: pinta puramente del estado (slice novedadesUi, ADR-0008).
+ * El render solo pinta la pestaña viva: un repinto tardío no puede aplastar
+ * otra pestaña porque el render de la app solo invoca la vista activa. La
+ * carga de la Instantánea es idempotente (ensureNovedadesContent); la capa de
+ * la Ficha se sincroniza con el estado aquí (syncDetail, guard paintedRef).
  * @param {Element} container
  * @param {import('../app.js').Store} _store
  */
 export function render(container, _store) {
   if (!container.isConnected) return;
-  hostEl = container;
+  void ensureNovedadesContent().catch(() => {});
   paintSync(container);
   syncDetail();
-  void reloadSnapshot().catch(() => {});
-}
-
-/** Reinicia todo lo activado por la vista (aislación en pruebas). */
-export function resetNovedadesView() {
-  closeDetail();
-  loadSeq++;
-  hostEl = null;
-  snapshotCache = null;
-  snapshotLoaded = false;
-  refreshing = false;
-  lastStatus = null;
-  adding = false;
 }

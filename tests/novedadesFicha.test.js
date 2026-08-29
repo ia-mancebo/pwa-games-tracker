@@ -8,8 +8,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import './support/storage.js';
 import { saveSnapshot } from '../src/data/snapshot.js';
 import { newLibrary } from '../src/data/library.js';
-import { store } from '../src/app.js';
-import { render as renderView, resetNovedadesView } from '../src/views/novedades.js';
+import { resetNovedadesRefresh } from '../src/data/novedades.js';
+import { store, freshNovedadesUi } from '../src/app.js';
+import { render as renderView } from '../src/views/novedades.js';
 import { qs, qsa } from '../src/lib/dom.js';
 
 /** @param {string} title @param {number} igdbId */
@@ -44,6 +45,15 @@ function clickable(el) {
 
 beforeEach(async () => {
   document.body.innerHTML = '';
+  resetNovedadesRefresh();
+  store.set({
+    tab: 'biblioteca',
+    doc: null,
+    meta: { dirty: false, updatedAt: null, lastSavedFileHash: null, connectedFileName: null },
+    ready: false,
+    novedades: { section: null, genre: null, detail: null },
+    novedadesUi: freshNovedadesUi(),
+  });
   await newLibrary(new Date());
   root = /** @type {HTMLElement} */ (document.createElement('main'));
   document.body.appendChild(root);
@@ -52,6 +62,10 @@ beforeEach(async () => {
 describe('ficha externa de Novedades', () => {
   it('pinta Géneros y Plataformas como elementos, no como texto escapado', async () => {
     await saveSnapshot(SNAPSHOT);
+    // Suscripción mínima: sin la app completa, este test replica que cada
+    // cambio de store repinta la vista activa (la hoja la abre syncDetail
+    // invocado por el render).
+    const unsubscribe = store.subscribe(() => renderView(root, store));
     renderView(root, store);
     await vi.waitFor(() => expect(qs('[data-nov]', root)).toBeTruthy());
 
@@ -75,7 +89,7 @@ describe('ficha externa de Novedades', () => {
     expect(layer.querySelector('.d-desc')?.textContent).toBe(
       'Descripción de prueba <sin etiquetas>'
     );
-    resetNovedadesView();
+    unsubscribe();
   });
 
   it('abre la ficha también desde el drill-down por sección', async () => {
@@ -91,6 +105,5 @@ describe('ficha externa de Novedades', () => {
     clickable(rows()[0]).click();
     await vi.waitFor(() => expect(qs('.add-layer', document.body)).toBeTruthy());
     unsubscribe();
-    resetNovedadesView();
   });
 });

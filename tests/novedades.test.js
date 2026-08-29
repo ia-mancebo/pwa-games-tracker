@@ -9,9 +9,9 @@ import {
 import { getSnapshot, saveSnapshot } from '../src/data/snapshot.js';
 import { seedWorkerUrl } from './support/connection.js';
 import { COVERS_CACHE } from '../src/data/covers.js';
-import { store } from '../src/app.js';
+import { store, freshNovedadesUi } from '../src/app.js';
 import { initLibrary, newLibrary, importDoc } from '../src/data/library.js';
-import { render as renderView, resetNovedadesView } from '../src/views/novedades.js';
+import { render as renderView } from '../src/views/novedades.js';
 import { qs, qsa } from '../src/lib/dom.js';
 
 const WORKER_URL = 'https://gt-proxy.example.workers.dev';
@@ -198,7 +198,6 @@ beforeEach(async () => {
   document.body.innerHTML = '';
   stores.clear();
   resetNovedadesRefresh();
-  resetNovedadesView();
   retryCleanup?.();
   retryCleanup = null;
   setOnline(true);
@@ -219,6 +218,7 @@ beforeEach(async () => {
     meta: { dirty: false, updatedAt: null, lastSavedFileHash: null, connectedFileName: null },
     ready: false,
     novedades: { section: null, genre: null, detail: null },
+    novedadesUi: freshNovedadesUi(),
   });
   await initLibrary();
   await newLibrary(NOW);
@@ -227,7 +227,6 @@ beforeEach(async () => {
 afterEach(() => {
   retryCleanup?.();
   retryCleanup = null;
-  resetNovedadesView();
   vi.unstubAllGlobals();
   setOnline(true);
 });

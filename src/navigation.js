@@ -13,6 +13,7 @@
  */
 import { navigate } from './backnav.js';
 import { freshFicha } from './app.js';
+import { autoRefreshIfNeeded } from './data/novedades.js';
 
 /**
  * Cambia de pestaña. Las pestañas del raíl son pestañas raíz: cambiar de
@@ -27,6 +28,7 @@ import { freshFicha } from './app.js';
  * @param {string} tab
  */
 export function switchTab(store, tab) {
+  const previous = store.get().tab;
   const library = store.get().library;
   if (tab === 'biblioteca') {
     navigate(store, 'reset', {
@@ -36,6 +38,85 @@ export function switchTab(store, tab) {
     return;
   }
   navigate(store, 'reset', { tab, library: { ...library, gameId: null } });
+  // Entrar en Novedades dispara el refresco automático silencioso (>12 h y
+  // con conexión; spec §7.3), fire-and-forget.
+  if (tab === 'novedades' && previous !== 'novedades') {
+    void autoRefreshIfNeeded().catch(() => {});
+  }
+}
+
+/**
+ * Abre una sección del tablón Novedades (drill-down). Pantalla nueva: empuja
+ * entrada de historial (botón atrás del móvil).
+ * @param {import('./app.js').Store} store
+ * @param {string} section
+ */
+export function openNovedadesSection(store, section) {
+  navigate(store, 'push', {
+    novedades: { section, genre: null, detail: null },
+  });
+}
+
+/**
+ * Vuelve del drill-down al tablón. Consume la entrada de historial de la
+ * sección para que el botón atrás del sistema no la repita.
+ * @param {import('./app.js').Store} store
+ */
+export function backToNovedadesBoard(store) {
+  navigate(store, 'back', {
+    novedades: { section: null, genre: null, detail: null },
+  });
+}
+
+/**
+ * Filtro de género del drill-down: sin entrada de historial (como los filtros
+ * de Biblioteca).
+ * @param {import('./app.js').Store} store
+ * @param {string} genre
+ */
+export function toggleNovedadesGenre(store, genre) {
+  const nv = store.get().novedades;
+  store.set({
+    novedades: {
+      section: nv.section ?? null,
+      genre: nv.genre === genre ? null : genre,
+      detail: nv.detail ?? null,
+    },
+  });
+}
+
+/**
+ * Abre la Ficha externa de un juego del tablón. La Ficha NO es una pantalla
+ * (Q12): sin entrada de historial; el botón atrás del móvil la cierra vía el
+ * módulo de hojas (src/backnav.js + src/ui/sheet.js).
+ * @param {import('./app.js').Store} store
+ * @param {string} detailRef referencia «sección:índice»
+ */
+export function openNovedadesDetail(store, detailRef) {
+  const nv = store.get().novedades;
+  store.set({
+    novedades: {
+      section: nv.section ?? null,
+      genre: nv.genre ?? null,
+      detail: detailRef,
+    },
+  });
+}
+
+/**
+ * Cierra la Ficha externa de Novedades (✕, fondo, Escape, botón atrás): sin
+ * entrada de historial propia.
+ * @param {import('./app.js').Store} store
+ */
+export function closeNovedadesDetail(store) {
+  const nv = store.get().novedades;
+  store.set({
+    novedades: {
+      section: nv.section ?? null,
+      genre: nv.genre ?? null,
+      detail: null,
+    },
+  });
 }
 
 /**

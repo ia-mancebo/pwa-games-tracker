@@ -4,6 +4,7 @@
  * carátulas en covers-v1 y los refrescos automáticos silenciosos (al abrir la
  * pestaña con >12 h, y reintento cuando vuelve la red tras un fallo).
  */
+import { store } from '../app.js';
 import { igdb } from '../services/igdb.js';
 import { getSnapshot, saveSnapshot } from './snapshot.js';
 import { seedCovers } from './covers.js';
@@ -18,6 +19,9 @@ const REFRESH_AGE_MS = 12 * 60 * 60 * 1000;
 
 /** El último intento terminó mal (offline/servicio): alimenta el reintento. */
 let lastAttemptFailed = false;
+
+/** La Instantánea ya se cargó al slice: ensureNovedadesContent es idempotente. */
+let contentLoaded = false;
 
 /**
  * URLs de carátula presentes en la instantánea (para covers-v1).
@@ -36,29 +40,45 @@ function collectCoverUrls(data) {
 
 /**
  * Descarga el tablón y guarda la instantánea atómica + carátulas. Nunca
- * lanza: el resultado tipado alimenta la banda de modo degradado.
+ * lanza: el resultado tipado alimenta la banda de modo degradado. Escribe el
+ * ciclo en el slice novedadesUi: refreshing en vuelo, degraded al terminar
+ * (null si triunfa) y la Instantánea nueva en el slice.
  * @returns {Promise<{ status: RefreshStatus }>}
  */
 export async function refreshNovedades() {
+  store.set({ novedadesUi: { ...store.get().novedadesUi, refreshing: true } });
+  /** @type {RefreshStatus} */
+  let status;
+  /** @type {import('./snapshot.js').SavedSnapshot|null} */
+  let record = null;
   if (!igdb.isConfigured()) {
     lastAttemptFailed = false;
-    return { status: 'unconfigured' };
-  }
-  if (!navigator.onLine) {
+    status = 'unconfigured';
+  } else if (!navigator.onLine) {
     lastAttemptFailed = true;
-    return { status: 'offline' };
+    status = 'offline';
+  } else {
+    try {
+      const data = await igdb.fetchNovedades();
+      record = await saveSnapshot(data);
+      // Siembra fire-and-forget: nunca bloquea ni decide el estado del refresco.
+      void seedCovers(collectCoverUrls(data));
+      lastAttemptFailed = false;
+      status = 'ok';
+    } catch {
+      lastAttemptFailed = true;
+      status = 'service-error';
+    }
   }
-  try {
-    const data = await igdb.fetchNovedades();
-    await saveSnapshot(data);
-    // Siembra fire-and-forget: nunca bloquea ni decide el estado del refresco.
-    void seedCovers(collectCoverUrls(data));
-    lastAttemptFailed = false;
-    return { status: 'ok' };
-  } catch {
-    lastAttemptFailed = true;
-    return { status: 'service-error' };
-  }
+  store.set({
+    novedadesUi: {
+      ...store.get().novedadesUi,
+      refreshing: false,
+      degraded: status === 'ok' ? null : status,
+      ...(record ? { snapshot: record } : {}),
+    },
+  });
+  return { status };
 }
 
 /**
@@ -77,6 +97,25 @@ export async function autoRefreshIfNeeded() {
 }
 
 /**
+ * Carga la Instantánea desde IDB al slice novedadesUi (idempotente, guarda
+ * interna del módulo): siembra loading, escribe el snapshot y apaga loading.
+ * La vista la llama desde su render; el refresco escribe la Instantánea
+ * nueva directamente en el slice.
+ * @returns {Promise<void>}
+ */
+export async function ensureNovedadesContent() {
+  if (contentLoaded) return;
+  contentLoaded = true;
+  store.set({ novedadesUi: { ...store.get().novedadesUi, loading: true } });
+  try {
+    const snap = await getSnapshot();
+    store.set({ novedadesUi: { ...store.get().novedadesUi, snapshot: snap } });
+  } finally {
+    store.set({ novedadesUi: { ...store.get().novedadesUi, loading: false } });
+  }
+}
+
+/**
  * Reintento silencioso cuando vuelve la red tras un intento fallido
  * (spec §7.3). Devuelve la función de limpieza para pruebas.
  * @returns {() => void}
@@ -90,7 +129,8 @@ export function initNovedadesRetry() {
   return () => window.removeEventListener('online', onOnline);
 }
 
-/** Reinicia el estado interno del refresco (aislación en pruebas). */
+/** Reinicia el estado interno del refresco y la carga (aislación en pruebas). */
 export function resetNovedadesRefresh() {
   lastAttemptFailed = false;
+  contentLoaded = false;
 }
