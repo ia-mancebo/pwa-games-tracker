@@ -76,4 +76,13 @@ export default [
       },
     },
   },
+  // Scripts de Node (harness de layout/overflow): corren fuera del navegador.
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+      },
+    },
+  },
 ];

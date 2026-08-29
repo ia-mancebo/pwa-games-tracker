@@ -590,16 +590,26 @@ function onStoreChange() {
 }
 
 function onVisibilityChange() {
-  if (document.visibilityState !== 'hidden') return;
+  if (document.visibilityState === 'hidden') {
+    const { meta, file } = store.get();
+    if (meta.dirty && file.status === 'connected') void saveNow();
+    return;
+  }
+  // Al volver visible: un vuelco oculto congelado (Chrome Android) puede haber
+  // dejado `saving` colgado para siempre; se libera para no bloquear la sesión
+  // y se retoma el vuelco pendiente sin esperar al debounce.
+  saving = false;
   const { meta, file } = store.get();
-  if (meta.dirty && file.status === 'connected') void saveNow();
+  if (meta.dirty && file.status === 'connected' && !pendingConflict()) void saveNow();
 }
 
-function onFocus() {
-  void checkExternalChange();
+async function onFocus() {
+  await checkExternalChange();
+  const { meta, file } = store.get();
+  if (meta.dirty && file.status === 'connected' && !pendingConflict()) void saveNow();
 }
 
-/** Activa autoguardado, chequeo al ocultar la pestaña y chequeo al recuperar foco. */
+/** Activa autoguardado, chequeo al ocultar la pestaña, retoma al volver visible y chequeo al recuperar foco. */
 export function startAutosave() {
   if (started) return;
   started = true;

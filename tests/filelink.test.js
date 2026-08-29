@@ -502,6 +502,57 @@ describe('autoguardado (§5.4)', () => {
     expect(store.get().meta.dirty).toBe(false);
   });
 
+  it('vuelve a volcar al recuperar visibilidad tras un vuelco oculto congelado (Android)', async () => {
+    const handle = makeHandle(FILE_V1_TEXT);
+    await connectFile(FILE_V1_TEXT, handle);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    startAutosave();
+
+    // Camino sano: el debounce de 15 s vuelca sin intervención.
+    await addGame({ title: 'Hades II', today: TODAY });
+    vi.advanceTimersByTime(15000);
+    await settle();
+    expect(handle.writes).toBe(1);
+    expect(store.get().meta.dirty).toBe(false);
+    // El archivo en disco refleja el último vuelco (hash base coherente).
+    handle.setText(JSON.stringify(store.get().doc));
+
+    // Escenario rojo: mutar, ocultar la pestaña y congelar el vuelco oculto.
+    await addGame({ title: 'Hades III', today: TODAY });
+    expect(store.get().meta.dirty).toBe(true);
+
+    // El handle se congela: getFile nunca resuelve (página congelada por
+    // Chrome Android a mitad del vuelco oculto).
+    const frozen = new Promise(() => {});
+    const originalGetFile = handle.getFile.bind(handle);
+    handle.getFile = () => frozen;
+
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    try {
+      document.dispatchEvent(new Event('visibilitychange'));
+    } finally {
+      delete /** @type {any} */ (document).visibilityState;
+    }
+    // Deja que el vuelco oculto llegue al getFile congelado (sha256Hex es
+    // async): el saveNow queda colgado con saving=true. NO avanzamos el debounce.
+    await settle();
+
+    // Restaura el handle y vuelve a visible + foco.
+    handle.getFile = originalGetFile;
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    try {
+      document.dispatchEvent(new Event('visibilitychange'));
+    } finally {
+      delete /** @type {any} */ (document).visibilityState;
+    }
+    window.dispatchEvent(new Event('focus'));
+    await settle();
+
+    // Sin intervención humana, el archivo debe volcarse.
+    expect(handle.writes).toBe(2);
+    expect(store.get().meta.dirty).toBe(false);
+  });
+
   it('sin archivo conectado no agenda ningún vuelco', async () => {
     const handle = makeHandle(FILE_V1_TEXT);
     await connectFile(FILE_V1_TEXT, handle);
@@ -623,6 +674,18 @@ describe('pastilla de archivo (chrome de la app)', () => {
 
     expect(store.get().file.status).toBe('connected');
     expect(qs('.filebar', root)?.textContent).toContain('Archivo: game-tracker.json');
+  });
+
+  it('error con mensaje largo: la pastilla conserva la clase del guard de wrapping', async () => {
+    grantFsa();
+    const LONG_ERROR =
+      'SecurityError: The operation is insecure. No se pudo escribir el archivo en el sistema de archivos.';
+    store.set({ file: { status: 'error', name: null, error: LONG_ERROR, conflict: null } });
+
+    const root = mountApp();
+    const pill = qs('.filebar .pill-btn', root);
+    expect(pill?.textContent).toBe(LONG_ERROR);
+    expect(qs('[data-retry]', root)).toBeTruthy();
   });
 
   it('sin FSA informa del guardado automático local, sin botones de enlace', async () => {

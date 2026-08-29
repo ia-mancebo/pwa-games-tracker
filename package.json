@@ -11,6 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:layout": "node scripts/check-layout.mjs",
+    "test:layout:mobile": "node scripts/check-layout-mobile.mjs",
+    "test:overflow:mobile": "node scripts/check-overflow-mobile.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",

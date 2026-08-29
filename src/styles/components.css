@@ -1661,11 +1661,18 @@ button.plate:hover {
 .filebar .pill,
 .filebar .pill-btn {
   padding: 6px 14px;
+  white-space: normal;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .file-name {
   font-size: 0.82rem;
   color: var(--muted);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .file-dirty {
@@ -1852,6 +1859,7 @@ button.pill-btn:hover {
 
 .ro-banner-text {
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .readonly-tab .fab {
