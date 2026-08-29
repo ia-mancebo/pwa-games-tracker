@@ -11,6 +11,7 @@ import { newLibrary } from '../src/data/library.js';
 import { resetNovedadesRefresh } from '../src/data/novedades.js';
 import { store, freshNovedadesUi } from '../src/app.js';
 import { render as renderView } from '../src/views/novedades.js';
+import { closeLightbox } from '../src/ui/lightbox.js';
 import { qs, qsa } from '../src/lib/dom.js';
 
 /** @param {string} title @param {number} igdbId */
@@ -104,6 +105,66 @@ describe('ficha externa de Novedades', () => {
     await vi.waitFor(() => expect(rows().length).toBeGreaterThan(0));
     clickable(rows()[0]).click();
     await vi.waitFor(() => expect(qs('.add-layer', document.body)).toBeTruthy());
+    unsubscribe();
+  });
+
+  it('pinta la galería del snapshot y el clic abre el visor; el wiring sobrevive al repintado', async () => {
+    const SHOTS = [
+      'https://images.igdb.com/igdb/image/upload/t_screenshot_big/sc1.jpg',
+      'https://images.igdb.com/igdb/image/upload/t_screenshot_big/sc2.jpg',
+    ];
+    await saveSnapshot({
+      ...SNAPSHOT,
+      recientes: [{ ...SNAPSHOT.recientes[0], screenshots: SHOTS }],
+    });
+    const unsubscribe = store.subscribe(() => renderView(root, store));
+    renderView(root, store);
+    await vi.waitFor(() => expect(qs('[data-nov]', root)).toBeTruthy());
+
+    clickable(qs('[data-ndetail="recientes:0"]', root)).click();
+    const layer = /** @type {HTMLElement} */ (
+      await vi.waitFor(() => {
+        const found = qs('.add-layer', document.body);
+        if (!found) throw new Error('ficha no abierta');
+        return found;
+      })
+    );
+    const shots = qsa('button.d-shot[data-shot]', layer);
+    expect(shots).toHaveLength(2);
+    expect(shots[0]?.querySelector('img')?.getAttribute('src')).toBe(SHOTS[0]);
+
+    clickable(shots[0]).click();
+    expect(qs('.lightbox img', document.body)?.getAttribute('src')).toBe(SHOTS[0]);
+    closeLightbox();
+
+    // El repintado del cuerpo (tras «Quiero jugarlo») no rompe el wiring:
+    // la delegación vive en la capa, no en el cuerpo repintado.
+    clickable(qs('[data-want-play]', layer)).click();
+    await vi.waitFor(() => expect(qs('[data-want-play]', layer)).toBeNull());
+    const freshShots = qsa('button.d-shot[data-shot]', layer);
+    expect(freshShots).toHaveLength(2);
+    clickable(freshShots[1]).click();
+    expect(qs('.lightbox img', document.body)?.getAttribute('src')).toBe(SHOTS[1]);
+    closeLightbox();
+    unsubscribe();
+  });
+
+  it('sin capturas no pinta la sección de galería', async () => {
+    await saveSnapshot(SNAPSHOT);
+    const unsubscribe = store.subscribe(() => renderView(root, store));
+    renderView(root, store);
+    await vi.waitFor(() => expect(qs('[data-nov]', root)).toBeTruthy());
+
+    clickable(qs('[data-ndetail="recientes:0"]', root)).click();
+    const layer = /** @type {HTMLElement} */ (
+      await vi.waitFor(() => {
+        const found = qs('.add-layer', document.body);
+        if (!found) throw new Error('ficha no abierta');
+        return found;
+      })
+    );
+    expect(qs('[data-sec="gallery"]', layer)).toBeNull();
+    expect(layer.textContent).not.toContain('Galería');
     unsubscribe();
   });
 });

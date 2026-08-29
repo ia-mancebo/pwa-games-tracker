@@ -26,7 +26,7 @@ import {
 import { coverHtml } from '../ui/cover.js';
 import { statusPillHtml } from '../ui/pill.js';
 import { addTag, removeTag, tagEditorHtml } from '../ui/tags.js';
-import { openLightbox } from '../ui/lightbox.js';
+import { galleryHtml, wireGallery } from '../ui/gallery.js';
 import * as nav from '../navigation.js';
 import { freshFicha } from '../app.js';
 
@@ -391,26 +391,6 @@ ${play.notes ?? ''}</textarea>
   </article>`;
 }
 
-/**
- * Galería de capturas: scroll horizontal, imágenes siempre online; el clic
- * abre el visor a pantalla completa ({@link openLightbox}).
- * @param {string[]} shots
- * @returns {string}
- */
-function galleryHtml(shots) {
-  return html`<section class="d-sec" data-sec="gallery">
-    <h3>Galería</h3>
-    <div class="d-gallery">
-      ${shots.map(
-        (url) =>
-          html`<button type="button" class="d-shot" data-shot="${url}" aria-label="Ampliar captura">
-            <img loading="lazy" src="${url}" alt="" />
-          </button>`
-      )}
-    </div>
-  </section>`;
-}
-
 /* ------------------------------------------------------------------ */
 /* Marcado completo de la Ficha                                         */
 /* ------------------------------------------------------------------ */
@@ -429,7 +409,6 @@ function fichaHtml(game, ficha) {
     'platforms',
     'screenshots',
   ]);
-  const shots = game.screenshots ?? [];
   return html`<div class="fade ficha">
     <div class="toolbar">
       <button type="button" class="chip" data-back-ficha>← Volver</button>
@@ -458,7 +437,7 @@ function fichaHtml(game, ficha) {
         )}
       </div>
     </section>
-    ${shots.length > 0 ? galleryHtml(shots) : ''}
+    ${galleryHtml(game.screenshots ?? [])}
     <section class="d-sec" data-sec="plays">
       <h3>Jugadas (${game.plays.length})</h3>
       ${
@@ -639,6 +618,7 @@ async function commitOwnPlatform(input, store) {
 function wire(container, store) {
   const surface = container.firstElementChild;
   if (!(surface instanceof HTMLElement)) return;
+  wireGallery(surface);
 
   surface.addEventListener('click', (e) => {
     if (!(e.target instanceof HTMLElement)) return;
@@ -654,12 +634,6 @@ function wire(container, store) {
       // Aplica el cierre al instante y consume la entrada de historial de la
       // Ficha (src/backnav.js): el botón atrás del sistema no la repite.
       nav.closeGame(store);
-      return;
-    }
-    const shot = pick('[data-shot]');
-    if (shot) {
-      const url = shot.getAttribute('data-shot');
-      if (url) openLightbox(url);
       return;
     }
     if (pick('[data-edit-title]')) {

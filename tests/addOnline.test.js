@@ -3,6 +3,7 @@ import './support/storage.js';
 import { createApp, store } from '../src/app.js';
 import { importDoc, initLibrary, newLibrary } from '../src/data/library.js';
 import { openAddSheet } from '../src/views/addSheet.js';
+import { closeLightbox } from '../src/ui/lightbox.js';
 import { seedWorkerUrl } from './support/connection.js';
 import { todayFrom } from '../src/domain/schema.js';
 import { qs, qsa } from '../src/lib/dom.js';
@@ -236,6 +237,50 @@ describe('camino online activo (servicio configurado + conexión)', () => {
     await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1));
     expect(qs('.add-preview', sheet)).toBeNull();
     expect(store.get().doc?.games).toHaveLength(0);
+  });
+
+  it('la previsualización muestra la galería del resultado y el clic abre el visor', async () => {
+    stubFetch();
+    await newLibrary(NOW);
+    seedWorkerUrl(WORKER_URL);
+    const root = mount();
+    createApp(root);
+
+    const sheet = openSheet();
+    typeQuery(sheet, 'celeste');
+    await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 5000 });
+    btn(qs('[data-result]', sheet)).click();
+
+    const preview = await vi.waitFor(() => need(qs('.add-preview', sheet)));
+    const shots = qsa('button.d-shot[data-shot]', preview);
+    expect(shots).toHaveLength(SEARCH_RESULT.screenshots.length);
+    expect(shots[0]?.querySelector('img')?.getAttribute('src')).toBe(
+      SEARCH_RESULT.screenshots[0]
+    );
+
+    btn(shots[0]).click();
+    expect(need(qs('.lightbox img', document.body)).getAttribute('src')).toBe(
+      SEARCH_RESULT.screenshots[0]
+    );
+    closeLightbox();
+    expect(store.get().doc?.games).toHaveLength(0);
+  });
+
+  it('sin capturas la previsualización no pinta la sección de galería', async () => {
+    stubFetch([{ ...SEARCH_RESULT, screenshots: [] }]);
+    await newLibrary(NOW);
+    seedWorkerUrl(WORKER_URL);
+    const root = mount();
+    createApp(root);
+
+    const sheet = openSheet();
+    typeQuery(sheet, 'celeste');
+    await vi.waitFor(() => expect(qsa('[data-result]', sheet)).toHaveLength(1), { timeout: 5000 });
+    btn(qs('[data-result]', sheet)).click();
+
+    const preview = await vi.waitFor(() => need(qs('.add-preview', sheet)));
+    expect(qs('[data-sec="gallery"]', preview)).toBeNull();
+    expect(preview.textContent).not.toContain('Galería');
   });
 
   it('elegir un resultado y confirmar crea el juego con datos IGDB y primera jugada Quiero jugar', async () => {

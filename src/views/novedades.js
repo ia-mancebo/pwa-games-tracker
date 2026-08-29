@@ -11,6 +11,7 @@ import { todayFrom } from '../domain/schema.js';
 import { findDuplicates } from '../domain/selectors.js';
 import { mapSourceToAddInput, toCoverGame } from '../domain/gateway.js';
 import { coverHtml } from '../ui/cover.js';
+import { galleryHtml, wireGallery } from '../ui/gallery.js';
 import { addGame } from '../data/library.js';
 import { ensureNovedadesContent, refreshNovedades } from '../data/novedades.js';
 import { IGDB_SERVICE_ERROR, igdb } from '../services/igdb.js';
@@ -383,6 +384,7 @@ function openDetailLayer(ref) {
     content: '',
   });
   sheet = handle;
+  wireGallery(handle.layer);
   handle.layer.addEventListener('click', (e) => {
     if (!(e.target instanceof HTMLElement)) return;
     if (e.target.closest('[data-want-play]')) {
@@ -476,6 +478,7 @@ function paintDetail() {
             </div>`
           : ''
       }
+      ${galleryHtml(game.screenshots ?? [])}
       <div class="d-sec" data-detail-add>
         ${
           inLibrary

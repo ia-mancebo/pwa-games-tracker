@@ -19,6 +19,7 @@ import { store } from '../app.js';
 import * as nav from '../navigation.js';
 import { statusPillHtml } from '../ui/pill.js';
 import { coverHtml } from '../ui/cover.js';
+import { galleryHtml, wireGallery } from '../ui/gallery.js';
 import { IGDB_SERVICE_ERROR, igdb } from '../services/igdb.js';
 import { openSheet } from '../ui/sheet.js';
 
@@ -191,6 +192,7 @@ function previewHtml(result) {
       ${genres.length > 0 ? html`<div class="add-preview-genres">${genres}</div>` : ''}
       ${result.description ? html`<p class="add-preview-desc">${result.description}</p>` : ''}
     </div>
+    ${galleryHtml(result.screenshots ?? [])}
     <div class="add-preview-actions">
       <button type="button" class="chip" data-preview-back>← Volver a resultados</button>
       <button type="button" class="btn-primary" data-preview-add>Añadir a la biblioteca</button>
@@ -383,6 +385,7 @@ export function openAddSheet(opts = {}) {
   });
   layer = handle.layer;
   closeSheet = handle.close;
+  wireGallery(layer);
 
   const paintFeedback = () => {
     if (!layer) return;
