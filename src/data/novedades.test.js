@@ -153,6 +153,22 @@ describe('ensureNovedadesContent', () => {
     await ensureNovedadesContent();
     expect(store.get().novedadesUi.snapshot?.recientes).toHaveLength(1);
   });
+
+  it('si la carga falla, la siguiente llamada reintenta y escribe el snapshot', async () => {
+    await saveSnapshot(smallBody());
+    const snapshotModule = await import('./snapshot.js');
+    const spy = vi
+      .spyOn(snapshotModule, 'getSnapshot')
+      .mockRejectedValueOnce(new Error('IDB caído'));
+
+    await expect(ensureNovedadesContent()).rejects.toThrow('IDB caído');
+    expect(store.get().novedadesUi.loading).toBe(false);
+    expect(store.get().novedadesUi.snapshot).toBeNull();
+
+    await ensureNovedadesContent();
+    expect(store.get().novedadesUi.snapshot?.recientes).toHaveLength(1);
+    spy.mockRestore();
+  });
 });
 
 describe('refreshNovedades', () => {

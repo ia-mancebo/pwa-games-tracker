@@ -137,8 +137,8 @@ function wire(layerEl, conflict) {
   qs('[data-confirm="no"]', layerEl)?.addEventListener('click', () => paint(conflict));
 }
 
-/** Suscripción activa del diálogo al store (una sola vez por página). */
-let subscribed = false;
+/** Desuscripción de la suscripción activa (una sola vez por página). @type {(() => boolean) | null} */
+let unsubscribe = null;
 
 /**
  * Suscribe el diálogo al estado (ADR-0004): abre cuando aparece un conflicto
@@ -149,9 +149,8 @@ let subscribed = false;
  * Idempotente: una sola vez por página.
  */
 export function initConflictDialog() {
-  if (subscribed) return;
-  subscribed = true;
-  store.subscribe((state) => {
+  if (unsubscribe) return;
+  unsubscribe = store.subscribe((state) => {
     const pending = state.file?.conflict ?? null;
     if (pending) {
       if (!isConflictOpen()) openConflict();
@@ -159,4 +158,14 @@ export function initConflictDialog() {
     }
     if (isConflictOpen()) closeConflict();
   });
+}
+
+/**
+ * Limpieza total para pruebas: des-suscribe el diálogo del store y deja el
+ * módulo en base (initConflictDialog vuelve a suscribir). Lo compone
+ * resetBoot (src/boot.js): la suscripción no sobrevive al teardown.
+ */
+export function resetConflictDialog() {
+  unsubscribe?.();
+  unsubscribe = null;
 }

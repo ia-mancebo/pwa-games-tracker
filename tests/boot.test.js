@@ -8,7 +8,7 @@
  * se espean y solo se aserta el ORDEN del cableado. `resetBoot()` es el
  * teardown único que compone los resets de los módulos con estado.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { store } from '../src/app.js';
 import { start, resetBoot } from '../src/boot.js';
 
@@ -50,10 +50,21 @@ vi.mock('../src/data/filelink.js', () => ({
   resetFilelink: vi.fn(() => calls.push('resetFilelink')),
 }));
 
-vi.mock('../src/ui/conflictDialog.js', () => ({
-  openConflict: vi.fn(() => calls.push('openConflict')),
-  initConflictDialog: vi.fn(() => calls.push('initConflictDialog')),
-}));
+vi.mock('../src/ui/conflictDialog.js', async (importOriginal) => {
+  const actual = /** @type {any} */ (await importOriginal());
+  return {
+    ...actual,
+    openConflict: vi.fn(() => calls.push('openConflict')),
+    initConflictDialog: vi.fn(() => {
+      calls.push('initConflictDialog');
+      actual.initConflictDialog();
+    }),
+    resetConflictDialog: vi.fn(() => {
+      calls.push('resetConflictDialog');
+      actual.resetConflictDialog();
+    }),
+  };
+});
 
 vi.mock('../src/data/covers.js', () => ({
   initCoverSeeding: vi.fn(() => calls.push('initCoverSeeding')),
@@ -116,6 +127,10 @@ beforeEach(() => {
   });
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe('start(root): orden del cableado', () => {
   it('registra el sheet closer ANTES de createApp (antes de que exista historial que consumirlo)', async () => {
     await start(mount());
@@ -166,6 +181,7 @@ describe('resetBoot', () => {
     expect(calls).toEqual(
       expect.arrayContaining([
         'resetFilelink',
+        'resetConflictDialog',
         'resetSheet',
         'resetBackNav',
         'resetCoverSeeding',
@@ -174,5 +190,22 @@ describe('resetBoot', () => {
         'resetReconnectModal',
       ]),
     );
+  });
+
+  it('desmonta la suscripción del diálogo de conflicto: tras resetBoot, initConflictDialog vuelve a suscribirse UNA vez', async () => {
+    const subscribeSpy = vi.spyOn(store, 'subscribe');
+    await start(mount());
+    expect(subscribeSpy).toHaveBeenCalledTimes(1);
+
+    // Idempotente mientras está montada: una segunda llamada no re-suscribe.
+    const { initConflictDialog } = await import('../src/ui/conflictDialog.js');
+    initConflictDialog();
+    expect(subscribeSpy).toHaveBeenCalledTimes(1);
+
+    resetBoot();
+
+    // Tras resetBoot la suscripción quedó desmontada: vuelve a suscribirse.
+    initConflictDialog();
+    expect(subscribeSpy).toHaveBeenCalledTimes(2);
   });
 });

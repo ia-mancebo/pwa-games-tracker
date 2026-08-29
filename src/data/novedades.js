@@ -99,16 +99,19 @@ export async function autoRefreshIfNeeded() {
 /**
  * Carga la Instantánea desde IDB al slice novedadesUi (idempotente, guarda
  * interna del módulo): siembra loading, escribe el snapshot y apaga loading.
- * La vista la llama desde su render; el refresco escribe la Instantánea
- * nueva directamente en el slice.
+ * La guarda solo se fija tras una carga EXITOSA: si getSnapshot rechaza, la
+ * siguiente llamada reintenta (la vista la invoca en cada render). La vista
+ * la llama desde su render; el refresco escribe la Instantánea nueva
+ * directamente en el slice.
  * @returns {Promise<void>}
  */
 export async function ensureNovedadesContent() {
-  if (contentLoaded) return;
-  contentLoaded = true;
-  store.set({ novedadesUi: { ...store.get().novedadesUi, loading: true } });
+  const ui = store.get().novedadesUi;
+  if (contentLoaded || ui.loading) return;
+  store.set({ novedadesUi: { ...ui, loading: true } });
   try {
     const snap = await getSnapshot();
+    contentLoaded = true;
     store.set({ novedadesUi: { ...store.get().novedadesUi, snapshot: snap } });
   } finally {
     store.set({ novedadesUi: { ...store.get().novedadesUi, loading: false } });

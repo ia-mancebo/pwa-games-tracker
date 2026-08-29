@@ -21,7 +21,7 @@ import { initCoverSeeding, resetCoverSeeding } from './data/covers.js';
 import { initNovedadesRetry, resetNovedadesRefresh } from './data/novedades.js';
 import { hasFsa } from './services/fsa.js';
 import { openReconnectModal, resetReconnectModal } from './ui/reconnectModal.js';
-import { openConflict, initConflictDialog } from './ui/conflictDialog.js';
+import { openConflict, initConflictDialog, resetConflictDialog } from './ui/conflictDialog.js';
 import { initSheet, resetSheet } from './ui/sheet.js';
 import { resetBackNav } from './backnav.js';
 import { registerSW } from 'virtual:pwa-register';
@@ -128,6 +128,7 @@ export async function start(root) {
  */
 export function resetBoot() {
   resetFilelink();
+  resetConflictDialog();
   resetSheet();
   resetBackNav();
   resetCoverSeeding();

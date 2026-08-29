@@ -248,6 +248,12 @@ export function rateHero(gameId, rating) {
       error: new LibraryError('Juego no encontrado', 'NOT_FOUND'),
     });
   }
+  if (game.plays.length === 0) {
+    return Promise.resolve({
+      ok: false,
+      error: new LibraryError('Todo juego necesita al menos una jugada', 'BAD_SHAPE'),
+    });
+  }
   return toResult(repoRatePlay(gameId, latestPlay(game).id, rating));
 }
 
@@ -261,6 +267,12 @@ export function rateHero(gameId, rating) {
  */
 export function addPlay(gameId, now = new Date()) {
   const game = findGame(store.get().doc, gameId);
+  if (game && game.plays.length === 0) {
+    return Promise.resolve({
+      ok: false,
+      error: new LibraryError('Todo juego necesita al menos una jugada', 'BAD_SHAPE'),
+    });
+  }
   const inherited = game ? latestPlay(game).platform : null;
   return toResult(
     repoAddPlay(gameId, {
