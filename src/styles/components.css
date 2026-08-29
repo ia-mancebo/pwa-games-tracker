@@ -131,18 +131,6 @@
   margin-top: 2px;
 }
 
-/* Cabecera de vista sticky SOLO en móvil: el título queda fijo al hacer
-   scroll y el contenido pasa por debajo; en escritorio (≥900px, layout de
-   dos columnas) queda como siempre. */
-@media (max-width: 900px) {
-  .view-head {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    background: var(--bg0);
-  }
-}
-
 .sec {
   font-family: var(--mono);
   font-size: 0.72rem;
@@ -1625,8 +1613,14 @@ button.plate:hover {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* Barra superior sticky en móvil: el raíl colapsado queda fijo al hacer
+     scroll y el contenido pasa por debajo; z-index bajo para que FAB, toasts,
+     hojas y diálogos (40+) sigan pintando por encima. */
   .rail {
-    position: static;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg0);
     height: auto;
     flex-direction: row;
     align-items: center;

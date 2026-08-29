@@ -3,8 +3,10 @@
  * ensanchar la página. Replica el DOM real de app.js (shell > rail > logo + nav
  * con 3 botones) y los 3 CSS reales, mide con Edge headless a viewports móviles
  * reales (360×740 y 390×844) y falla (exit 1) si el documento se ensancha, si
- * algún elemento desborda el viewport, o si el scroll horizontal de los botones
- * no queda confinado dentro de .nav.
+ * algún elemento desborda el viewport, si el scroll horizontal de los botones
+ * no queda confinado dentro de .nav, o si el sticky móvil está en el elemento
+ * equivocado: debe ser .rail (barra superior colapsada) y .view-head debe
+ * quedar static.
  *
  * Uso: npm run test:layout:mobile  (o node scripts/check-layout-mobile.mjs)
  */
@@ -65,7 +67,9 @@ const html = `<!doctype html>
           <button type="button" class="chip chip-xs bar-datos" data-open-data>Datos</button>
         </div>
       </div>
-      <main class="main"></main>
+      <main class="main">
+        <header class="view-head"><h1>Biblioteca</h1></header>
+      </main>
     </div>
   </div>
 </body>
@@ -93,6 +97,10 @@ try {
       const docW = document.documentElement.scrollWidth;
       const vw = window.innerWidth;
       const nav = document.querySelector('.nav');
+      const rail = document.querySelector('.rail');
+      const viewHead = document.querySelector('.view-head');
+      const railStyle = globalThis.getComputedStyle(rail);
+      const headStyle = globalThis.getComputedStyle(viewHead);
       const overflowers = [];
       document.querySelectorAll('*').forEach((el) => {
         const rect = el.getBoundingClientRect();
@@ -108,6 +116,9 @@ try {
         navClientWidth: nav.clientWidth,
         navScrollWidth: nav.scrollWidth,
         overflowers,
+        railPosition: railStyle.position,
+        railTop: railStyle.top,
+        viewHeadPosition: headStyle.position,
       };
     });
     console.log(`\n=== ${vp.label} ===`);
@@ -116,6 +127,8 @@ try {
     const noOverflowers = report.overflowers.length === 0;
     const navScrolls = report.navScrollWidth > report.navClientWidth;
     const navConfined = !navScrolls || pageOk;
+    const railSticky = report.railPosition === 'sticky' && report.railTop === '0px';
+    const headStatic = report.viewHeadPosition === 'static';
     if (!pageOk) {
       failures++;
       console.log(`RED: el documento se ensancha (scrollWidth ${report.docW} > viewport ${report.vw})`);
@@ -128,9 +141,21 @@ try {
       failures++;
       console.log('RED: el scroll de .nav no queda confinado dentro del header');
     }
-    if (pageOk && noOverflowers && navConfined) {
+    if (!railSticky) {
+      failures++;
       console.log(
-        `GREEN: página ${report.docW}px, sin desbordes, .nav ${navScrolls ? 'scrollea' : 'cabe'} (${report.navScrollWidth}/${report.navClientWidth}px)`
+        `RED: .rail no es sticky en móvil (position ${report.railPosition}, top ${report.railTop}); debe ser sticky con top 0px`
+      );
+    }
+    if (!headStatic) {
+      failures++;
+      console.log(
+        `RED: .view-head es sticky en móvil (position ${report.viewHeadPosition}); debe ser static`
+      );
+    }
+    if (pageOk && noOverflowers && navConfined && railSticky && headStatic) {
+      console.log(
+        `GREEN: página ${report.docW}px, sin desbordes, .nav ${navScrolls ? 'scrollea' : 'cabe'} (${report.navScrollWidth}/${report.navClientWidth}px), .rail sticky, .view-head static`
       );
     }
     await page.close();
