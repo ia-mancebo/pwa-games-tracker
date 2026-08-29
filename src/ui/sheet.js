@@ -196,15 +196,28 @@ export function closeTopSheet() {
   return true;
 }
 
+/** El closer ya se registró en backnav (initSheet idempotente). */
+let closerRegistered = false;
+
+/**
+ * Registra el cierre de hoja en backnav (ticket 1): el botón atrás del móvil
+ * cierra la hoja primero, sin cambiar de pantalla; backnav re-empuja la
+ * instantánea al consumir la pulsación. Lo llama el arranque (src/boot.js)
+ * ANTES de createApp, para que el popstate del historial pueda consultarlo
+ * desde la primera entrada. Idempotente: una sola vez por página.
+ */
+export function initSheet() {
+  if (closerRegistered) return;
+  closerRegistered = true;
+  registerSheetCloser(closeTopSheet);
+}
+
 /**
  * Limpieza total para pruebas: cierra la hoja (sin onClose) y re-registra el
  * closer en backnav, que resetBackNav anula.
  */
 export function resetSheet() {
   if (current) tearDown(current);
-  registerSheetCloser(closeTopSheet);
+  closerRegistered = false;
+  initSheet();
 }
-
-// El botón atrás del móvil cierra la hoja primero, sin cambiar de pantalla;
-// backnav re-empuja la instantánea al consumir la pulsación (ticket 1).
-registerSheetCloser(closeTopSheet);

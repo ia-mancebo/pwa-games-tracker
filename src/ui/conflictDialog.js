@@ -137,15 +137,26 @@ function wire(layerEl, conflict) {
   qs('[data-confirm="no"]', layerEl)?.addEventListener('click', () => paint(conflict));
 }
 
-// El diálogo sigue al estado (ADR-0004): abre cuando aparece un conflicto
-// pendiente — también desde segundo plano, sin cableado por import — y cierra
-// cuando se resuelve. La resolución de «file»/«local» borra el campo y la
-// suscripción cierra; «download» no escribe estado y deja la hoja con la nota.
-store.subscribe((state) => {
-  const pending = state.file?.conflict ?? null;
-  if (pending) {
-    if (!isConflictOpen()) openConflict();
-    return;
-  }
-  if (isConflictOpen()) closeConflict();
-});
+/** Suscripción activa del diálogo al store (una sola vez por página). */
+let subscribed = false;
+
+/**
+ * Suscribe el diálogo al estado (ADR-0004): abre cuando aparece un conflicto
+ * pendiente — también desde segundo plano, sin cableado por import — y cierra
+ * cuando se resuelve. La resolución de «file»/«local» borra el campo y la
+ * suscripción cierra; «download» no escribe estado y deja la hoja con la nota.
+ * Lo llama el arranque (src/boot.js) tras registrar el handler de conflicto.
+ * Idempotente: una sola vez por página.
+ */
+export function initConflictDialog() {
+  if (subscribed) return;
+  subscribed = true;
+  store.subscribe((state) => {
+    const pending = state.file?.conflict ?? null;
+    if (pending) {
+      if (!isConflictOpen()) openConflict();
+      return;
+    }
+    if (isConflictOpen()) closeConflict();
+  });
+}
