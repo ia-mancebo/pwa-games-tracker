@@ -22,6 +22,7 @@ Glosario del dominio. Sin detalles de implementación: los términos y nada más
 - **Carátula**: imagen de portada de un juego. Se referencia por su origen externo y debe poder verse sin conexión.
 - **Novedades**: sección con información externa y reciente: juegos nuevos y populares, próximos lanzamientos y un calendario de estrenos.
 - **Instantánea de Novedades**: copia del último contenido refrescado de Novedades que la app conserva para mostrar el tablón cuando no puede refrescar.
+- **Modo degradado**: estado de Novedades cuando el refresco falla y el tablón muestra la última Instantánea con un aviso.
 - **Dashboard de estadísticas**: resúmenes agregados calculados sobre la biblioteca propia.
 - **Fuente de datos**: servicio externo del que se obtienen juegos, géneros, carátulas y fechas de lanzamiento.
 - **Cliente de la Fuente de datos**: pieza que habla con la Fuente de datos usando la Conexión. No decide cómo se configura: su conexión se le entrega ya hecha.
