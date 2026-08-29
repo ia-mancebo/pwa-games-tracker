@@ -544,9 +544,12 @@ try {
   server.child.kill();
 }
 
+// Salida explícita: en Windows child.kill() no mata el árbol npm→vite→esbuild
+// y los pipes vivos impedirían el fin natural del proceso (falso cuelgue).
 if (totalFailures > 0) {
   console.error(`\nRED: ${totalFailures} superficie(s) con overflow horizontal en móvil`);
   process.exit(1);
 } else {
   console.log('\nGREEN: sin overflow horizontal en móvil (360×740 y 320×568)');
+  process.exit(0);
 }
