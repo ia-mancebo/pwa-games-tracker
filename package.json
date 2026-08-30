@@ -13,6 +13,7 @@
     "test:layout": "node scripts/check-layout.mjs",
     "test:layout:mobile": "node scripts/check-layout-mobile.mjs",
     "test:overflow:mobile": "node scripts/check-overflow-mobile.mjs",
+    "test:scroll": "node scripts/check-scroll-restore.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",

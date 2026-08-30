@@ -182,6 +182,19 @@ export function installBackNav(store) {
   // Sin history (entornos raros) la app funciona igual: solo sin botón atrás.
   if (typeof history === 'undefined' || typeof window === 'undefined') return;
   try {
+    // Restauración de scroll propia por superficie (src/scroll.js): con el
+    // 'auto' nativo el navegador re-ancla el scroll del documento en cada
+    // popstate (su posición grabada por entrada) y pisa el scrollTo del
+    // render — el atrás del móvil volvía a la Estantería en 0 en vez de
+    // reponer su posición. 'manual' deja la restauración en manos de la app.
+    if ('scrollRestoration' in history) {
+      try {
+        history.scrollRestoration = 'manual';
+      } catch {
+        // Sin soporte (navegadores antiguos): el navegador restaura por su
+        // cuenta; la app no puede evitarlo.
+      }
+    }
     history.replaceState({ app: snapshot(store) }, '');
   } catch {
     return;
