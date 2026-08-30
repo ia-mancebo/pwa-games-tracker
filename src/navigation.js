@@ -37,7 +37,14 @@ export function switchTab(store, tab) {
     });
     return;
   }
-  navigate(store, 'reset', { tab, library: { ...library, gameId: null } });
+  navigate(store, 'reset', {
+    tab,
+    library: { ...library, gameId: null },
+    // Pulsar Novedades repone el tablón (pestaña raíz = pestaña inicial),
+    // igual que pulsar Biblioteca repone la estantería: el drill-down de
+    // sección, el filtro de género y la Ficha externa no sobreviven.
+    ...(tab === 'novedades' ? { novedades: { section: null, genre: null, detail: null } } : {}),
+  });
   // Entrar en Novedades dispara el refresco automático silencioso (>12 h y
   // con conexión; spec §7.3), fire-and-forget.
   if (tab === 'novedades' && previous !== 'novedades') {

@@ -128,6 +128,29 @@ describe('género y Ficha externa · sin entradas de historial', () => {
   });
 });
 
+describe('pulsar Novedades reinicia al tablón', () => {
+  it('estando en una sección, switchTab a Novedades vuelve al tablón', () => {
+    installBackNav(store);
+    openNovedadesSection(store, 'recientes');
+    expect(store.get().novedades.section).toBe('recientes');
+
+    switchTab(store, 'novedades');
+    expect(store.get().novedades.section).toBeNull();
+    expect(store.get().novedades.genre).toBeNull();
+    expect(store.get().novedades.detail).toBeNull();
+  });
+
+  it('viniendo de otra pestaña, switchTab a Novedades repone el tablón', () => {
+    installBackNav(store);
+    openNovedadesSection(store, 'recientes');
+    expect(store.get().novedades.section).toBe('recientes');
+
+    switchTab(store, 'biblioteca');
+    switchTab(store, 'novedades');
+    expect(store.get().novedades.section).toBeNull();
+  });
+});
+
 describe('refresco automático al entrar en Novedades', () => {
   it('switchTab a Novedades desde otra pestaña dispara autoRefreshIfNeeded', async () => {
     installBackNav(store);
