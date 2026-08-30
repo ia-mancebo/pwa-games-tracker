@@ -837,6 +837,38 @@ describe('pastilla de archivo (chrome de la app)', () => {
     expect(qs('.file-dirty', root)).toBeNull();
   });
 
+  it('alternar dirty/saving actualiza la pastilla en sitio sin reescribir el filebar', async () => {
+    grantFsa();
+    const handle = makeHandle(FILE_V1_TEXT);
+    await connectFile(FILE_V1_TEXT, handle);
+    const root = mountApp();
+
+    const filebar = qs('.filebar', root);
+    const nameNode = qs('.file-name', root);
+    const saveBtn = qs('[data-save-now]', root);
+    expect(filebar).toBeTruthy();
+
+    store.set({ meta: { ...store.get().meta, dirty: true } });
+    expect(qs('.file-dirty', root)?.textContent).toContain('cambios sin volcar');
+    expect(qs('.filebar', root)).toBe(filebar);
+    expect(qs('.file-name', root)).toBe(nameNode);
+    expect(qs('[data-save-now]', root)).toBe(saveBtn);
+
+    store.set({ file: { ...store.get().file, saving: true } });
+    expect(qs('.file-dirty', root)?.textContent).toContain('volcando…');
+    expect(qs('.filebar', root)).toBe(filebar);
+    expect(qs('.file-name', root)).toBe(nameNode);
+    expect(qs('[data-save-now]', root)).toBe(saveBtn);
+
+    store.set({
+      file: { ...store.get().file, saving: false },
+      meta: { ...store.get().meta, dirty: false },
+    });
+    expect(qs('.file-dirty', root)).toBeNull();
+    expect(qs('.filebar', root)).toBe(filebar);
+    expect(qs('.file-name', root)).toBe(nameNode);
+  });
+
   it('error muestra la pastilla de reintento y Recuperar vuelve a conectado', async () => {
     grantFsa();
     const handle = makeHandle(FILE_V1_TEXT, { failWrites: true });

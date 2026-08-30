@@ -27,8 +27,11 @@ export function galleryHtml(shots) {
 
 /**
  * Cablea el clic de [data-shot] del contenedor al visor a pantalla completa.
- * Delegación sobre el contenedor: sobrevive a repintados de su contenido y
- * muere con él; llamar dos veces sobre el mismo contenedor es no-op.
+ * Recopila TODAS las capturas del contenedor en orden de aparición y abre el
+ * visor con la pulsada como índice inicial: así las flechas ‹ ›, el teclado
+ * y el swipe recorren la galería completa. Delegación sobre el contenedor:
+ * sobrevive a repintados de su contenido y muere con él; llamar dos veces
+ * sobre el mismo contenedor es no-op.
  * @param {Element} container
  */
 export function wireGallery(container) {
@@ -38,7 +41,11 @@ export function wireGallery(container) {
     if (!(e.target instanceof HTMLElement)) return;
     const shot = e.target.closest('[data-shot]');
     if (!shot) return;
-    const url = shot.getAttribute('data-shot');
-    if (url) openLightbox(url);
+    const shots = [...container.querySelectorAll('[data-shot]')];
+    const urls = shots
+      .map((s) => s.getAttribute('data-shot'))
+      .filter((u) => u !== null);
+    if (urls.length === 0) return;
+    openLightbox(urls, Math.max(0, shots.indexOf(shot)));
   });
 }

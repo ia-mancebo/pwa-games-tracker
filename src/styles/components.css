@@ -1292,6 +1292,8 @@ button.plate:hover {
   justify-content: center;
   background: rgba(8, 6, 4, 0.85);
   cursor: zoom-out;
+  /* Los swipes horizontales son del visor; el scroll vertical sigue libre. */
+  touch-action: pan-y;
 }
 
 .lightbox img {
@@ -1305,6 +1307,25 @@ button.plate:hover {
 .lightbox-close {
   position: absolute;
   top: 14px;
+  right: 16px;
+}
+
+/* Flechas de navegación del visor: chip flotante como el ✕, centradas en
+   vertical sobre el fondo oscuro; el clic no cierra (lo filtra el módulo). */
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.35rem;
+  line-height: 1;
+  padding: 10px 15px;
+}
+
+.lightbox-prev {
+  left: 16px;
+}
+
+.lightbox-next {
   right: 16px;
 }
 

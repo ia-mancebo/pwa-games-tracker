@@ -96,4 +96,34 @@ describe('createApp', () => {
     const values = qsa('.bw b', root).map((el) => el.textContent?.trim());
     expect(values).toEqual(['0', '0', '—']);
   });
+
+  it('un cambio solo de guardado (file/meta) no re-renderiza la vista principal', async () => {
+    await newLibrary(NOW);
+    const root = mount();
+    createApp(root);
+    const mainNode = qs('main', root);
+    const viewNode = mainNode?.firstElementChild;
+    expect(viewNode).toBeTruthy();
+
+    store.set({ meta: { ...store.get().meta, dirty: true } });
+    store.set({ file: { ...store.get().file, saving: true } });
+    store.set({ file: { ...store.get().file, saving: false } });
+
+    expect(qs('main', root)).toBe(mainNode);
+    expect(qs('main', root)?.firstElementChild).toBe(viewNode);
+  });
+
+  it('un cambio visual sí re-renderiza la vista principal', async () => {
+    await newLibrary(NOW);
+    const root = mount();
+    createApp(root);
+    const mainNode = qs('main', root);
+    const viewNode = mainNode?.firstElementChild;
+    expect(viewNode).toBeTruthy();
+
+    store.set({ library: { ...store.get().library, query: 'hades' } });
+
+    expect(qs('main', root)).toBe(mainNode);
+    expect(qs('main', root)?.firstElementChild).not.toBe(viewNode);
+  });
 });

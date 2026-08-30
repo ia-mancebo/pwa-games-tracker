@@ -215,6 +215,25 @@ let state = {
 /** @type {Set<Listener>} */
 const listeners = new Set();
 
+/**
+ * Slices que pintan la vista principal (todo menos `file`/`meta`, el estado
+ * de guardado). Si ninguno cambia de referencia entre renders, un set de
+ * file/meta solo debe tocar el filebar: re-renderizar la vista re-dispara la
+ * animación `.fade` y parpadea toda la pantalla (ver renderCurrent).
+ * @type {(keyof AppState)[]}
+ */
+const VIEW_SLICES = [
+  'tab',
+  'doc',
+  'ready',
+  'tabRole',
+  'library',
+  'stats',
+  'novedades',
+  'novedadesUi',
+  'ficha',
+];
+
 function notify() {
   for (const fn of [...listeners]) fn(state);
 }
@@ -335,8 +354,15 @@ export function createApp(root) {
     switchTab(store, tab);
   });
 
+  /** Estado del último render: si los slices visuales no cambiaron de
+   *  referencia, un set de file/meta no re-pinta la vista (sin parpadeo).
+   *  @type {AppState|null} */
+  let lastRender = null;
+
   const renderCurrent = () => {
     const state = store.get();
+    const prev = lastRender;
+    lastRender = state;
     const tab = state.tab in views ? state.tab : 'biblioteca';
     const gated = isGated();
     // Segunda pestaña en solo lectura: el CSS oculta el FAB vía esta clase.
@@ -359,6 +385,13 @@ export function createApp(root) {
       if (gated) filebarSlot.innerHTML = '';
       else renderFilebar(filebarSlot, store);
     }
+    // Solo cambió el estado de guardado (file/meta): la vista principal ya
+    // está pintada y re-renderizarla re-dispararía la animación `.fade`
+    // (parpadeo de toda la pantalla en cada vuelco). El store hace spread por
+    // slice, así que la referencia de un slice solo cambia si se parcheó; la
+    // puerta de bienvenida (ready/doc) y el toggle readonly (tabRole) ya
+    // quedan cubiertos por la comparación.
+    if (prev && VIEW_SLICES.every((k) => state[k] === prev[k])) return;
     // Puerta de bienvenida: sin biblioteca no se renderiza ninguna pestaña.
     if (gated) {
       welcome.render(main, store);
