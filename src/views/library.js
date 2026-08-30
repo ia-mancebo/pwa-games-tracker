@@ -19,6 +19,7 @@ import { tagChipsHtml } from '../ui/tags.js';
 import { openAddSheet } from './addSheet.js';
 import { renderGame } from './game.js';
 import * as nav from '../navigation.js';
+import { preserveInnerScroll, restoreInnerScroll } from '../scroll.js';
 
 /** Portadas visibles por balda antes de la tarjeta «+N más» (spec §8.1). */
 const SHELF_LIMIT = 6;
@@ -410,11 +411,17 @@ export function render(container, store) {
   const hadFocus = prevSearch instanceof HTMLInputElement && document.activeElement === prevSearch;
   const caret = hadFocus ? (prevSearch.selectionStart ?? prevSearch.value.length) : 0;
 
+  // El scroll interno de la tabla del Panel se conserva entre renders de la
+  // misma superficie («Cargar más», búsqueda, filtros); al llegar desde otra
+  // superficie no hay cardbox previo y empieza arriba (src/scroll.js).
+  const innerScroll = preserveInnerScroll(container);
+
   container.innerHTML =
     state.library.view === 'panel'
       ? panelHtml(doc, state.library)
       : shelvesHtml(doc, state.library);
   wire(container, store);
+  restoreInnerScroll(container, innerScroll);
 
   if (hadFocus) {
     const search = qs('.search', container);

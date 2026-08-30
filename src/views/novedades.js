@@ -17,6 +17,7 @@ import { ensureNovedadesContent, refreshNovedades } from '../data/novedades.js';
 import { IGDB_SERVICE_ERROR, igdb } from '../services/igdb.js';
 import { store } from '../app.js';
 import { openSheet, SHEET_BODY_SELECTOR } from '../ui/sheet.js';
+import { preserveInnerScroll, restoreInnerScroll } from '../scroll.js';
 import {
   backToNovedadesBoard,
   closeNovedadesDetail,
@@ -570,7 +571,12 @@ function paintSync(container) {
  */
 export function render(container, _store) {
   if (!container.isConnected) return;
+  // El scroll interno de la tabla del drill-down se conserva entre renders de
+  // la misma superficie (género, refresco); al llegar desde el tablón no hay
+  // cardbox previo y empieza arriba (src/scroll.js).
+  const innerScroll = preserveInnerScroll(container);
   void ensureNovedadesContent().catch(() => {});
   paintSync(container);
   syncDetail();
+  restoreInnerScroll(container, innerScroll);
 }

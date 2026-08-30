@@ -7,7 +7,7 @@ import { renderFilebar } from './ui/filebar.js';
 import { openDataDialog } from './views/dataDialog.js';
 import { installBackNav } from './backnav.js';
 import { switchTab } from './navigation.js';
-import { settleScroll } from './scroll.js';
+import { isFixedSurface, settleScroll } from './scroll.js';
 
 /**
  * Meta del espejo IndexedDB (spec §5.1). `exportFileName` y `persistAsked` son
@@ -393,6 +393,10 @@ export function createApp(root) {
     // puerta de bienvenida (ready/doc) y el toggle readonly (tabRole) ya
     // quedan cubiertos por la comparación.
     if (prev && VIEW_SLICES.every((k) => state[k] === prev[k])) return;
+    // Superficie fija (Panel del Estado y drill-down de Novedades): la tabla
+    // scrollea dentro y la columna de contenido se fija a la ventana
+    // (src/scroll.js + components.css).
+    root.classList.toggle('surface-fixed', isFixedSurface(state));
     // Puerta de bienvenida: sin biblioteca no se renderiza ninguna pestaña.
     if (gated) {
       welcome.render(main, store);

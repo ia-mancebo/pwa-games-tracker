@@ -2148,6 +2148,71 @@ button.pill-btn:hover {
   }
 }
 
+/* Superficies fijas (Panel del Estado y drill-down de Novedades): la columna
+   de contenido ocupa la altura de la ventana y el scroll vive en la tabla
+   (cardbox), no en el documento. La clase surface-fixed la pone la app
+   (src/app.js) según la superficie (src/scroll.js). */
+.surface-fixed .content {
+  height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.surface-fixed .content > .main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.surface-fixed .content > .main > .fade {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.surface-fixed .content > .main .cardbox.tight {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* Sin padding superior: la cabecera pegada cubre todo el ancho al scrollear */
+  padding-top: 0;
+  scrollbar-width: thin;
+}
+
+/* Cabecera de columnas pegada al borde superior al scrollear las filas;
+   fondo sólido para que las filas pasen por debajo sin transparentarse. */
+.surface-fixed .content > .main .b-thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg1);
+}
+
+/* El FAB flota sobre el Panel: aire al pie de la tabla para que la última
+   fila se pueda scrollear por encima del botón. */
+.surface-fixed .content > .main .cardbox.tight:has(~ .fab) {
+  padding-bottom: 72px;
+}
+
+@media (max-width: 899px) {
+  /* Móvil: el raíl colapsado a barra superior ocupa su propia fila; el shell
+     pasa a columna de altura de ventana para que la tabla no se salga. */
+  .surface-fixed .shell {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .surface-fixed .content {
+    height: auto;
+    flex: 1;
+    min-height: 0;
+  }
+}
+
 /* Avisos PWA (ticket 25, spec §11): toasts fijos centrados bajo el FAB */
 .toasts {
   position: fixed;

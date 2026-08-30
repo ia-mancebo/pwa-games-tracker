@@ -1,14 +1,19 @@
 /**
  * Posición de scroll por superficie (ADR-0005/0008). La app pinta todas las
- * superficies en el mismo `<main>` y el scroll es el del documento (ninguna
- * caja interna scrollea): al navegar entre superficies, el scroll de la
- * saliente se hereda en la entrante. Regla: la Estantería y el tablón de
- * Novedades conservan su scroll al salir y lo reponen al volver — «cuando
- * vuelva atrás a la Biblioteca/Novedades, conserva el scroll que tenía»; el
- * Panel, la Ficha y el drill-down de Novedades llegan siempre arriba. Los
- * cambios dentro de la misma superficie (búsqueda, filtros, «Cargar más»,
- * Ficha externa del tablón, vuelco de archivo) no tocan el scroll.
- * Estadísticas no se gobierna: conserva su comportamiento actual.
+ * superficies en el mismo `<main>` y el scroll es el del documento; al navegar
+ * entre superficies, el scroll de la saliente se hereda en la entrante. Hay
+ * dos excepciones (isFixedSurface): el Panel de un Estado de la Biblioteca y
+ * el drill-down de sección de Novedades fijan la altura de la columna de
+ * contenido y scrollean DENTRO de su tabla (el cardbox), con la cabecera de
+ * columnas pegada arriba. Regla: la Estantería y el tablón de Novedades
+ * conservan su scroll al salir y lo reponen al volver — «cuando vuelva atrás
+ * a la Biblioteca/Novedades, conserva el scroll que tenía»; el Panel, la Ficha
+ * y el drill-down de Novedades llegan siempre arriba. Los cambios dentro de
+ * la misma superficie (búsqueda, filtros, «Cargar más», Ficha externa del
+ * tablón, vuelco de archivo) no tocan el scroll; en las superficies fijas, el
+ * scroll interno de la tabla se captura y repone entre renders
+ * (preserveInnerScroll/restoreInnerScroll). Estadísticas no se gobierna:
+ * conserva su comportamiento actual.
  */
 
 /** Última posición guardada de la Estantería. @type {number} */
@@ -65,4 +70,48 @@ export function settleScroll(prev, next) {
 export function resetScroll() {
   shelvesScroll = 0;
   boardScroll = 0;
+}
+
+/**
+ * ¿La superficie actual scrollea dentro de su tabla (Panel de un Estado de la
+ * Biblioteca y drill-down de Novedades)? Estas superficies fijan la altura de
+ * la columna de contenido (clase surface-fixed en la raíz, components.css) y
+ * el scroll vive en el cardbox, no en el documento.
+ * @param {import('./app.js').AppState} state
+ * @returns {boolean}
+ */
+export function isFixedSurface(state) {
+  if (state.tab === 'biblioteca') {
+    return state.library.gameId == null && state.library.view === 'panel';
+  }
+  if (state.tab === 'novedades') return state.novedades.section != null;
+  return false;
+}
+
+/**
+ * Captura el scroll interno de la tabla de una superficie fija ANTES de
+ * re-renderizar. Fuera de una superficie fija (o sin tabla) devuelve 0 y
+ * restaurar no hace nada.
+ * @param {Element} container
+ * @param {string} [selector]
+ * @returns {number}
+ */
+export function preserveInnerScroll(container, selector = '.cardbox.tight') {
+  const box = container.querySelector(selector);
+  return box ? box.scrollTop : 0;
+}
+
+/**
+ * Repone sobre el DOM nuevo el scroll interno capturado: los cambios dentro
+ * de la misma superficie («Cargar más», búsqueda, filtros, género…) no deben
+ * saltar la tabla a arriba.
+ * @param {Element} container
+ * @param {number} scrollTop
+ * @param {string} [selector]
+ * @returns {void}
+ */
+export function restoreInnerScroll(container, scrollTop, selector = '.cardbox.tight') {
+  if (scrollTop <= 0) return;
+  const box = container.querySelector(selector);
+  if (box) box.scrollTop = scrollTop;
 }

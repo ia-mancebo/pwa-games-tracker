@@ -16,7 +16,7 @@ import { resetBackNav } from '../src/backnav.js';
 import { resetSheet } from '../src/ui/sheet.js';
 import { saveSnapshot } from '../src/data/snapshot.js';
 import { resetNovedadesRefresh } from '../src/data/novedades.js';
-import { resetScroll } from '../src/scroll.js';
+import { resetScroll, isFixedSurface, preserveInnerScroll, restoreInnerScroll } from '../src/scroll.js';
 import { qs } from '../src/lib/dom.js';
 
 /** @type {ReturnType<typeof vi.spyOn> | null} */
@@ -243,6 +243,104 @@ describe('dentro de la misma superficie: el scroll no se toca', () => {
 
     expect(scrollToSpy).not.toHaveBeenCalled();
   });
+
+  it('cambiar un filtro dentro del Panel conserva el scroll interno de la tabla', () => {
+    const root = mount();
+    unsubscribe = createApp(root);
+    btn(qs('[data-open-panel="playing"]', root)).click();
+    const box = btn(qs('.cardbox.tight', root));
+    box.scrollTop = 400;
+
+    btn(qs('[data-f-genre="RPG"]', root)).click();
+
+    expect(qs('.cardbox.tight', root)?.scrollTop).toBe(400);
+  });
+});
+
+describe('superficies fijas: el scroll vive en la tabla (clase surface-fixed)', () => {
+  it('el Panel la pone y la Estantería la quita', () => {
+    const root = mount();
+    unsubscribe = createApp(root);
+    expect(root.classList.contains('surface-fixed')).toBe(false);
+
+    btn(qs('[data-open-panel="playing"]', root)).click();
+    expect(root.classList.contains('surface-fixed')).toBe(true);
+
+    btn(qs('[data-back-shelves]', root)).click();
+    expect(root.classList.contains('surface-fixed')).toBe(false);
+  });
+
+  it('la Ficha no es superficie fija aunque se abra desde el Panel', () => {
+    const root = mount();
+    unsubscribe = createApp(root);
+    btn(qs('[data-open-panel="playing"]', root)).click();
+    expect(root.classList.contains('surface-fixed')).toBe(true);
+
+    btn(qs('[data-game-id="g1"]', root)).click();
+
+    expect(root.classList.contains('surface-fixed')).toBe(false);
+  });
+});
+
+describe('scroll interno de la tabla (preserve/restoreInnerScroll)', () => {
+  it('preserve/restore repone el scroll del cardbox tras re-renderizar', () => {
+    const container = document.createElement('div');
+    container.innerHTML = '<div class="cardbox tight"></div>';
+    const box = btn(qs('.cardbox.tight', container));
+    box.scrollTop = 350;
+
+    const saved = preserveInnerScroll(container);
+    container.innerHTML = '<div class="cardbox tight"></div>';
+    restoreInnerScroll(container, saved);
+
+    expect(qs('.cardbox.tight', container)?.scrollTop).toBe(350);
+  });
+
+  it('sin cardbox previo captura 0; restaurar sobre un DOM sin tabla no hace nada', () => {
+    const container = document.createElement('div');
+
+    expect(preserveInnerScroll(container)).toBe(0);
+
+    container.innerHTML = '<div class="shelves"></div>';
+    restoreInnerScroll(container, 250);
+
+    expect(qs('.cardbox.tight', container)).toBeNull();
+  });
+
+  it('restaurar con 0 no toca la tabla nueva', () => {
+    const container = document.createElement('div');
+    container.innerHTML = '<div class="cardbox tight"></div>';
+
+    restoreInnerScroll(container, 0);
+
+    expect(qs('.cardbox.tight', container)?.scrollTop).toBe(0);
+  });
+
+  it('isFixedSurface reconoce Panel y drill-down, no el resto', () => {
+    /**
+     * Estado de biblioteca a medida para isFixedSurface.
+     * @param {'shelves'|'panel'} view
+     * @param {string|null} [gameId]
+     */
+    const lib = (view, gameId = null) => ({
+      ...store.get(),
+      library: { ...store.get().library, view, gameId },
+    });
+    /**
+     * Estado de Novedades a medida para isFixedSurface.
+     * @param {string|null} section
+     */
+    const nov = (section) => ({
+      ...store.get(),
+      tab: 'novedades',
+      novedades: { ...store.get().novedades, section },
+    });
+    expect(isFixedSurface(lib('shelves'))).toBe(false);
+    expect(isFixedSurface(lib('panel'))).toBe(true);
+    expect(isFixedSurface(lib('panel', 'g1'))).toBe(false);
+    expect(isFixedSurface(nov('recientes'))).toBe(true);
+    expect(isFixedSurface(nov(null))).toBe(false);
+  });
 });
 
 describe('Novedades: el tablón conserva su scroll, la sección llega arriba', () => {
@@ -335,5 +433,19 @@ describe('Novedades: el tablón conserva su scroll, la sección llega arriba', (
     btn(qs('[data-ndetail="recientes:0"]', root)).click();
 
     expect(scrollToSpy).not.toHaveBeenCalled();
+  });
+
+  it('el drill-down de sección pone surface-fixed y el tablón la quita', async () => {
+    await saveSnapshot(snapBody());
+    const root = mount();
+    unsubscribe = createApp(root);
+    await goToBoard(root);
+    expect(root.classList.contains('surface-fixed')).toBe(false);
+
+    btn(qs('[data-nsection="recientes"]', root)).click();
+    expect(root.classList.contains('surface-fixed')).toBe(true);
+
+    btn(qs('[data-nback]', root)).click();
+    expect(root.classList.contains('surface-fixed')).toBe(false);
   });
 });
