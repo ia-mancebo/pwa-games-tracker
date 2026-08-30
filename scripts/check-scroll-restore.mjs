@@ -1,12 +1,13 @@
 /**
- * Regression test (scroll real): la Ficha llega arriba al abrirse y el botón
- * atrás del navegador devuelve a la Estantería con su scroll conservado.
- * jsdom no puede verificar el atrás real: el navegador restaura su propio
- * scroll por entrada de historial (scrollRestoration) y puede pisar el
- * nuestro según el orden de los eventos. Este script conduce Edge headless
- * contra un dev server real: siembra una biblioteca grande por la bienvenida,
- * scrollea la Estantería, abre una Ficha y vuelve con `goBack()` midiendo el
- * scroll en varios instantes.
+ * Regression test (scroll real): la Ficha y el drill-down de Novedades llegan
+ * arriba al abrirse y el botón atrás del navegador devuelve a la Estantería y
+ * al tablón con su scroll conservado. jsdom no puede verificar el atrás real:
+ * el navegador restaura su propio scroll por entrada de historial
+ * (scrollRestoration) y puede pisar el nuestro según el orden de los eventos.
+ * Este script conduce Edge headless contra un dev server real: siembra una
+ * biblioteca grande por la bienvenida y una instantánea de Novedades por IDB,
+ * scrollea cada base, abre un hijo (Ficha / sección) y vuelve con `goBack()`
+ * midiendo el scroll en varios instantes.
  *
  * Uso: npm run test:scroll  (o node scripts/check-scroll-restore.mjs)
  */
@@ -41,6 +42,74 @@ function fixtureDoc() {
     };
   });
   return { schema: 'game-tracker', version: 1, updatedAt: '2026-08-23T10:00:00Z', games };
+}
+
+/**
+ * Instantánea del tablón: suficientes títulos por sección para que el tablón
+ * scrollee de verdad; sin carátulas (placeholders, cero red).
+ * @returns {Record<string, unknown>}
+ */
+function fixtureSnapshot() {
+  const section = (prefix, count) =>
+    Array.from({ length: count }, (_, i) => ({
+      id: prefix + i,
+      title: `${prefix} ${String(i).padStart(2, '0')}`,
+      releaseDate: '2026-08-01',
+      genres: [{ id: 8, name: 'Platform' }],
+      platforms: [{ id: 130, name: 'Nintendo Switch' }],
+    }));
+  return {
+    recientes: section(100, 80),
+    proximos: section(200, 80),
+    populares: section(300, 80),
+    esperados: section(400, 80),
+    generatedAt: '2026-08-24T09:30:00.000Z',
+    savedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Scroll que la superficie base tenía EN EL MOMENTO de pulsar el hijo (el
+ * foco del clic puede re-anclar la página; el contrato es reponer lo que
+ * había justo antes de entrar).
+ * @param {import('puppeteer-core').Page} page
+ * @param {string} selector
+ * @returns {Promise<number>}
+ */
+async function tapPos(page, selector) {
+  return page.evaluate(
+    (sel) =>
+      new Promise((resolve) => {
+        const el = /** @type {HTMLElement} */ (document.querySelector(sel));
+        el.addEventListener('click', () => resolve(Math.round(window.scrollY)), { once: true });
+        el.click();
+      }),
+    selector
+  );
+}
+
+/**
+ * Mide el scroll tras `goBack()` en varios instantes y comprueba que el
+ * navegador no pisó la restauración de la app.
+ * @param {import('puppeteer-core').Page} page
+ * @param {string} waitSel
+ * @param {number} expected
+ * @param {string} label
+ */
+async function assertBackRestores(page, waitSel, expected, label) {
+  await page.goBack();
+  await page.waitForSelector(waitSel, { timeout: 10000 });
+  const samples = [];
+  for (const delay of [0, 100, 300, 600]) {
+    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+    samples.push(await page.evaluate(() => window.scrollY));
+  }
+  if (samples.some((y) => y !== expected)) {
+    throw new Error(
+      `RED: el botón atrás no conserva el scroll de ${label} (muestras ${samples.join(', ')}; esperado ${expected})`
+    );
+  }
+  console.log(`  ${label} restaurada a ${expected}px tras el atrás (${samples.join(', ')})`);
 }
 
 async function main() {
@@ -87,42 +156,57 @@ async function main() {
     // El contrato: el atrás repone el scroll que la Estantería tenía EN EL
     // MOMENTO de entrar a la Ficha. El foco del clic puede re-anclar la
     // página, así que se captura la posición real al pulsar la tarjeta.
-    const tapPos = await page.evaluate(
-      () =>
-        new Promise((resolve) => {
-          const card = /** @type {HTMLElement} */ (document.querySelector('.shelves [data-game-id]'));
-          card.addEventListener(
-            'click',
-            () => resolve(Math.round(window.scrollY)),
-            { once: true }
-          );
-          card.click();
-        })
-    );
+    const tapPosShelves = await tapPos(page, '.shelves [data-game-id]');
     await page.waitForSelector('.ficha', { timeout: 10000 });
     const atFicha = await page.evaluate(() => window.scrollY);
     if (atFicha !== 0) {
       throw new Error(`RED: la Ficha hereda el scroll (scrollY=${atFicha}, esperado 0)`);
     }
+    console.log(`  Ficha arriba (0) al abrirse (estantería en ${tapPosShelves})`);
 
-    await page.goBack();
-    await page.waitForSelector('.shelves [data-game-id]', { timeout: 10000 });
-    const samples = [];
-    for (const delay of [0, 100, 300, 600]) {
-      if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
-      samples.push(await page.evaluate(() => window.scrollY));
-    }
-    console.log(
-      JSON.stringify({ scrollTarget, tapPos, atFicha, samples }, null, 2)
-    );
-    if (samples.some((y) => y !== tapPos)) {
+    await assertBackRestores(page, '.shelves [data-game-id]', tapPosShelves, 'la Estantería');
+
+    // Instantánea de Novedades por IDB (el tablón siempre se pinta desde ahí).
+    await page.evaluate(async (snap) => {
+      const db = await new Promise((resolve, reject) => {
+        const req = indexedDB.open('game-tracker', 3);
+        req.addEventListener('success', () => resolve(req.result));
+        req.addEventListener('error', () => reject(req.error));
+      });
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction('novedades', 'readwrite');
+        tx.objectStore('novedades').put(snap, 'snapshot');
+        tx.addEventListener('complete', resolve);
+        tx.addEventListener('error', () => reject(tx.error));
+      });
+      db.close();
+    }, fixtureSnapshot());
+
+    await page.click('[data-tab="novedades"]');
+    await page.waitForSelector('[data-nsection="recientes"]', { timeout: 10000 });
+
+    const boardTarget = 200;
+    const boardStarted = await page.evaluate((y) => {
+      window.scrollTo(0, y);
+      return window.scrollY;
+    }, boardTarget);
+    if (boardStarted !== boardTarget) {
       throw new Error(
-        `RED: el botón atrás no conserva el scroll de la Estantería (muestras ${samples.join(', ')}; esperado ${tapPos})`
+        `RED: el tablón no scrollea (scrollY=${boardStarted}, objetivo ${boardTarget})`
       );
     }
-    console.log(
-      `GREEN: Ficha arriba (0) y Estantería restaurada a ${tapPos}px tras el atrás`
-    );
+
+    const tapPosBoard = await tapPos(page, '[data-nsection="recientes"]');
+    await page.waitForSelector('[data-nback]', { timeout: 10000 });
+    const atSection = await page.evaluate(() => window.scrollY);
+    if (atSection !== 0) {
+      throw new Error(`RED: la sección hereda el scroll (scrollY=${atSection}, esperado 0)`);
+    }
+    console.log(`  Sección arriba (0) al abrirse (tablón en ${tapPosBoard})`);
+
+    await assertBackRestores(page, '[data-nsection="recientes"]', tapPosBoard, 'el tablón');
+
+    console.log(`GREEN: Ficha y drill-down arriba; Estantería y tablón restaurados tras el atrás`);
   } finally {
     await browser.close();
     await rm(dir, { recursive: true, force: true });
