@@ -7,6 +7,7 @@ import { renderFilebar } from './ui/filebar.js';
 import { openDataDialog } from './views/dataDialog.js';
 import { installBackNav } from './backnav.js';
 import { switchTab } from './navigation.js';
+import { settleScroll } from './scroll.js';
 
 /**
  * Meta del espejo IndexedDB (spec §5.1). `exportFileName` y `persistAsked` son
@@ -399,7 +400,12 @@ export function createApp(root) {
     }
     const view = views[tab];
     if (!view) return;
+    // Reposicionar el scroll por superficie (src/scroll.js): el destino se
+    // decide ANTES de re-renderizar para leer el scrollY de la superficie
+    // saliente, y se aplica DESPUÉS, sobre el DOM nuevo.
+    const scrollTarget = settleScroll(prev, state);
     view.render(main, store);
+    if (scrollTarget != null) window.scrollTo(0, scrollTarget);
   };
 
   const unsubscribe = store.subscribe(renderCurrent);
