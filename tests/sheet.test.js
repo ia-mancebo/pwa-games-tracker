@@ -234,4 +234,47 @@ describe('integración con el botón atrás del sistema', () => {
     history.back();
     await vi.waitFor(() => expect(store.get().tab).toBe('biblioteca'));
   });
+
+  it('a profundidad 0 la hoja empuja una centinela: el atrás del sistema la cierra sin cambiar la pantalla ni dejar entradas basura', async () => {
+    installBackNav(store);
+    // Profundidad 0: sin entrada de historial consumible (la Ficha del tablón).
+    const onClose = vi.fn();
+    openSheet({ title: 'Ficha', content: CONTENT, onClose });
+    expect(qs('.add-layer', document.body)).toBeTruthy();
+
+    history.back();
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(qs('.add-layer', document.body)).toBeNull();
+    expect(store.get().tab).toBe('biblioteca');
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(store.get().tab).toBe('biblioteca');
+
+    // Sin entradas basura: el siguiente atrás no restaura nada (sale de la app).
+    history.back();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(store.get().tab).toBe('biblioteca');
+  });
+
+  it('el ✕ a profundidad 0 consume la centinela: sin dobles atrás y la siguiente hoja vuelve a cerrarse con atrás', async () => {
+    installBackNav(store);
+    const onClose = vi.fn();
+    openSheet({ title: 'Ficha', content: CONTENT, onClose });
+    btn(qs('[data-sheet-close]', document.body)).click();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(qs('.add-layer', document.body)).toBeNull();
+    // La centinela se consumió (back + swallow): el atrás del sistema no
+    // tiene nada que poppear y no repite el cierre.
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    history.back();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(store.get().tab).toBe('biblioteca');
+
+    // Una hoja nueva a profundidad 0 vuelve a tener su centinela.
+    const onClose2 = vi.fn();
+    openSheet({ title: 'Ficha', content: CONTENT, onClose: onClose2 });
+    history.back();
+    await vi.waitFor(() => expect(onClose2).toHaveBeenCalledTimes(1));
+    expect(qs('.add-layer', document.body)).toBeNull();
+  });
 });

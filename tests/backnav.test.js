@@ -200,6 +200,55 @@ describe('atrás del sistema', () => {
     await vi.waitFor(() => expect(qs('.add-layer', document.body)).toBeNull());
   });
 
+  it('desde la Ficha abierta en el tablón (profundidad 0) el atrás del sistema la cierra', async () => {
+    await saveSnapshot({
+      recientes: [
+        {
+          igdbId: 268807,
+          title: 'Celeste',
+          releaseDate: '2026-08-01',
+          coverUrl: 'https://images.igdb.com/igdb/image/upload/t_cover_big/co268807.jpg',
+          description: 'Descripci�n de prueba',
+          genres: [{ id: 8, name: 'Platform' }],
+          platforms: [{ id: 130, name: 'Nintendo Switch' }],
+        },
+      ],
+      proximos: [],
+      populares: [],
+      esperados: [],
+    });
+    const root = mount();
+    createApp(root);
+
+    btn(qs('[data-tab="novedades"]', root)).click();
+    await vi.waitFor(() => expect(qs('[data-ndetail="recientes:0"]', root)).toBeTruthy());
+    // Sin drill-down: la Ficha se abre a profundidad 0 (el tablón es pestaña
+    // raíz y la Ficha no es una pantalla, Q12). El atrás del sistema no tiene
+    // entrada propia que poppear: la centinela de la hoja la crea.
+    btn(qs('[data-ndetail="recientes:0"]', root)).click();
+    expect(store.get().novedades.detail).toBe('recientes:0');
+    expect(need(qs('.add-layer', document.body))).toBeTruthy();
+
+    // El atrás del sistema cierra la Ficha; NO regresa a Biblioteca.
+    history.back();
+    await vi.waitFor(() => expect(store.get().novedades.detail).toBeNull());
+    expect(store.get().tab).toBe('novedades');
+    expect(store.get().novedades.section).toBeNull();
+    await vi.waitFor(() => expect(qs('.add-layer', document.body)).toBeNull());
+  });
+
+  it('el atrás del sistema cierra la hoja del Alta abierta a profundidad 0', async () => {
+    const root = mount();
+    createApp(root);
+
+    btn(qs('.fab[data-add-game]', root)).click();
+    expect(qs('.add-sheet', document.body)).toBeTruthy();
+
+    history.back();
+    await vi.waitFor(() => expect(qs('.add-sheet', document.body)).toBeNull());
+    expect(store.get().tab).toBe('biblioteca');
+  });
+
   it('el ✕ de la Ficha de Novedades consume su entrada de historial', async () => {
     await saveSnapshot({
       recientes: [

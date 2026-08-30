@@ -6,9 +6,17 @@
  * la trampa de Tab/foco; los adaptadores solo describen el contenido y un
  * onClose. Abrir una hoja reemplaza la anterior SIN llamar a su onClose; el
  * close() devuelto está ligado a su sesión (una sesión reemplazada es no-op).
+ *
+ * Botón atrás del sistema a profundidad 0 (Ficha del tablón, Alta, diálogos):
+ * sin entrada de historial propia no hay popstate y el atrás no cerraría la
+ * hoja. Al abrir, el módulo pide a backnav una entrada centinela
+ * (ensureSheetSentinel); al cerrar por cualquier vía que no sea el atrás
+ * (✕, fondo, Escape, cierre programático) la consume (consumeSheetSentinel:
+ * consumo diferido, la próxima operación de historial la retira). El cierre
+ * por atrás del sistema NO consume: el popstate de la centinela ya la consumió.
  */
 import { html, qs, qsa } from '../lib/dom.js';
-import { registerSheetCloser } from '../backnav.js';
+import { registerSheetCloser, ensureSheetSentinel, consumeSheetSentinel } from '../backnav.js';
 
 /** Selector del cuerpo repintable de la hoja; lo usan los adaptadores. */
 export const SHEET_BODY_SELECTOR = '[data-sheet-body]';
@@ -34,6 +42,14 @@ let current = null;
 /** Listener global de teclado (Escape + trampa de Tab) mientras hay hoja.
  * @type {((e: KeyboardEvent) => void)|null} */
 let keyHandler = null;
+
+/**
+ * ¿El cierre en curso viene del botón atrás del sistema (closeTopSheet)? El
+ * popstate de la centinela ya la consumió: el cierre no debe retroceder de
+ * nuevo (doble pulsación de atrás).
+ * @type {boolean}
+ */
+let closingViaBack = false;
 
 /** @param {HTMLElement} sheet @returns {HTMLElement[]} */
 function focusables(sheet) {
@@ -64,6 +80,18 @@ function tearDown(session) {
 }
 
 /**
+ * Cierre de una sesión por vía de usuario o programática: retira la capa y
+ * consume la centinela si la hoja se abrió a profundidad 0. El cierre por
+ * botón atrás del sistema (closeTopSheet) no consume: el popstate de la
+ * centinela ya la consumió.
+ * @param {SheetSession} session
+ */
+function closeSession(session) {
+  tearDown(session);
+  if (!closingViaBack) consumeSheetSentinel();
+}
+
+/**
  * Cierre por vía iniciada por el usuario: corre onClose y retira la capa.
  * Idempotente; también la usa closeTopSheet para el botón atrás del sistema.
  * El onClose corre primero porque puede repintar la superficie (p. ej. cerrar
@@ -77,7 +105,7 @@ function closeUserPath() {
   try {
     onClose?.();
   } finally {
-    tearDown(session);
+    closeSession(session);
   }
 }
 
@@ -176,23 +204,32 @@ export function openSheet({
   current = session;
   document.addEventListener('keydown', onKeyDown);
   keyHandler = onKeyDown;
+  // A profundidad 0 el atrás del sistema no tiene entrada que poppear: la
+  // centinela le da una (la consume el popstate al cerrar la hoja).
+  ensureSheetSentinel();
 
   // Foco inicial: primer elemento enfocable del contenido; sin ninguno, el ✕.
   const firstFocusable = focusables(sheet)[0];
   const initial = firstFocusable ?? qs('[data-sheet-close]', layer) ?? sheet;
   if (initial instanceof HTMLElement) initial.focus();
 
-  return { close: () => tearDown(session), layer: sheet };
+  return { close: () => closeSession(session), layer: sheet };
 }
 
 /**
  * Cierre de hoja para el botón atrás del sistema (backnav): corre onClose y
- * retira la capa. Devuelve true si había hoja abierta y se cerró.
+ * retira la capa. Devuelve true si había hoja abierta y se cerró. No consume
+ * la centinela: el popstate que disparó el cierre ya la consumió.
  * @returns {boolean}
  */
 export function closeTopSheet() {
   if (!current) return false;
-  closeUserPath();
+  closingViaBack = true;
+  try {
+    closeUserPath();
+  } finally {
+    closingViaBack = false;
+  }
   return true;
 }
 

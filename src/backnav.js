@@ -21,6 +21,21 @@
  *
  * Las instantáneas cubren solo las porciones del estado que definen una
  * pantalla: tab, library y novedades. Doc, meta, file y tabRole no viajan.
+ *
+ * Hoja abierta a profundidad 0 (Ficha del tablón, Alta, diálogos): el atrás
+ * del sistema no tiene entrada propia que poppear (la primera entrada no
+ * dispara popstate: el navegador sale de la app), así que el closer de hojas
+ * nunca se consultaría. El módulo de hojas pide una ENTRADA CENTINELA
+ * (ensureSheetSentinel) al abrir: una entrada marcada ({app: null}, nunca
+ * restaurable) que da al atrás del sistema algo que poppear; el popstate
+ * resultante consulta el closer y la pulsación se consume cerrando la hoja.
+ * La centinela se consume por cualquier vía: el propio popstate del atrás
+ * (re-escribe la raíz, que lleva la misma instantánea: la hoja no es una
+ * pantalla) o el cierre por ✕/fondo/Escape/programático (consumeSheetSentinel
+ * la marca huérfana y la consume la próxima operación de historial — consumo
+ * diferido: history.back() es asíncrono y un push síncrono posterior lo
+ * adelantaría). No es una pantalla restaurable (ADR-0007/8): su estado es un
+ * marcador que restore() ignora.
  */
 
 /**
@@ -56,6 +71,29 @@ let installed = false;
  * @type {boolean}
  */
 let pendingReset = false;
+
+/**
+ * ¿La entrada superior del historial es una centinela de hoja (empujada por
+ * ensureSheetSentinel al abrir una hoja a profundidad 0)? Mientras es true,
+ * el siguiente popstate consulta el closer y la pulsación se consume cerrando
+ * la hoja; cualquier operación que retire la entrada superior (pop del atrás,
+ * rebobinado de reset, back interno) la consume y limpia el flag.
+ * @type {boolean}
+ */
+let sheetSentinel = false;
+
+/**
+ * ¿La centinela quedó huérfana (la hoja se cerró por ✕/fondo/Escape/cierre
+ * programático y la entrada sigue arriba)? La consume la PRÓXIMA operación de
+ * historial — un popstate (el atrás del sistema la poppea y restaura la raíz,
+ * que lleva la misma instantánea), un push (la reutiliza como entrada de la
+ * pantalla nueva), un back interno, un replace o un reset — para no dejar
+ * entradas basura ni dobles pulsaciones de atrás. Consumo diferido a
+ * propósito: history.back() es asíncrono y un push síncrono posterior (p. ej.
+ * el duplicado del Alta) lo adelantaría y poppearía la entrada nueva.
+ * @type {boolean}
+ */
+let orphanedSentinel = false;
 
 /** Handler activo, para poder retirarlo en resetBackNav (pruebas).
  * @type {((e: PopStateEvent) => void)|null} */
@@ -117,9 +155,13 @@ export function installBackNav(store) {
       // Pop del rebobinado de una pestaña raíz: la instantánea viva ya lleva
       // el estado nuevo (store.set fue síncrono); se re-escribe la entrada
       // raíz y el atrás del sistema sale de la app en vez de recorrer la
-      // traza previa.
+      // traza previa. El rebobinado también consumió la centinela si la hoja
+      // estaba abierta (la supervivencia de la hoja entre pestañas queda
+      // congelada, ADR-0008: sin centinela, el atrás ya no la cierra).
       pendingReset = false;
       depth = 0;
+      sheetSentinel = false;
+      orphanedSentinel = false;
       try {
         history.replaceState({ app: snapshot(store) }, '');
       } catch {
@@ -131,12 +173,34 @@ export function installBackNav(store) {
       // La pulsación atrás se consumió cerrando la hoja: se deshace el pop
       // re-empujando la pantalla actual; la profundidad no cambia y no se
       // restaura nada (la hoja no es una pantalla).
+      const wasSentinel = sheetSentinel;
+      sheetSentinel = false;
+      orphanedSentinel = false;
       try {
-        history.pushState({ app: snapshot(store) }, '');
+        if (wasSentinel) {
+          // La pulsación consumió la centinela (hoja abierta a profundidad 0):
+          // el pop llegó a la raíz, que lleva la misma instantánea; se
+          // re-escribe en vez de re-empujar para no dejar entradas duplicadas.
+          depth = 0;
+          history.replaceState({ app: snapshot(store) }, '');
+        } else {
+          history.pushState({ app: snapshot(store) }, '');
+        }
       } catch {
         // Sin historial utilizable: nada que re-empujar.
       }
       return;
+    }
+    if (sheetSentinel) {
+      // El pop consumió la centinela sin hoja que cerrar (caso defensivo):
+      // la entrada ya no está arriba y el flag no debe sobrevivir.
+      sheetSentinel = false;
+    }
+    if (orphanedSentinel) {
+      // El pop consumió la centinela huérfana (la hoja ya se había cerrado):
+      // se restaura la raíz, que lleva la misma instantánea — sin cambio
+      // visible, y la pila queda limpia.
+      orphanedSentinel = false;
     }
     if (depth > 0) depth--;
     const app = /** @type {{app?: NavSnapshot|null}} */ (e.state)?.app;
@@ -157,8 +221,22 @@ export function navigate(store, kind, transition) {
   store.set(transition);
   if (typeof history === 'undefined') return;
   if (kind === 'push') {
-    // Pantalla nueva: entrada con la instantánea de lo recién pintado.
+    // Pantalla nueva: entrada con la instantánea de lo recién pintado. Si la
+    // centinela quedó huérfana (hoja cerrada sin consumir), es la entrada
+    // actual: el push la REUTILIZA como entrada de la pantalla nueva en vez
+    // de empujar otra — la pila no crece y el atrás del sistema restaura la
+    // raíz (p. ej. el duplicado del Alta: cerrar hoja + abrir Ficha).
+    if (orphanedSentinel) {
+      orphanedSentinel = false;
+      try {
+        history.replaceState({ app: snapshot(store) }, '');
+      } catch {
+        // Sin historial utilizable: nada que re-escribir.
+      }
+      return;
+    }
     depth++;
+    sheetSentinel = false;
     try {
       history.pushState({ app: snapshot(store) }, '');
     } catch {
@@ -168,7 +246,11 @@ export function navigate(store, kind, transition) {
   }
   if (kind === 'replace') {
     // Sustituye la entrada actual (p. ej. la Ficha de un juego borrado):
-    // la profundidad no cambia, el back del sistema salta a la previa.
+    // la profundidad no cambia, el back del sistema salta a la previa. Si la
+    // entrada actual era una centinela, deja de serlo (pasa a ser una entrada
+    // real con la instantánea viva).
+    sheetSentinel = false;
+    orphanedSentinel = false;
     try {
       history.replaceState({ app: snapshot(store) }, '');
     } catch {
@@ -180,6 +262,9 @@ export function navigate(store, kind, transition) {
     // Pestaña raíz: la pila se reinicia. La entrada raíz (la de la carga de
     // la página) pasa a llevar la instantánea del nuevo estado con depth 0;
     // el atrás del sistema sale de la app en vez de recorrer la traza previa.
+    // El rebobinado consume la centinela (huérfana o no) que estuviera arriba.
+    sheetSentinel = false;
+    orphanedSentinel = false;
     if (depth === 0) {
       // Ya en la raíz: solo se re-escribe la entrada actual.
       try {
@@ -210,8 +295,12 @@ export function navigate(store, kind, transition) {
   if (depth > 0) {
     // Botón «← Volver» interno: retrocede el historial tragándose el
     // popstate resultante para no restaurar una instantánea ya obsoleta.
+    // El back interno también consume la centinela (huérfana o no) si estaba
+    // arriba: la entrada que poppea es la suya.
     depth--;
     pendingSwallow++;
+    sheetSentinel = false;
+    orphanedSentinel = false;
     try {
       history.back();
     } catch {
@@ -221,6 +310,57 @@ export function navigate(store, kind, transition) {
       pendingSwallow--;
     }
   }
+}
+
+/**
+ * Entrada centinela para una hoja abierta a profundidad 0 (el módulo de hojas
+ * la pide al abrir): sin entrada propia, el atrás del sistema no dispara
+ * popstate y el closer de hojas nunca se consultaría. Empuja una entrada
+ * marcada ({app: null}: restore() la ignora, no es una pantalla restaurable)
+ * y la deja como entrada superior; el siguiente atrás del sistema la poppea,
+ * consulta el closer y la pulsación se consume cerrando la hoja. No-op si ya
+ * hay profundidad (el atrás ya tiene una entrada que poppear) o si la
+ * centinela ya está arriba; si quedó una centinela huérfana (hoja cerrada sin
+ * consumir), la nueva hoja la re-utiliza en vez de empujar otra.
+ * @returns {boolean} true si la hoja tiene centinela arriba.
+ */
+export function ensureSheetSentinel() {
+  if (typeof history === 'undefined') return false;
+  if (depth > 0) return false;
+  if (sheetSentinel) return false;
+  if (orphanedSentinel) {
+    // La centinela huérfana sigue arriba (nada tocó el historial desde el
+    // cierre): la nueva hoja la re-utiliza.
+    orphanedSentinel = false;
+    sheetSentinel = true;
+    return true;
+  }
+  depth++;
+  sheetSentinel = true;
+  try {
+    history.pushState({ app: null }, '');
+  } catch {
+    depth--;
+    sheetSentinel = false;
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Consume la centinela al cerrar la hoja por una vía que no es el atrás del
+ * sistema (✕, fondo, Escape, cierre programático). Consumo DIFERIDO: la
+ * entrada centinela queda marcada como huérfana y la consume la próxima
+ * operación de historial — el atrás del sistema la poppea (restaura la raíz,
+ * que lleva la misma instantánea: sin cambio visible), un push la reutiliza
+ * como entrada de la pantalla nueva, un back interno/replace/reset la retira.
+ * No-op sin centinela pendiente (el atrás del sistema ya la consumió con su
+ * popstate).
+ */
+export function consumeSheetSentinel() {
+  if (!sheetSentinel) return;
+  sheetSentinel = false;
+  orphanedSentinel = true;
 }
 
 /**
@@ -238,6 +378,8 @@ export function resetBackNav() {
   depth = 0;
   pendingSwallow = 0;
   pendingReset = false;
+  sheetSentinel = false;
+  orphanedSentinel = false;
   installed = false;
   sheetCloser = null;
   if (popHandler && typeof window !== 'undefined') {

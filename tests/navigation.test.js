@@ -314,10 +314,11 @@ describe('flujo del duplicado del Alta (la danza de tres pasos desaparece)', () 
     const pushSpy = vi.spyOn(history, 'pushState');
     btn(qs('[data-dup-open]', layer)).click();
 
-    // La hoja se cierra y el intent empuja la Ficha con su pestaña: un solo
-    // push con la instantánea tab + gameId (antes: dos pasos y un patch suelto).
+    // La hoja se cierra y el intent reutiliza la centinela de la hoja como
+    // entrada de la Ficha con su pestaña: UNA sola entrada con la instantánea
+    // tab + gameId, sin pushState nuevo (antes: dos pasos y un patch suelto).
     expect(qs('.add-sheet')).toBeNull();
-    expect(pushSpy).toHaveBeenCalledTimes(1);
+    expect(pushSpy).not.toHaveBeenCalled();
     const entry = /** @type {{app?: import('../src/backnav.js').NavSnapshot}} */ (history.state);
     expect(entry.app?.tab).toBe('biblioteca');
     expect(entry.app?.library?.gameId).toBe('g1');
