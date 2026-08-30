@@ -21,8 +21,24 @@
  *   botones de navegación, y un swipe marcado suprime el clic sintético que
  *   el navegador dispara tras el gesto. El clic en imagen/fondo sigue
  *   cerrando.
+ * - Botón atrás del sistema (móvil): el visor participa en backnav como la
+ *   hoja (src/ui/sheet.js) pero SIEMPRE empuja su propia entrada centinela al
+ *   abrir (ensureLightboxSentinel) — se abre encima de cualquier pantalla
+ *   (Ficha, hoja o raíz) y la primera pulsación de atrás debe cerrarlo a él.
+ *   El cierre por atrás (closeTopLightbox) NO consume la centinela: el
+ *   popstate ya la consumió; el cierre por ✕/fondo/Escape/programático la
+ *   consume (consumeLightboxSentinel, consumo diferido). El closer se registra
+ *   en backnav en cada open (asignación idempotente): así sobrevive a los
+ *   resetBackNav de las pruebas y no hace falta registro en el arranque — un
+ *   popstate solo puede consultarlo cuando hay centinela, y la centinela solo
+ *   existe tras un open (ADR-0010: sin efectos de import).
  */
 import { html, qs } from '../lib/dom.js';
+import {
+  ensureLightboxSentinel,
+  consumeLightboxSentinel,
+  registerLightboxCloser,
+} from '../backnav.js';
 
 /** Desplazamiento horizontal mínimo (px) para considerar un swipe. */
 const SWIPE_THRESHOLD = 40;
@@ -47,6 +63,14 @@ let touchLastX = null;
 
 /** Un swipe acaba de navegar: el clic sintético siguiente no debe cerrar. */
 let suppressClick = false;
+
+/**
+ * ¿El cierre en curso viene del botón atrás del sistema (closeTopLightbox)? El
+ * popstate de la centinela ya la consumió: el cierre no debe consumirla de
+ * nuevo (doble pulsación de atrás).
+ * @type {boolean}
+ */
+let closingViaBack = false;
 
 /**
  * Muestra la captura `index` de la galería: solo cambia el `src` del `<img>`
@@ -159,10 +183,19 @@ export function openLightbox(urls, index = 0) {
     }
   };
   document.addEventListener('keydown', lightboxKeyHandler);
+  // El closer se registra en cada open: asignación idempotente que además
+  // sobrevive a los resetBackNav de las pruebas (ver JSDoc de cabecera).
+  registerLightboxCloser(closeTopLightbox);
+  // El visor SIEMPRE empuja su propia centinela: la primera pulsación de atrás
+  // del sistema lo cierra a él, sin tocar la pantalla de debajo.
+  ensureLightboxSentinel();
 }
 
-/** Cierra el visor y retira sus listeners globales. */
-export function closeLightbox() {
+/**
+ * Retira la capa del visor y sus listeners globales; no toca la centinela:
+ * cada camino de cierre la consume según su vía.
+ */
+function tearDownLightbox() {
   if (lightboxKeyHandler) {
     document.removeEventListener('keydown', lightboxKeyHandler);
     lightboxKeyHandler = null;
@@ -174,4 +207,32 @@ export function closeLightbox() {
   touchStartX = null;
   touchLastX = null;
   suppressClick = false;
+}
+
+/**
+ * Cierra el visor por vía de usuario o programática (✕, fondo, Escape,
+ * close()): retira la capa y consume la centinela (consumo diferido). El
+ * cierre por botón atrás del sistema (closeTopLightbox) no consume: el
+ * popstate de la centinela ya la consumió.
+ */
+export function closeLightbox() {
+  tearDownLightbox();
+  if (!closingViaBack) consumeLightboxSentinel();
+}
+
+/**
+ * Cierre del visor para el botón atrás del sistema (backnav): retira la capa.
+ * Devuelve true si el visor estaba abierto y se cerró. No consume la centinela:
+ * el popstate que disparó el cierre ya la consumió.
+ * @returns {boolean}
+ */
+export function closeTopLightbox() {
+  if (!lightboxLayer) return false;
+  closingViaBack = true;
+  try {
+    tearDownLightbox();
+  } finally {
+    closingViaBack = false;
+  }
+  return true;
 }

@@ -6,10 +6,12 @@
  * primitiva (src/ui/lightbox.js, ADR-0006): el camino de clic desde la Ficha
  * sigue siendo el cableado de la vista.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, store } from '../src/app.js';
 import { importDoc, initLibrary } from '../src/data/library.js';
+import { resetBackNav } from '../src/backnav.js';
 import { closeLightbox, openLightbox } from '../src/ui/lightbox.js';
+import { initSheet, openSheet, resetSheet } from '../src/ui/sheet.js';
 import { qs, qsa } from '../src/lib/dom.js';
 
 const SHOT_A = 'https://images.igdb.com/igdb/image/upload/shot-a.jpg';
@@ -237,5 +239,106 @@ describe('primitiva directa', () => {
 
     swipe(layer, 300, 280);
     expect(img.getAttribute('src')).toBe(SHOT_A);
+  });
+});
+
+describe('botón atrás del sistema', () => {
+  /**
+   * jsdom acumula el historial entre pruebas del mismo archivo: rebobina a la
+   * entrada raíz para que cada prueba parta de la pila limpia. Se llama ANTES
+   * de createApp, cuando ningún handler de popstate está instalado.
+   */
+  async function rewindToRoot() {
+    if (history.length <= 1) return;
+    history.pushState({}, '');
+    history.go(-(history.length - 1));
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+
+  beforeEach(async () => {
+    resetBackNav();
+    resetSheet();
+    await rewindToRoot();
+  });
+
+  it('desde la Ficha abierta, el atrás cierra el visor sin cerrar la Ficha', async () => {
+    const root = mount();
+    createApp(root);
+    btn(qs('.card[data-game-id="gshot"]', root)).click();
+    expect(qs('.ficha', root)).toBeTruthy();
+
+    btn(qsa('button.d-shot[data-shot]', root)[0]).click();
+    expect(qs('.lightbox', document.body)).toBeTruthy();
+
+    history.back();
+    await vi.waitFor(() => expect(qs('.lightbox', document.body)).toBeNull());
+    // La pulsación se consumió cerrando el visor: la pantalla no cambió.
+    expect(qs('.ficha', root)).toBeTruthy();
+    expect(store.get().library.gameId).toBe('gshot');
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(qs('.ficha', root)).toBeTruthy();
+
+    // El re-push deshizo el pop: el segundo back restaura la pantalla previa.
+    history.back();
+    await vi.waitFor(() => expect(store.get().library.view).toBe('shelves'));
+  });
+
+  it('a profundidad 0 el visor empuja su centinela: el atrás lo cierra sin cambiar la pantalla', async () => {
+    const root = mount();
+    createApp(root);
+    openLightbox([SHOT_A]);
+    expect(qs('.lightbox', document.body)).toBeTruthy();
+
+    history.back();
+    await vi.waitFor(() => expect(qs('.lightbox', document.body)).toBeNull());
+    expect(store.get().tab).toBe('biblioteca');
+
+    // Sin entradas basura: el siguiente atrás no restaura nada (sale de la app).
+    history.back();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(store.get().tab).toBe('biblioteca');
+  });
+
+  it('el atrás cierra el visor antes que la hoja abierta debajo, y el siguiente cierra la hoja', async () => {
+    const root = mount();
+    createApp(root);
+    initSheet();
+    const onClose = vi.fn();
+    openSheet({ title: 'Ficha', content: '<p>Ficha del tablón</p>', onClose });
+    expect(qs('.add-layer', document.body)).toBeTruthy();
+
+    openLightbox([SHOT_A]);
+    expect(qs('.lightbox', document.body)).toBeTruthy();
+
+    history.back();
+    await vi.waitFor(() => expect(qs('.lightbox', document.body)).toBeNull());
+    expect(qs('.add-layer', document.body)).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+
+    history.back();
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(qs('.add-layer', document.body)).toBeNull();
+    expect(root.textContent).not.toBe('');
+  });
+
+  it('el ✕ del visor deja la centinela huérfana: el atrás no repite el cierre ni cierra la hoja', async () => {
+    const root = mount();
+    createApp(root);
+    initSheet();
+    const onClose = vi.fn();
+    openSheet({ title: 'Ficha', content: '<p>Ficha del tablón</p>', onClose });
+
+    openLightbox([SHOT_A]);
+    btn(need(qs('.lightbox-close', document.body))).click();
+    expect(qs('.lightbox', document.body)).toBeNull();
+
+    history.back();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(qs('.add-layer', document.body)).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+
+    history.back();
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(qs('.add-layer', document.body)).toBeNull();
   });
 });

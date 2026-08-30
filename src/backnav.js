@@ -36,6 +36,14 @@
  * diferido: history.back() es asíncrono y un push síncrono posterior lo
  * adelantaría). No es una pantalla restaurable (ADR-0007/8): su estado es un
  * marcador que restore() ignora.
+ *
+ * Visor de capturas abierto (lightbox, src/ui/lightbox.js): MISMA mecánica de
+ * centinela que la hoja, con una diferencia: el visor SIEMPRE empuja su propia
+ * entrada al abrir (ensureLightboxSentinel), no solo a profundidad 0 — se
+ * abre encima de cualquier pantalla (Ficha empujada, hoja abierta o la raíz) y
+ * su primera pulsación de atrás debe cerrarlo a él sin tocar lo de debajo. Su
+ * closer (registerLightboxCloser) se consulta ANTES que el de la hoja: el
+ * visor está siempre encima de la hoja abierta.
  */
 
 /**
@@ -95,6 +103,29 @@ let sheetSentinel = false;
  */
 let orphanedSentinel = false;
 
+/**
+ * ¿La entrada superior del historial es la centinela del visor de capturas
+ * (empujada por ensureLightboxSentinel al abrir el lightbox)? El visor SIEMPRE
+ * empuja su propia entrada al abrir (a diferencia de la hoja, que solo la pide
+ * a profundidad 0): así la primera pulsación de atrás poppea la entrada del
+ * visor y lo cierra sin tocar la pantalla de debajo — ni la hoja abierta ni la
+ * Ficha. Mientras es true, el popstate consulta el closer del visor ANTES que
+ * el de la hoja (el visor está encima); cualquier operación que retire la
+ * entrada superior la consume y limpia el flag.
+ * @type {boolean}
+ */
+let lightboxSentinel = false;
+
+/**
+ * ¿La centinela del visor quedó huérfana (cerrado por ✕/fondo/Escape/cierre
+ * programático con la entrada aún arriba)? Misma mecánica que la centinela de
+ * hoja: la consume la PRÓXIMA operación de historial; el popstate que la
+ * poppea es un no-op visible — NO consulta el closer de la hoja, porque la
+ * entrada consumida era del visor y la hoja de debajo sigue con su centinela.
+ * @type {boolean}
+ */
+let orphanedLightboxSentinel = false;
+
 /** Handler activo, para poder retirarlo en resetBackNav (pruebas).
  * @type {((e: PopStateEvent) => void)|null} */
 let popHandler = null;
@@ -105,6 +136,15 @@ let popHandler = null;
  * @type {(() => boolean)|null}
  */
 let sheetCloser = null;
+
+/**
+ * Cierre del visor de capturas registrado por el módulo del visor
+ * (src/ui/lightbox.js): devuelve true si la pulsación atrás del sistema se
+ * consumió cerrando el visor. Se consulta ANTES que el de la hoja: el visor
+ * está siempre encima de cualquier hoja abierta.
+ * @type {(() => boolean)|null}
+ */
+let lightboxCloser = null;
 
 /**
  * Instantánea de navegación del estado actual.
@@ -157,16 +197,38 @@ export function installBackNav(store) {
       // raíz y el atrás del sistema sale de la app en vez de recorrer la
       // traza previa. El rebobinado también consumió la centinela si la hoja
       // estaba abierta (la supervivencia de la hoja entre pestañas queda
-      // congelada, ADR-0008: sin centinela, el atrás ya no la cierra).
+      // congelada, ADR-0008: sin centinela, el atrás ya no la cierra) y la del
+      // visor (su cierre por atrás también queda congelado).
       pendingReset = false;
       depth = 0;
       sheetSentinel = false;
       orphanedSentinel = false;
+      lightboxSentinel = false;
+      orphanedLightboxSentinel = false;
       try {
         history.replaceState({ app: snapshot(store) }, '');
       } catch {
         // Sin historial utilizable: nada que re-escribir.
       }
+      return;
+    }
+    if (orphanedLightboxSentinel) {
+      // El pop consumió la centinela huérfana del visor (ya cerrado por ✕,
+      // fondo, Escape o cierre programático): la entrada era del visor, no una
+      // pantalla — sin cambio visible. NO se consulta el closer de la hoja:
+      // una hoja abierta debajo conserva su propia centinela intacta.
+      orphanedLightboxSentinel = false;
+      if (depth > 0) depth--;
+      return;
+    }
+    if (lightboxCloser && lightboxCloser()) {
+      // La pulsación atrás se consumió cerrando el visor: su centinela (que
+      // está SIEMPRE arriba mientras el visor está abierto) se poppeó y nada
+      // de debajo cambió — el visor no es una pantalla, solo se retira su
+      // entrada y se limpia el flag. La profundidad baja en uno.
+      lightboxSentinel = false;
+      orphanedLightboxSentinel = false;
+      if (depth > 0) depth--;
       return;
     }
     if (sheetCloser && sheetCloser()) {
@@ -222,12 +284,13 @@ export function navigate(store, kind, transition) {
   if (typeof history === 'undefined') return;
   if (kind === 'push') {
     // Pantalla nueva: entrada con la instantánea de lo recién pintado. Si la
-    // centinela quedó huérfana (hoja cerrada sin consumir), es la entrada
-    // actual: el push la REUTILIZA como entrada de la pantalla nueva en vez
-    // de empujar otra — la pila no crece y el atrás del sistema restaura la
+    // centinela quedó huérfana (hoja o visor cerrados sin consumir), es la
+    // entrada actual: el push la REUTILIZA como entrada de la pantalla nueva en
+    // vez de empujar otra — la pila no crece y el atrás del sistema restaura la
     // raíz (p. ej. el duplicado del Alta: cerrar hoja + abrir Ficha).
-    if (orphanedSentinel) {
+    if (orphanedSentinel || orphanedLightboxSentinel) {
       orphanedSentinel = false;
+      orphanedLightboxSentinel = false;
       try {
         history.replaceState({ app: snapshot(store) }, '');
       } catch {
@@ -251,6 +314,8 @@ export function navigate(store, kind, transition) {
     // real con la instantánea viva).
     sheetSentinel = false;
     orphanedSentinel = false;
+    lightboxSentinel = false;
+    orphanedLightboxSentinel = false;
     try {
       history.replaceState({ app: snapshot(store) }, '');
     } catch {
@@ -265,6 +330,8 @@ export function navigate(store, kind, transition) {
     // El rebobinado consume la centinela (huérfana o no) que estuviera arriba.
     sheetSentinel = false;
     orphanedSentinel = false;
+    lightboxSentinel = false;
+    orphanedLightboxSentinel = false;
     if (depth === 0) {
       // Ya en la raíz: solo se re-escribe la entrada actual.
       try {
@@ -301,6 +368,8 @@ export function navigate(store, kind, transition) {
     pendingSwallow++;
     sheetSentinel = false;
     orphanedSentinel = false;
+    lightboxSentinel = false;
+    orphanedLightboxSentinel = false;
     try {
       history.back();
     } catch {
@@ -364,6 +433,65 @@ export function consumeSheetSentinel() {
 }
 
 /**
+ * Entrada centinela del visor de capturas (el módulo del visor la pide al
+ * abrir, SIEMPRE — a diferencia de la hoja, que solo la pide a profundidad 0):
+ * el visor se abre encima de cualquier pantalla (Ficha empujada, hoja abierta
+ * o la raíz) y necesita una entrada propia arriba para que la primera pulsación
+ * de atrás del sistema lo cierre sin tocar lo de debajo. Empuja una entrada
+ * marcada ({app: null}: restore() la ignora, no es una pantalla restaurable) y
+ * la deja como entrada superior; el siguiente atrás del sistema la poppea,
+ * consulta el closer del visor y la pulsación se consume cerrándolo. No-op si
+ * la centinela ya está arriba; si quedó una huérfana (visor cerrado sin
+ * consumir), la re-utiliza en vez de empujar otra.
+ * @returns {boolean} true si el visor tiene centinela arriba.
+ */
+export function ensureLightboxSentinel() {
+  if (typeof history === 'undefined') return false;
+  if (lightboxSentinel) return false;
+  if (orphanedLightboxSentinel) {
+    // La centinela huérfana sigue arriba (nada tocó el historial desde el
+    // cierre): el visor nuevo la re-utiliza.
+    orphanedLightboxSentinel = false;
+    lightboxSentinel = true;
+    return true;
+  }
+  depth++;
+  lightboxSentinel = true;
+  try {
+    history.pushState({ app: null }, '');
+  } catch {
+    depth--;
+    lightboxSentinel = false;
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Consume la centinela al cerrar el visor por una vía que no es el atrás del
+ * sistema (✕, fondo, Escape, cierre programático). Consumo DIFERIDO, igual que
+ * la centinela de hoja: la entrada queda marcada como huérfana y la consume la
+ * próxima operación de historial. No-op sin centinela pendiente (el atrás del
+ * sistema ya la consumió con su popstate).
+ */
+export function consumeLightboxSentinel() {
+  if (!lightboxSentinel) return;
+  lightboxSentinel = false;
+  orphanedLightboxSentinel = true;
+}
+
+/**
+ * Registra el cierre del visor de capturas (src/ui/lightbox.js): el popstate
+ * que no se traga consulta el cierre del visor ANTES que el de la hoja; si
+ * devuelve true, la pulsación atrás se consumió cerrando el visor y la
+ * pantalla de debajo no cambia.
+ * @param {() => boolean} fn
+ */
+export function registerLightboxCloser(fn) {
+  lightboxCloser = fn;
+}
+
+/**
  * Registra el cierre de la hoja del módulo de hojas (ticket 2): el popstate
  * que no se traga consulta el cierre ANTES de restaurar; si devuelve true,
  * la pulsación atrás se consumió cerrando la hoja y la pantalla no cambia.
@@ -380,8 +508,11 @@ export function resetBackNav() {
   pendingReset = false;
   sheetSentinel = false;
   orphanedSentinel = false;
+  lightboxSentinel = false;
+  orphanedLightboxSentinel = false;
   installed = false;
   sheetCloser = null;
+  lightboxCloser = null;
   if (popHandler && typeof window !== 'undefined') {
     window.removeEventListener('popstate', popHandler);
   }
