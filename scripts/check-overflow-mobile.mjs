@@ -36,6 +36,7 @@ const GAMES = [
   {
     title: 'The Legend of Zelda: Tears of the Kingdom',
     status: 'playing',
+    genres: 'Rol de mundo abierto',
     tags: 'aventura, mundo abierto',
     platforms: 'Nintendo Switch',
     screenshots:
@@ -45,6 +46,7 @@ const GAMES = [
   {
     title: 'Elden Ring: Shadow of the Erdtree',
     status: 'finished',
+    genres: 'Rol de acción Souls-like',
     tags: 'rol, difícil',
     platforms: 'Mi emulador de sobremesa portátil',
     screenshots:
@@ -54,6 +56,7 @@ const GAMES = [
   {
     title: "Baldur's Gate 3",
     status: 'backlog',
+    genres: 'Rol por turnos',
     tags: 'rol, cooperativo',
     platforms: 'PC (Steam Deck)',
     screenshots: '',
@@ -61,7 +64,43 @@ const GAMES = [
   },
 ];
 
-function fixtureGame(id, title, date, platforms) {
+/** Géneros largos repartidos por las secciones: el chip-row del drill-down
+ * queda ancho y estresa el encadenado flex de las superficies fijas
+ * (regresión: con un solo género la fila nunca ensanchaba la página). */
+const NOVEDADES_GENRES = [
+  'Role-playing (RPG)',
+  'Real Time Strategy (RTS)',
+  'Turn-based Strategy (TBS)',
+  'Point-and-click',
+  'Fighting',
+  'Shooter',
+  'Music/Rhythm',
+  'Platformer',
+  'Puzzle',
+  'Racing',
+  'Simulation',
+  'Sport',
+  'Strategy',
+  'Tactical',
+  'Quiz/Trivia',
+  'Hack and slash/Beat em up',
+  'Pinball',
+  'Adventure',
+  'Indie',
+  'Arcade',
+  'Visual Novel',
+  'Card & Board Game',
+  'MOBA',
+  'Stealth',
+  'Survival Horror',
+  'Battle Royale',
+  'Action RPG',
+  'Souls-like',
+  'Roguelike',
+  'Metroidvania',
+];
+
+function fixtureGame(id, title, date, platforms, genreIndex) {
   return {
     igdbId: id,
     title,
@@ -69,7 +108,7 @@ function fixtureGame(id, title, date, platforms) {
     coverUrl: null,
     description:
       'Descripción larga de prueba para estresar el layout de la ficha externa y del drill-down de novedades.',
-    genres: [{ id, name: 'Género de prueba' }],
+    genres: [{ id, name: NOVEDADES_GENRES[genreIndex % NOVEDADES_GENRES.length] }],
     platforms: platforms.map((name, i) => ({ id: id * 10 + i, name })),
     screenshots: [],
   };
@@ -121,10 +160,10 @@ const ESPERADOS = [
 ];
 
 const NOVEDADES_FIXTURE = {
-  recientes: RECIENTES.map((t, i) => fixtureGame(100 + i, t, '2026-08-01', ['Nintendo Switch', 'PC (Steam Deck)'])),
-  proximos: PROXIMOS.map((t, i) => fixtureGame(200 + i, t, '2026-09-15', ['Mi emulador de sobremesa portátil'])),
-  populares: POPULARES.map((t, i) => fixtureGame(300 + i, t, '2026-07-20', ['PC (Steam Deck)', 'PlayStation 5'])),
-  esperados: ESPERADOS.map((t, i) => fixtureGame(400 + i, t, '2026-10-01', ['Nintendo Switch'])),
+  recientes: RECIENTES.map((t, i) => fixtureGame(100 + i, t, '2026-08-01', ['Nintendo Switch', 'PC (Steam Deck)'], i)),
+  proximos: PROXIMOS.map((t, i) => fixtureGame(200 + i, t, '2026-09-15', ['Mi emulador de sobremesa portátil'], i + 3)),
+  populares: POPULARES.map((t, i) => fixtureGame(300 + i, t, '2026-07-20', ['PC (Steam Deck)', 'PlayStation 5'], i + 7)),
+  esperados: ESPERADOS.map((t, i) => fixtureGame(400 + i, t, '2026-10-01', ['Nintendo Switch'], i + 11)),
   generatedAt: new Date().toISOString(),
 };
 
@@ -407,6 +446,7 @@ async function runViewport(browser, vp) {
         if (card) card.click();
       }, game.title);
       await page.waitForSelector('.ficha', { timeout: 5000 });
+      if (game.genres) await editField(page, 'genres', game.genres);
       if (game.platforms) await editField(page, 'platforms', game.platforms);
       if (game.screenshots) await editField(page, 'screenshots', game.screenshots);
       for (let i = 1; i < game.plays; i++) {

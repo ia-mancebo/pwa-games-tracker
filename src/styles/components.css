@@ -413,6 +413,9 @@ button.plate:hover {
   overflow-x: auto;
   scrollbar-width: thin;
   padding-bottom: 2px;
+  /* Como item flex (panel/drill-down fijos) el min-width:auto tomaría el
+     mínimo transferido y ensancharía la página con los chips nowrap. */
+  min-width: 0;
 }
 
 .cardbox.tight {
@@ -2169,8 +2172,16 @@ button.pill-btn:hover {
 .surface-fixed .content > .main > .fade {
   flex: 1;
   min-height: 0;
+  /* Item flex con min-width:auto recibe el mínimo transferido (min-content):
+     los chips nowrap de los filtros ensancharían toda la cadena y la página
+     scrollearía en horizontal. Cero corta la transferencia en cada eslabón. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
+}
+
+.surface-fixed .content > .main .toolbar {
+  min-width: 0;
 }
 
 .surface-fixed .content > .main .cardbox.tight {
@@ -2199,11 +2210,15 @@ button.pill-btn:hover {
 
 @media (max-width: 899px) {
   /* Móvil: el raíl colapsado a barra superior ocupa su propia fila; el shell
-     pasa a columna de altura de ventana para que la tabla no se salga. */
+     pasa a columna de altura de ventana para que la tabla no se salga.
+     align-items:stretch (no heredar el start del grid): si la columna se
+     dimensionara por contenido, los chips nowrap de los filtros la
+     ensancharían a su max-content y la página scrollearía en horizontal. */
   .surface-fixed .shell {
     height: 100dvh;
     display: flex;
     flex-direction: column;
+    align-items: stretch;
   }
 
   .surface-fixed .content {
