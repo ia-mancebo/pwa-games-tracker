@@ -19,5 +19,8 @@ export function downloadTextBlob(text, name) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  // Revocar en el mismo tick (setTimeout 0) puede cancelar la descarga antes
+  // de que el navegador la inicie (Chrome Android PWA). Se difiere: el blob
+  // queda vivo de sobra y el navegador lo libera solo al cerrar la página.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

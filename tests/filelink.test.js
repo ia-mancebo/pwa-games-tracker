@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, store } from '../src/app.js';
-import { addGame, importDoc } from '../src/data/library.js';
+import { addGame, addPlay, importDoc } from '../src/data/library.js';
 import {
   markConnected,
   pickAndConnect,
@@ -58,13 +58,20 @@ async function settle() {
 
 /**
  * @param {string} initialText
- * @param {{ failWrites?: boolean }} [options]
+ * @param {{ failWrites?: boolean, killOnCreate?: boolean }} [options]
  * @returns {{ name: string, setText(next: string): void, readonly writes: number, readonly captured: string | null,
- *   getFile(): Promise<File>, createWritable(): Promise<{write(data: string): Promise<void>, close(): Promise<void>}>,
+ *   getFile(): Promise<File>, createWritable(options?: { keepExistingData?: boolean }): Promise<{
+ *     write(data: string): Promise<void>, truncate(size: number): Promise<void>, close(): Promise<void>}>,
  *   requestPermission(options?: { mode: string }): Promise<string> }}
  */
 function makeHandle(initialText, options = {}) {
-  const state = { text: initialText, writes: 0, captured: /** @type {string | null} */ (null), fail: options.failWrites === true };
+  const state = {
+    text: initialText,
+    writes: 0,
+    captured: /** @type {string | null} */ (null),
+    fail: options.failWrites === true,
+    killOnCreate: options.killOnCreate === true,
+  };
   return {
     name: 'game-tracker.json',
     setText(next) {
@@ -79,15 +86,26 @@ function makeHandle(initialText, options = {}) {
     async getFile() {
       return new File([state.text], 'game-tracker.json', { type: 'application/json' });
     },
-    async createWritable() {
+    async createWritable(opts = {}) {
       if (state.fail) throw new Error('disco lleno');
       state.writes += 1;
+      // FSA real: sin keepExistingData el archivo queda a 0 bytes EN EL MISMO
+      // createWritable. El bug de truncado depende de este detalle.
+      if (!opts.keepExistingData) state.text = '';
       return {
         async write(data) {
+          if (state.killOnCreate) return new Promise(() => {});
           state.captured = data;
           // El archivo en disco refleja la escritura (como createWritable real):
           // los vuelcos siguientes pre-chequean el hash contra este contenido.
           state.text = data;
+        },
+        async truncate(size) {
+          // FSA real: truncate recibe BYTES UTF-8, no code units UTF-16. El
+          // fake modela esa semántica: recorta el texto codificado a `size`
+          // bytes y lo decodifica (un corte a mitad de carácter multibyte
+          // produce U+FFFD, como en el navegador).
+          state.text = new TextDecoder().decode(new TextEncoder().encode(state.text).slice(0, size));
         },
         async close() {},
       };
@@ -280,6 +298,37 @@ describe('saveNow (vuelco verificado, §5.4)', () => {
     expect(retried.status).toBe('saved');
     expect(store.get().file.status).toBe('connected');
     expect(store.get().meta.dirty).toBe(false);
+  });
+
+  it('kill a mitad del vuelco: entre createWritable y write el archivo NUNCA queda a 0 bytes', async () => {
+    const handle = makeHandle(FILE_V1_TEXT, { killOnCreate: true });
+    await connectFile(FILE_V1_TEXT, handle);
+    await addGame({ title: 'Hades II', today: TODAY });
+
+    // La pestaña muere justo al crear el writable (Android mata la página al
+    // ocultarse): ni write ni close llegan a correr. Releemos el archivo en la
+    // «próxima sesión»: con el código actual quedó truncado a 0 bytes.
+    void saveNow();
+    await settle();
+
+    const text = await (await handle.getFile()).text();
+    expect(text).toBe(FILE_V1_TEXT);
+    expect(store.get().meta.dirty).toBe(true);
+  });
+
+  it('vuelco con contenido acentuado conserva el JSON íntegro (truncate a bytes UTF-8, no a code units)', async () => {
+    const handle = makeHandle(FILE_V1_TEXT);
+    await connectFile(FILE_V1_TEXT, handle);
+    // Acentos/ñ (2 bytes UTF-8) y un emoji (surrogate pair, 4 bytes): hacen
+    // que text.length (code units) sea MENOR que la longitud real en bytes.
+    await addGame({ title: 'Tomb Raider: La Última Revelación', today: TODAY });
+    await addPlay('g1', { status: 'finished', today: TODAY, notes: '🔥 final épico' });
+
+    const res = await saveNow();
+
+    expect(res.status).toBe('saved');
+    const text = await (await handle.getFile()).text();
+    expect(text).toBe(JSON.stringify(store.get().doc));
   });
 
   it('archivo cambió fuera + cambios sin volcar → conflicto SIN escribir', async () => {

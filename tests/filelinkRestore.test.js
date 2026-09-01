@@ -91,6 +91,7 @@ function makeHandle(initialText, perm) {
         async write(data) {
           state.text = data;
         },
+        async truncate() {},
         async close() {},
       };
     },

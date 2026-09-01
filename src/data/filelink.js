@@ -85,10 +85,15 @@ export function setHandleStore(next) {
 
 /**
  * Handle FSA con escritura y permisos; tipado estructural para que los tests
- * lo simulen con objetos planos.
+ * lo simulen con objetos planos. `createWritable` acepta opciones FSA
+ * (`keepExistingData`) y el writable expone `truncate` además de write/close.
  * @typedef {{
  *   getFile(): Promise<File>,
- *   createWritable(): Promise<{ write(data: string): Promise<void>, close(): Promise<void> }>,
+ *   createWritable(options?: { keepExistingData?: boolean }): Promise<{
+ *     write(data: string): Promise<void>,
+ *     truncate(size: number): Promise<void>,
+ *     close(): Promise<void>,
+ *   }>,
  *   requestPermission(options?: { mode: 'read' | 'readwrite' }): Promise<PermissionState>,
  *   name?: string,
  * }} WritableFileHandle
@@ -471,6 +476,11 @@ export async function saveNow({ force = false } = {}) {
 async function doSave({ force, handle, doc, meta, file }) {
   const name = file.name ?? meta.connectedFileName;
   const text = JSON.stringify(doc);
+  // Longitud en BYTES UTF-8 del texto: `truncate` de FSA recibe bytes, no
+  // code units UTF-16 (text.length). Con acentos/ñ/emojis los bytes superan
+  // a los code units; truncar con text.length recortaría la cola del JSON.
+  // Se calcula aquí, antes del writable, para reducir la ventana de trabajo.
+  const bytes = new TextEncoder().encode(text);
   const hash = await sha256Hex(text);
   if (!force && meta.lastSavedFileHash != null) {
     // Comprobación de hash justo antes de CADA vuelco (spec §5.5), limpio o no.
@@ -499,8 +509,17 @@ async function doSave({ force, handle, doc, meta, file }) {
     // Igual: el vuelco continúa y escribe.
   }
   try {
-    const writable = await handle.createWritable();
+    // Escritura kill-safe: `keepExistingData` evita el truncado a 0 bytes en
+    // el propio createWritable (bug del .json vacío al morir la pestaña a
+    // mitad del vuelco). Sin él, FSA trunca el archivo AL CREAR el writable:
+    // un kill entre createWritable y write deja el archivo a 0B. Con él, el
+    // contenido anterior sobrevive intacto salvo en la ventana entre write y
+    // truncate (prefijo nuevo + cola vieja, recuperable), nunca 0B.
+    const writable = await handle.createWritable({ keepExistingData: true });
     await writable.write(text);
+    // El write empieza en el offset 0: recorta la cola del contenido viejo si
+    // el texto nuevo es más corto que el anterior. En bytes UTF-8 (bytes.length).
+    await writable.truncate(bytes.length);
     await writable.close();
   } catch (err) {
     setFileError(err);

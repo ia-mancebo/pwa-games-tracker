@@ -170,7 +170,26 @@ async function doExport() {
         paint({ note: '', error: '' });
         return;
       }
-      // Picker roto o permiso fallido: cae al vuelco universal por descarga.
+      // Picker roto o permiso fallido: cae al fallback (share o descarga).
+    }
+  }
+  if (!written) {
+    // Android PWA: `showSaveFilePicker` no existe o lanza fuera de contexto
+    // seguro, y la descarga por <a download> en display standalone es poco
+    // fiable (blob revocado a los 0 ms). El share sheet con archivos es la
+    // vía real de dejar la copia en manos del usuario.
+    if (canShareFiles()) {
+      const file = new File([text], name, { type: 'application/json' });
+      try {
+        await /** @type {any} */ (navigator).share({ files: [file] });
+        written = true;
+      } catch (err) {
+        if (isAbortError(err)) {
+          paint({ note: '', error: '' });
+          return;
+        }
+        // Share falló (sin apps de destino…): cae a la descarga universal.
+      }
     }
   }
   if (!written) downloadTextBlob(text, name);
@@ -184,7 +203,13 @@ async function doExport() {
     await markSaved({ hash: await sha256Hex(text), now: new Date(), doc: serialized.doc });
     void requestPersistOnce();
   } catch (err) {
-    paint({ note: '', error: `Copia exportada como «${name}», pero no se pudo registrar el vuelco: ${formatError(err)}` });
+    // La copia ya está en manos del usuario (picker, share o descarga); el
+    // registro del vuelco en meta es un extra: su fallo no debe pintar el
+    // export como fracasado ni ocultar que la copia se hizo.
+    paint({
+      note: `Copia exportada como «${name}». No se pudo registrar el vuelco en este dispositivo: ${formatError(err)}`,
+      error: '',
+    });
     return;
   }
   paint({ note: `Copia exportada como «${name}»: vuelco verificado registrado.`, error: '' });

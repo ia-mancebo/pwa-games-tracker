@@ -1,3 +1,8 @@
+/**
+ * Descarga de texto como archivo (Blob + a[download]). El revoke del blob URL
+ * no puede ser inmediato (setTimeout 0): en Chrome Android PWA puede cancelar
+ * la descarga antes de que el navegador la inicie.
+ */
 import { describe, expect, it, vi } from 'vitest';
 import { downloadTextBlob } from './download.js';
 
@@ -40,7 +45,8 @@ describe('downloadTextBlob', () => {
     }
   });
 
-  it('libera la URL del blob al terminar el turno', async () => {
+  it('no revoca el blob en el mismo tick ni al segundo: el revoke se difiere', () => {
+    vi.useFakeTimers();
     const urlApi = /** @type {any} */ (globalThis.URL);
     const prevCreate = urlApi.createObjectURL;
     const prevRevoke = urlApi.revokeObjectURL;
@@ -51,11 +57,15 @@ describe('downloadTextBlob', () => {
 
     try {
       downloadTextBlob('x', 'a.json');
-      await new Promise((resolve) => setTimeout(resolve, 0));
 
+      expect(revoke).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1000);
+      expect(revoke).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(60_000);
       expect(revoke).toHaveBeenCalledWith('blob:test-url');
     } finally {
       clickSpy.mockRestore();
+      vi.useRealTimers();
       if (prevCreate) urlApi.createObjectURL = prevCreate;
       else delete urlApi.createObjectURL;
       if (prevRevoke) urlApi.revokeObjectURL = prevRevoke;

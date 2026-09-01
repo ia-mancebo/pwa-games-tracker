@@ -93,6 +93,7 @@ function makeHandle(initialText, options = {}) {
         async write(data) {
           state.captured = data;
         },
+        async truncate() {},
         async close() {},
       };
     },
@@ -602,6 +603,37 @@ describe('diálogo «Datos»', () => {
       else delete urlApi.createObjectURL;
       if (prevRevoke) urlApi.revokeObjectURL = prevRevoke;
       else delete urlApi.revokeObjectURL;
+    }
+  });
+
+  it('picker presente pero roto (Android sin soporte real): el export cae a compartir el archivo si puede', async () => {
+    await importDoc(DOC_A_TEXT, { hash: await sha256Hex(DOC_A_TEXT), fileName: null });
+    await addGame({ title: 'Hades II', today: TODAY });
+    defineNav('canShare', () => true);
+    const shareSpy = vi.fn((/** @type {unknown} */ _arg) => Promise.resolve());
+    defineNav('share', shareSpy);
+    // hasSavePicker() da true pero el picker lanza (contexto no seguro, PWA
+    // de Android): el catch no debe caer en una descarga muda por <a download>.
+    /** @type {any} */ (window).showSaveFilePicker = vi.fn(() => Promise.reject(new Error('NotSupportedError')));
+    const anchors = /** @type {HTMLElement[]} */ ([]);
+    const originalAppend = document.body.appendChild.bind(document.body);
+    const appendSpy = vi.spyOn(document.body, 'appendChild').mockImplementation((el) => {
+      if (el instanceof HTMLElement && el.tagName === 'A') anchors.push(el);
+      return originalAppend(el);
+    });
+    openDataDialog();
+    try {
+      btn(qs('[data-export]', document.body)).click();
+      await settle();
+
+      expect(shareSpy).toHaveBeenCalledTimes(1);
+      const arg = /** @type {{ files: File[] }} */ (shareSpy.mock.calls[0][0]);
+      expect(arg.files[0].name).toBe('game-tracker.json');
+      expect(arg.files[0].type).toBe('application/json');
+      expect(anchors).toHaveLength(0);
+      expect(store.get().meta.dirty).toBe(false);
+    } finally {
+      appendSpy.mockRestore();
     }
   });
 
