@@ -167,6 +167,46 @@ const NOVEDADES_FIXTURE = {
   generatedAt: new Date().toISOString(),
 };
 
+/** Resultado de búsqueda estresante (regresión: la galería de la
+ * previsualización desbordaba la tarjeta; .add-preview .d-sec la confina). */
+const SEARCH_FIXTURE = {
+  results: [
+    {
+      igdbId: 9001,
+      title: 'The Legend of Zelda: Tears of the Kingdom — Edición Definitiva del Coleccionista',
+      releaseDate: '2023-05-12',
+      coverUrl: null,
+      description:
+        'Un título tan largo que debería caber siempre, y sin embargo estresa la previsualización: ' +
+        'una descripción muy larga con muchas palabras y frases que se extienden durante varias líneas ' +
+        'para comprobar que el texto envuelve bien dentro de la tarjeta y jamás desborda el contenedor ' +
+        'de resultados de la búsqueda online de la hoja de Alta del gestor de juegos.',
+      genres: [
+        { id: 1, name: 'Role-playing (RPG)' },
+        { id: 2, name: 'Action-Adventure' },
+        { id: 3, name: 'Real Time Strategy (RTS)' },
+        { id: 4, name: 'Point-and-click' },
+        { id: 5, name: 'Survival Horror' },
+        { id: 6, name: 'Hack and slash/Beat em up' },
+        { id: 7, name: 'Turn-based Strategy (TBS)' },
+        { id: 8, name: 'Card & Board Game' },
+      ],
+      platforms: [
+        { id: 11, name: 'Mi emulador de sobremesa portátil' },
+        { id: 12, name: 'Nintendo Switch 2 - Edición limitada' },
+        { id: 13, name: 'PlayStation 5 Pro' },
+        { id: 14, name: 'Xbox Series X|S' },
+        { id: 15, name: 'PC (Steam Deck)' },
+        { id: 16, name: 'RetroArch en consola' },
+      ],
+      screenshots: Array.from(
+        { length: 6 },
+        (_, i) => `https://images.igdb.com/igdb/image/upload/t_screenshot_big/s${i}.jpg`
+      ),
+    },
+  ],
+};
+
 /* ------------------------------------------------------------------ */
 /* Servidor                                                           */
 /* ------------------------------------------------------------------ */
@@ -395,7 +435,7 @@ async function runViewport(browser, vp) {
             status: 200,
             contentType: 'application/json',
             headers: cors,
-            body: JSON.stringify({ results: [] }),
+            body: JSON.stringify(SEARCH_FIXTURE),
           });
         } else if (path === '/api/health') {
           req.respond({
@@ -473,6 +513,41 @@ async function runViewport(browser, vp) {
       { timeout: 5000 }
     );
     await clickSel(page, '[data-sheet-close]');
+    await page.waitForFunction(() => !document.querySelector('.add-layer'), { timeout: 5000 });
+
+    // Búsqueda online con fixtures estresantes: resultados y previsualización
+    // (regresión: la galería de la previsualización desbordaba la tarjeta).
+    await clickSel(page, '[data-add-game]');
+    await page.waitForSelector('input[name="online-query"]', { timeout: 5000 });
+    await page.$eval('input[name="online-query"]', (el, v) => {
+      el.value = v;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }, 'zelda');
+    await page.waitForSelector('.add-result', { timeout: 8000 });
+    await measure('Alta búsqueda online (resultados)');
+    await clickSel(page, '.add-result');
+    await page.waitForSelector('.add-preview', { timeout: 5000 });
+    await measure('Alta búsqueda online (previsualización)');
+    // El sheet es scroll container legítimo (whitelist): el desborde interno
+    // de la tarjeta no ensancha la página. Medirlo aparte: la tarjeta y su
+    // información no deben desbordar su propia caja (regresión de la galería).
+    const internalOverflow = await page.evaluate(() => {
+      const out = [];
+      for (const sel of ['.add-result', '.add-preview', '.add-preview-info']) {
+        const el = document.querySelector(sel);
+        if (el && el.scrollWidth > el.clientWidth + 1) {
+          out.push(`${sel} scrollWidth=${el.scrollWidth} clientWidth=${el.clientWidth}`);
+        }
+      }
+      return out;
+    });
+    if (internalOverflow.length > 0) {
+      failures.push('Alta búsqueda online (desborde interno)');
+      console.log(`  RED Alta búsqueda online (desborde interno): ${internalOverflow.join('; ')}`);
+    } else {
+      console.log('  GREEN Alta búsqueda online (desborde interno): tarjetas sin desborde');
+    }
+    await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.add-layer'), { timeout: 5000 });
 
     // Novedades: refresco con fixtures → tablón real.
@@ -570,7 +645,7 @@ const browser = await puppeteer.launch({
 });
 
 let totalFailures = 0;
-const SURFACE_COUNT = 9;
+const SURFACE_COUNT = 11;
 try {
   for (const vp of VIEWPORTS) {
     console.log(`\n=== ${vp.label} ===`);

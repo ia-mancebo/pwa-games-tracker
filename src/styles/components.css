@@ -943,6 +943,15 @@ button.plate:hover {
   padding-top: 12px;
 }
 
+/* La galería de la previsualización es flex item de .add-preview: sin
+   min-width: 0 su mínimo es el ancho completo de las capturas (los .d-shot no
+   encogen) y desborda la tarjeta; flex-basis: 100% la lleva a su propia línea
+   y el scroll horizontal de .d-gallery queda confinado dentro de la tarjeta. */
+.add-preview .d-sec {
+  flex-basis: 100%;
+  min-width: 0;
+}
+
 .add-form .field {
   display: block;
   border: none;
