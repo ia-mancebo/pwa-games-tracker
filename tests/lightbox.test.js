@@ -40,20 +40,41 @@ function need(el) {
  * @param {HTMLElement} layer
  * @param {number} from
  * @param {number} to
+ * @param {number} [fromY]
+ * @param {number} [toY]
  */
-function swipe(layer, from, to) {
+function swipe(layer, from, to, fromY = 120, toY = 120) {
   /**
    * @param {string} type
    * @param {number} x
+   * @param {number} y
    */
-  const touch = (type, x) => {
+  const touch = (type, x, y) => {
     const ev = new Event(type, { bubbles: true });
-    /** @type {any} */ (ev).changedTouches = [{ clientX: x }];
+    /** @type {any} */ (ev).changedTouches = [{ clientX: x, clientY: y }];
     layer.dispatchEvent(ev);
   };
-  touch('touchstart', from);
-  touch('touchmove', (from + to) / 2);
-  touch('touchend', to);
+  touch('touchstart', from, fromY);
+  touch('touchmove', (from + to) / 2, (fromY + toY) / 2);
+  touch('touchend', to, toY);
+}
+
+/**
+ * Tap táctil corto (sin movimiento) sobre `el`: el gesto se resuelve en el
+ * `touchend`, sin click sintético posterior.
+ * @param {HTMLElement} el
+ */
+function tap(el) {
+  /**
+   * @param {string} type
+   */
+  const touch = (type) => {
+    const ev = new Event(type, { bubbles: true });
+    /** @type {any} */ (ev).changedTouches = [{ clientX: 150, clientY: 150 }];
+    el.dispatchEvent(ev);
+  };
+  touch('touchstart');
+  touch('touchend');
 }
 
 beforeEach(async () => {
@@ -232,13 +253,78 @@ describe('primitiva directa', () => {
     expect(qs('.lightbox', document.body)).toBeTruthy();
   });
 
-  it('un toque corto (bajo el umbral) no navega', () => {
+  it('un toque corto (bajo el umbral) cierra el visor: es un tap', () => {
     openLightbox([SHOT_A, SHOT_B]);
     const layer = need(qs('.lightbox', document.body));
     const img = need(layer.querySelector('img'));
 
-    swipe(layer, 300, 280);
+    swipe(layer, 300, 288);
     expect(img.getAttribute('src')).toBe(SHOT_A);
+    expect(qs('.lightbox', document.body)).toBeNull();
+  });
+
+  it('un tap en el ✕ cierra el visor a la primera (táctil, sin click)', () => {
+    openLightbox([SHOT_A, SHOT_B]);
+    const layer = need(qs('.lightbox', document.body));
+
+    tap(need(qs('.lightbox-close', layer)));
+    expect(qs('.lightbox', document.body)).toBeNull();
+  });
+
+  it('un tap sobre una flecha navega sin cerrar (táctil, sin click)', () => {
+    openLightbox([SHOT_A, SHOT_B]);
+    const layer = need(qs('.lightbox', document.body));
+    const img = need(layer.querySelector('img'));
+
+    tap(need(qs('.lightbox-next', layer)));
+    expect(img.getAttribute('src')).toBe(SHOT_B);
+    expect(qs('.lightbox', document.body)).toBeTruthy();
+
+    tap(need(qs('.lightbox-prev', layer)));
+    expect(img.getAttribute('src')).toBe(SHOT_A);
+    expect(qs('.lightbox', document.body)).toBeTruthy();
+  });
+
+  it('el click sintético del navegador tras un swipe no cierra ni re-navega', () => {
+    openLightbox([SHOT_A, SHOT_B]);
+    const layer = need(qs('.lightbox', document.body));
+    const img = need(layer.querySelector('img'));
+
+    swipe(layer, 300, 200);
+    expect(img.getAttribute('src')).toBe(SHOT_B);
+    // Eco del navegador dentro de la ventana de supresión: se traga.
+    btn(layer).click();
+    expect(img.getAttribute('src')).toBe(SHOT_B);
+    expect(qs('.lightbox', document.body)).toBeTruthy();
+  });
+
+  it('el click de ratón (sin toques previos) sigue cerrando', () => {
+    openLightbox([SHOT_A, SHOT_B]);
+    const layer = need(qs('.lightbox', document.body));
+
+    btn(layer).click();
+    expect(qs('.lightbox', document.body)).toBeNull();
+  });
+
+  it('el click tras un swipe, con la ventana ya expirada, cierra', async () => {
+    openLightbox([SHOT_A, SHOT_B]);
+    const layer = need(qs('.lightbox', document.body));
+
+    swipe(layer, 300, 200);
+    expect(qs('.lightbox', document.body)).toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve, 550));
+    btn(layer).click();
+    expect(qs('.lightbox', document.body)).toBeNull();
+  });
+
+  it('el paneo vertical (dy dominante) no navega ni cierra', () => {
+    openLightbox([SHOT_A, SHOT_B, SHOT_C], 1);
+    const layer = need(qs('.lightbox', document.body));
+    const img = need(layer.querySelector('img'));
+
+    swipe(layer, 200, 205, 100, 300);
+    expect(img.getAttribute('src')).toBe(SHOT_B);
+    expect(qs('.lightbox', document.body)).toBeTruthy();
   });
 });
 
