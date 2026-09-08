@@ -259,13 +259,13 @@ describe('edición en línea de jugadas', () => {
       need(qs('input[data-play-date="startedAt"]', card))
     );
     start.value = '2026-06-20';
-    start.dispatchEvent(new Event('change', { bubbles: true }));
+    start.dispatchEvent(new Event('focusout', { bubbles: true }));
 
     const finish = /** @type {HTMLInputElement} */ (
       need(qs('input[data-play-date="finishedAt"]', card))
     );
     finish.value = '2026-08-01';
-    finish.dispatchEvent(new Event('change', { bubbles: true }));
+    finish.dispatchEvent(new Event('focusout', { bubbles: true }));
 
     const notesBox = /** @type {HTMLTextAreaElement} */ (need(qs('textarea[data-play-notes]', card)));
     notesBox.value = 'Segunda vuelta al DLC';
@@ -287,6 +287,36 @@ describe('edición en línea de jugadas', () => {
     expect(reloaded.notes).toBe('Segunda vuelta al DLC');
   });
 
+  it('un `change` del input date a mitad de escritura no confirma ni re-renderiza (Chrome lo dispara al completarse la fecha)', async () => {
+    await seed([
+      {
+        id: 'g1',
+        title: 'Hollow Knight',
+        plays: [{ status: 'playing', addedAt: '2026-06-15', startedAt: '2026-06-15' }],
+      },
+    ]);
+    const root = mount();
+    createApp(root);
+    openFromPanel(root, 'g1', 'playing');
+
+    // Chrome dispara `change` en cuanto la fecha queda completa: al teclear el
+    // año, cada dígito la completa. Confirmar ahí re-renderizaba la Ficha a
+    // mitad de escritura y el input se reconstruía (el usuario veía una
+    // «recarga»). El `change` debe ignorarse: ni doc tocado ni nodo sustituido.
+    const start = /** @type {HTMLInputElement} */ (
+      need(qs('input[data-play-date="startedAt"]', root))
+    );
+    start.value = '2026-06-20';
+    start.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(findPlay('g1', 'g1-p1').startedAt).toBe('2026-06-15');
+    expect(qs('input[data-play-date="startedAt"]', root)).toBe(start);
+
+    // La fecha se confirma al salir del campo (focusout), como el título.
+    start.dispatchEvent(new Event('focusout', { bubbles: true }));
+    await vi.waitFor(() => expect(findPlay('g1', 'g1-p1').startedAt).toBe('2026-06-20'));
+  });
+
   it('vaciar una fecha elimina el campo (campo ausente = desconocido)', async () => {
     await seed([
       {
@@ -303,7 +333,7 @@ describe('edición en línea de jugadas', () => {
       need(qs('input[data-play-date="finishedAt"]', root))
     );
     finish.value = '';
-    finish.dispatchEvent(new Event('change', { bubbles: true }));
+    finish.dispatchEvent(new Event('focusout', { bubbles: true }));
 
     await vi.waitFor(() => {
       expect(findPlay('g1', 'g1-p1').finishedAt).toBeUndefined();

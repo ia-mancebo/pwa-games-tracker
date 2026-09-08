@@ -766,14 +766,6 @@ function wire(container, store) {
     const game = currentGame(store);
     if (!game) return;
 
-    if (target.matches('input[type="date"][data-play-date]')) {
-      const kind = target.getAttribute('data-play-date');
-      const playId = target.getAttribute('data-play-id') ?? '';
-      const value = /** @type {HTMLInputElement} */ (target).value;
-      if (kind !== 'startedAt' && kind !== 'finishedAt') return;
-      void setPlayDate(game.id, playId, kind, value);
-      return;
-    }
     if (target.matches('select[data-play-platform]')) {
       const playId = target.getAttribute('data-play-id') ?? '';
       const select = /** @type {HTMLSelectElement} */ (target);
@@ -835,10 +827,27 @@ function wire(container, store) {
   });
 
   // El blur no burbujea, pero focusout sí: salir del título (salvo hacia sus
-  // propios botones) confirma la edición, igual que Enter.
+  // propios botones) confirma la edición, igual que Enter. Las fechas también
+  // se confirman aquí y NO en `change`: Chrome dispara `change` en cuanto la
+  // fecha queda completa, y al teclear el año cada dígito la completa — si se
+  // confirmara ahí, cada dígito re-renderizaría la Ficha entera y el input se
+  // reconstruiría a mitad de escritura (el usuario ve una «recarga»).
   surface.addEventListener('focusout', (e) => {
     const target = e.target;
-    if (!(target instanceof HTMLElement) || !target.matches('[data-title-input]')) return;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.matches('input[type="date"][data-play-date]')) {
+      const game = currentGame(store);
+      if (!game) return;
+      const kind = target.getAttribute('data-play-date');
+      const playId = target.getAttribute('data-play-id') ?? '';
+      const value = /** @type {HTMLInputElement} */ (target).value;
+      if (kind !== 'startedAt' && kind !== 'finishedAt') return;
+      const current = game.plays.find((p) => p.id === playId)?.[kind] ?? '';
+      if (value === current) return;
+      void setPlayDate(game.id, playId, kind, value);
+      return;
+    }
+    if (!target.matches('[data-title-input]')) return;
     const form = target.closest('[data-title-form]');
     const to = e.relatedTarget;
     if (form && to instanceof HTMLElement && form.contains(to)) return;
