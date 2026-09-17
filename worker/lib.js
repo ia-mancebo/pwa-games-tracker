@@ -79,17 +79,42 @@ function apicalypse(lines) {
   return lines.join('\n');
 }
 
+/** Escapa barras invertidas y comillas dobles de un término para Apicalypse.
+ *
+ * @param {string} q
+ * @returns {string}
+ */
+function escapeTerm(q) {
+  return String(q).trim().replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
 /** Query de búsqueda (endpoint `games`): título libre, sin versiones parentales (mods, bundles…).
  *
  * @param {string} q
  * @returns {string}
  */
 export function searchQuery(q) {
-  const escaped = String(q).trim().replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   return apicalypse([
-    `search "${escaped}";`,
+    `search "${escapeTerm(q)}";`,
     `fields ${GAME_FIELDS};`,
     'where version_parent = null;',
+    `limit ${SEARCH_LIMIT};`,
+  ]);
+}
+
+/** Query de respaldo (endpoint `games`): coincidencia literal por nombre, sin versiones
+ * parentales. Neutraliza `*` del input con `\*` para que no actúe de comodín en el patrón.
+ *
+ * @param {string} q
+ * @returns {string | null} null si la consulta queda vacía
+ */
+export function nameContainsQuery(q) {
+  const term = escapeTerm(q);
+  if (!term) return null;
+  const literal = term.replace(/\*/g, '\\*');
+  return apicalypse([
+    `fields ${GAME_FIELDS};`,
+    `where version_parent = null & name ~ *"${literal}"*;`,
     `limit ${SEARCH_LIMIT};`,
   ]);
 }
@@ -147,7 +172,7 @@ export function resolvePopularityTypeId(types, want) {
   const byName = new Map(
     types
       .filter((type) => type && typeof type.name === 'string' && type.id != null)
-      .map((type) => /** @type {[string, number]} */ ([normalize(type.name), type.id])),
+      .map((type) => /** @type {[string, number]} */ ([normalize(type.name), type.id]))
   );
   for (const candidate of want.names) {
     const id = byName.get(normalize(candidate));
@@ -289,4 +314,47 @@ export function dedupeById(items, getId = (item) => /** @type {{id: string|numbe
     seen.add(key);
     return true;
   });
+}
+
+/** Normalización mínima local: el Worker se despliega como 3 ficheros sueltos y no puede
+ * importar src/. Mismas reglas que normalizeText de src/domain/search.js.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function normalizeForRank(text) {
+  return String(text ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+/** Bucket de relevancia de un título frente a la consulta ya normalizada.
+ *
+ * @param {string} title
+ * @param {string} query
+ * @returns {number} 0 exacto, 1 prefijo, 2 resto
+ */
+function textBucket(title, query) {
+  const normalized = normalizeForRank(title);
+  if (normalized === query) return 0;
+  if (normalized.startsWith(query)) return 1;
+  return 2;
+}
+
+/** Ordena resultados de respaldo por relevancia textual: título exacto normalizado, luego
+ * prefijo, luego el resto; desempate por igdbId ascendente (sort estable).
+ *
+ * @template {{ igdbId: number, title: string }} T
+ * @param {T[]} games
+ * @param {string} q
+ * @returns {T[]}
+ */
+export function rankGames(games, q) {
+  const query = normalizeForRank(q);
+  if (!query) return [...games];
+  return [...games].sort(
+    (a, b) => textBucket(a.title, query) - textBucket(b.title, query) || a.igdbId - b.igdbId
+  );
 }

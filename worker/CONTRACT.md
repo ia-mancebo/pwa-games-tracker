@@ -41,7 +41,7 @@ Comprobación de vida. Responde **sin necesidad de secretos configurados**, úti
 
 ### `GET /api/search?q=<texto>`
 
-Búsqueda por título contra IGDB (`search "…"` sobre juegos, excluyendo versiones parentales: mods, bundles, recopilaciones). Devuelve **hasta 12** resultados por relevancia de IGDB.
+Búsqueda por título contra IGDB (`search "…"` sobre juegos, excluyendo versiones parentales: mods, bundles, recopilaciones). Devuelve **hasta 12** resultados por relevancia de IGDB. Si el search full-text devuelve 0 filas (p. ej. consultas formadas solo por stopwords, como «until then»), el Worker reintenta con una coincidencia literal por nombre (`name ~ *"…"*`, mismo filtro de versiones y límite) y ordena ese resultado por relevancia textual: título exacto normalizado, luego prefijo, luego el resto; desempate por `igdbId` ascendente.
 
 - Parámetro obligatorio `q`; vacío o ausente → `400`.
 

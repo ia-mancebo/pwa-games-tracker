@@ -6,6 +6,8 @@
  */
 import {
   searchQuery,
+  nameContainsQuery,
+  rankGames,
   recentQuery,
   upcomingQuery,
   popularityTypesQuery,
@@ -22,7 +24,10 @@ const TWITCH_TOKEN_URL = 'https://id.twitch.tv/oauth2/token';
 const IGDB_API_BASE = 'https://api.igdb.com/v4';
 
 const POPULAR_TYPE = { names: ['IGDB Visits', 'Visits'], keyword: 'visits' };
-const HYPED_TYPE = { names: ['Most Wishlisted Upcoming', 'Most Wishlisted'], keyword: 'wishlisted' };
+const HYPED_TYPE = {
+  names: ['Most Wishlisted Upcoming', 'Most Wishlisted'],
+  keyword: 'wishlisted',
+};
 
 const NOVEDADES_MAX_AGE = 21600;
 // Respuesta degradada (sin bloque PopScore): se reconsulta antes, para que el
@@ -53,7 +58,7 @@ let tokenCache = null;
  * @returns {Cache}
  */
 function edgeCache() {
-  return /** @type {Cache} */ ((/** @type {any} */ (caches)).default);
+  return /** @type {Cache} */ (/** @type {any} */ (caches).default);
 }
 
 class NotConfiguredError extends Error {}
@@ -118,10 +123,20 @@ function postToIgdb(endpoint, query, clientId, token) {
  * @returns {Promise<T>}
  */
 async function igdbCall(endpoint, query, env) {
-  let res = await postToIgdb(endpoint, query, /** @type {string} */ (env.CLIENT_ID), await getTwitchToken(env));
+  let res = await postToIgdb(
+    endpoint,
+    query,
+    /** @type {string} */ (env.CLIENT_ID),
+    await getTwitchToken(env)
+  );
   if (res.status === 401) {
     tokenCache = null;
-    res = await postToIgdb(endpoint, query, /** @type {string} */ (env.CLIENT_ID), await getTwitchToken(env));
+    res = await postToIgdb(
+      endpoint,
+      query,
+      /** @type {string} */ (env.CLIENT_ID),
+      await getTwitchToken(env)
+    );
   }
   if (!res.ok) throw new UpstreamError(`IGDB ${endpoint} responded ${res.status}`);
   return /** @type {T} */ (await res.json());
@@ -170,7 +185,7 @@ function errorResponse(err) {
   if (err instanceof NotConfiguredError) {
     return jsonResponse(
       { error: 'Worker not configured: faltan los secretos CLIENT_ID y CLIENT_SECRET.' },
-      500,
+      500
     );
   }
   if (err instanceof UpstreamError) {
@@ -189,8 +204,15 @@ function errorResponse(err) {
 async function handleSearch(url, env) {
   const q = (url.searchParams.get('q') ?? '').trim();
   if (!q) return jsonResponse({ error: 'Falta el parámetro de búsqueda «q».' }, 400);
-  const rows = await igdbCall('games', searchQuery(q), env);
-  return jsonResponse({ results: toGames(/** @type {unknown[]} */ (rows), RECENT_COUNT) });
+  const rows = /** @type {unknown[]} */ (await igdbCall('games', searchQuery(q), env));
+  if (rows.length > 0) return jsonResponse({ results: toGames(rows, RECENT_COUNT) });
+
+  // El search full-text de IGDB descarta stopwords («until then» → 0 filas): el
+  // respaldo por nombre rescata lo que el índice no devuelve, rankeado por relevancia.
+  const fallbackQuery = nameContainsQuery(q);
+  if (!fallbackQuery) return jsonResponse({ results: [] });
+  const fallbackRows = /** @type {unknown[]} */ (await igdbCall('games', fallbackQuery, env));
+  return jsonResponse({ results: rankGames(toGames(fallbackRows, RECENT_COUNT), q) });
 }
 
 /**
@@ -222,7 +244,9 @@ async function loadPopularBlock(requestUrl, env) {
   const primitiveRows = [...popularPrimitives, ...hypedPrimitives];
   const gameIds = [...new Set(primitiveRows.map((p) => p.game_id))];
   const gameRows = await igdbCall('games', idsQuery(gameIds), env);
-  const byId = new Map(toGames(/** @type {unknown[]} */ (gameRows), gameIds.length).map((game) => [game.igdbId, game]));
+  const byId = new Map(
+    toGames(/** @type {unknown[]} */ (gameRows), gameIds.length).map((game) => [game.igdbId, game])
+  );
 
   /**
    * @param {{ game_id: number }[]} primitives
@@ -245,7 +269,9 @@ async function loadPopularBlock(requestUrl, env) {
   };
   await edgeCache().put(
     cacheKey,
-    jsonResponse(block, 200, { 'Cache-Control': `public, max-age=${POPULAR_BLOCK_MAX_AGE}` }).clone(),
+    jsonResponse(block, 200, {
+      'Cache-Control': `public, max-age=${POPULAR_BLOCK_MAX_AGE}`,
+    }).clone()
   );
   return block;
 }
@@ -294,7 +320,9 @@ async function handleNovedades(request, env) {
       generatedAt: new Date().toISOString(),
     },
     200,
-    { 'Cache-Control': `public, max-age=${degraded ? NOVEDADES_DEGRADED_MAX_AGE : NOVEDADES_MAX_AGE}` },
+    {
+      'Cache-Control': `public, max-age=${degraded ? NOVEDADES_DEGRADED_MAX_AGE : NOVEDADES_MAX_AGE}`,
+    }
   );
   await edgeCache().put(/** @type {any} */ (request), response.clone());
   return response;
