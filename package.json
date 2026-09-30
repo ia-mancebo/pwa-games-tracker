@@ -15,6 +15,7 @@
     "test:overflow:mobile": "node scripts/check-overflow-mobile.mjs",
     "test:add-online:overflow": "node scripts/check-add-online-overflow.mjs",
     "test:scroll": "node scripts/check-scroll-restore.mjs",
+    "test:aviso": "node scripts/check-navegador-aviso.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",

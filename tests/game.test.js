@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, store } from '../src/app.js';
 import { importDoc, initLibrary } from '../src/data/library.js';
 import { qs, qsa } from '../src/lib/dom.js';
@@ -69,6 +69,8 @@ function findPlay(gameId, playId) {
  *   startedAt?: string,
  *   finishedAt?: string,
  *   notes?: string,
+ *   playedSeconds?: number,
+ *   pendingSegments?: {id: string, seconds: number}[],
  * }} SeedPlay
  */
 
@@ -89,8 +91,9 @@ function findPlay(gameId, playId) {
 
 /**
  * @param {SeedGame[]} games
+ * @param {{gameId: string, playId: string, startedAt: string}} [counter] Contador en marcha
  */
-async function seed(games) {
+async function seed(games, counter) {
   await importDoc({
     schema: 'game-tracker',
     version: 1,
@@ -99,6 +102,7 @@ async function seed(games) {
       ...g,
       plays: g.plays.map((p, i) => ({ id: `${g.id}-p${i + 1}`, ...p })),
     })),
+    ...(counter ? { counter } : {}),
   });
 }
 
@@ -117,6 +121,56 @@ function openFromPanel(root, gameId, status) {
     btn(qs(`.plate[data-open-panel="${status}"]`, root)).click();
   }
   btn(qs(`.b-row[data-game-id="${gameId}"]`, root)).click();
+}
+
+/** Instante de inicio del Contador sembrado. */
+const T0 = '2026-08-24T10:00:00Z';
+const T0_MS = Date.parse(T0);
+/** Pausa a los 2700 s del inicio: el tramo contado debe ser de 2700 s. */
+const PAUSE_MS = T0_MS + 2_700_000;
+
+/**
+ * Pulsa Pausar con el reloj de sistema fijado en `systemTimeMs` para que el
+ * tramo contado sea determinista, y espera a que el consejo quede abierto.
+ * @param {HTMLElement} root
+ * @param {number} systemTimeMs
+ * @returns {Promise<{ playId: string, segmentId: string }>}
+ */
+async function pauseToAdvice(root, systemTimeMs) {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(systemTimeMs));
+  try {
+    btn(qs('.d-hero [data-counter-toggle]', root)).click();
+    await vi.waitFor(() => expect(store.get().ficha.segmentPrompt).toBeTruthy());
+  } finally {
+    vi.useRealTimers();
+  }
+  const prompt = store.get().ficha.segmentPrompt;
+  if (!prompt) throw new Error('el consejo no se abrió');
+  return prompt;
+}
+
+/**
+ * Siembra g1 con 600 s consolidados y el Contador en marcha desde T0, abre la
+ * Ficha y pausa dejando el consejo abierto sobre el tramo nuevo de 2700 s.
+ * @returns {Promise<HTMLElement>}
+ */
+async function openPausedFicha() {
+  await seed(
+    [
+      {
+        id: 'g1',
+        title: 'Hades',
+        plays: [{ status: 'playing', addedAt: '2026-07-01', playedSeconds: 600 }],
+      },
+    ],
+    { gameId: 'g1', playId: 'g1-p1', startedAt: T0 }
+  );
+  const root = mount();
+  createApp(root);
+  openFromPanel(root, 'g1', 'playing');
+  await pauseToAdvice(root, PAUSE_MS);
+  return root;
 }
 
 beforeEach(async () => {
@@ -649,5 +703,327 @@ describe('borrado de juego', () => {
     expect(findGame('g1')).toBeTruthy();
     expect(qs('.danger-msg', root)).toBeNull();
     expect(qs('.ficha', root)).toBeTruthy();
+  });
+});
+
+describe('contador en la Ficha: iniciar/pausar y tiempo vivo (ticket 06)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('el botón arranca el Contador (ancla en el Doc, jugada a Jugando) y pasa a Pausar', async () => {
+    await seed([
+      {
+        id: 'g1',
+        title: 'Hades',
+        plays: [{ status: 'backlog', addedAt: '2026-07-01' }],
+      },
+    ]);
+    const root = mount();
+    createApp(root);
+    openFromPanel(root, 'g1', 'backlog');
+
+    const labels = () => qsa('[data-counter-toggle]', root).map((b) => b.textContent?.trim());
+    expect(labels()).toEqual(['Iniciar', 'Iniciar']);
+    btn(qs('.d-hero [data-counter-toggle]', root)).click();
+
+    await vi.waitFor(() => expect(currentDoc().counter).toBeTruthy());
+    expect(currentDoc().counter).toMatchObject({ gameId: 'g1', playId: 'g1-p1' });
+    expect(findPlay('g1', 'g1-p1').status).toBe('playing');
+    expect(labels()).toEqual(['Pausar', 'Pausar']);
+  });
+
+  it('el tiempo mostrado avanza en vivo: Tiempo jugado más tramo en marcha', async () => {
+    await seed(
+      [
+        {
+          id: 'g1',
+          title: 'Hades',
+          plays: [{ status: 'playing', addedAt: '2026-07-01', playedSeconds: 3600 }],
+        },
+      ],
+      { gameId: 'g1', playId: 'g1-p1', startedAt: T0 }
+    );
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    vi.setSystemTime(new Date(T0_MS + 65_000));
+    const root = mount();
+    createApp(root);
+    openFromPanel(root, 'g1', 'playing');
+
+    const live = () => qsa('[data-live-time]', root).map((el) => el.textContent?.trim());
+    // Héroe y tarjeta: 3600 s consolidados + 65 s del tramo en marcha.
+    expect(live()).toEqual(['1:01:05', '1:01:05']);
+    vi.advanceTimersByTime(3000);
+    expect(live()).toEqual(['1:01:08', '1:01:08']);
+    vi.advanceTimersByTime(2000);
+    expect(live()).toEqual(['1:01:10', '1:01:10']);
+  });
+
+  it('Pausar abre el consejo prefillado con lo contado, enfocado en la jugada anclada', async () => {
+    await seed(
+      [
+        {
+          id: 'g1',
+          title: 'Hades',
+          plays: [{ status: 'playing', addedAt: '2026-07-01', playedSeconds: 600 }],
+        },
+      ],
+      { gameId: 'g1', playId: 'g1-p1', startedAt: T0 }
+    );
+    const root = mount();
+    createApp(root);
+    openFromPanel(root, 'g1', 'playing');
+
+    const prompt = await pauseToAdvice(root, PAUSE_MS);
+    expect(prompt).toEqual({ playId: 'g1-p1', segmentId: expect.any(String) });
+    const input = /** @type {HTMLInputElement} */ (need(qs('[data-seg-input]', root)));
+    expect(input.value).toBe('2700');
+    expect(document.activeElement).toBe(input);
+    expect(currentDoc().counter).toBeUndefined();
+    expect(findPlay('g1', 'g1-p1').pendingSegments).toEqual([
+      { id: expect.any(String), seconds: 2700 },
+    ]);
+  });
+
+  it('«Guardar tal cual» consolida lo contado en el Tiempo jugado y cierra el consejo', async () => {
+    const root = await openPausedFicha();
+    btn(qs('[data-seg-save-asis]', root)).click();
+    await vi.waitFor(() => expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(3300));
+    expect(findPlay('g1', 'g1-p1').pendingSegments).toBeUndefined();
+    expect(qs('[data-seg-input]', root)).toBeNull();
+    expect(store.get().ficha.segmentPrompt).toBeNull();
+  });
+
+  it('«Guardar» consolida la duración escrita en el input', async () => {
+    const root = await openPausedFicha();
+    const input = /** @type {HTMLInputElement} */ (need(qs('[data-seg-input]', root)));
+    input.value = '100';
+    btn(qs('[data-seg-save]', root)).click();
+    await vi.waitFor(() => expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(700));
+    expect(findPlay('g1', 'g1-p1').pendingSegments).toBeUndefined();
+    expect(qs('[data-seg-input]', root)).toBeNull();
+  });
+
+  it('«Guardar» con duración inválida la rechaza inline sin llamar al motor', async () => {
+    const root = await openPausedFicha();
+    const input = /** @type {HTMLInputElement} */ (need(qs('[data-seg-input]', root)));
+    input.value = '-5';
+    btn(qs('[data-seg-save]', root)).click();
+    const error = need(qs('[data-seg-error]', root));
+    expect(error.hasAttribute('hidden')).toBe(false);
+    expect(error.textContent).toContain('entero de segundos');
+    expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(600);
+    expect(findPlay('g1', 'g1-p1').pendingSegments).toEqual([
+      { id: expect.any(String), seconds: 2700 },
+    ]);
+    expect(store.get().ficha.segmentPrompt).toBeTruthy();
+  });
+
+  it('«Descartar» del consejo quita el tramo sin tocar el Tiempo jugado', async () => {
+    const root = await openPausedFicha();
+    btn(qs('[data-seg-discard]', root)).click();
+    await vi.waitFor(() => expect(findPlay('g1', 'g1-p1').pendingSegments).toBeUndefined());
+    expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(600);
+    expect(qs('[data-seg-input]', root)).toBeNull();
+  });
+
+  it('«Decidir después» cierra el consejo y deja el tramo pendiente señalizado', async () => {
+    const root = await openPausedFicha();
+    btn(qs('[data-seg-later]', root)).click();
+    await vi.waitFor(() => expect(qs('[data-seg-input]', root)).toBeNull());
+    expect(store.get().ficha.segmentPrompt).toBeNull();
+    expect(findPlay('g1', 'g1-p1').pendingSegments).toEqual([
+      { id: expect.any(String), seconds: 2700 },
+    ]);
+    expect(qs('[data-pending-segments]', root)?.getAttribute('data-pending-segments')).toBe('1');
+  });
+
+  it('la auto-pausa (Terminar) no abre consejo y deja el tramo pendiente señalizado', async () => {
+    await seed(
+      [
+        {
+          id: 'g1',
+          title: 'Hades',
+          plays: [{ status: 'playing', addedAt: '2026-07-01', playedSeconds: 600 }],
+        },
+      ],
+      { gameId: 'g1', playId: 'g1-p1', startedAt: T0 }
+    );
+    const root = mount();
+    createApp(root);
+    openFromPanel(root, 'g1', 'playing');
+
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(PAUSE_MS));
+    try {
+      btn(qs('[data-set-status="finished"]', root)).click();
+      await vi.waitFor(() => expect(findPlay('g1', 'g1-p1').status).toBe('finished'));
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(store.get().ficha.segmentPrompt).toBeNull();
+    expect(qs('[data-seg-input]', root)).toBeNull();
+    expect(findPlay('g1', 'g1-p1').pendingSegments).toEqual([
+      { id: expect.any(String), seconds: 2700 },
+    ]);
+    expect(qs('[data-pending-segments]', root)?.getAttribute('data-pending-segments')).toBe('1');
+  });
+
+  it('sin Contador en marcha el tictac no escribe el Doc', async () => {
+    await seed([
+      {
+        id: 'g1',
+        title: 'Hades',
+        plays: [{ status: 'playing', addedAt: '2026-07-01', playedSeconds: 600 }],
+      },
+    ]);
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    vi.setSystemTime(new Date(T0_MS));
+    const root = mount();
+    createApp(root);
+    openFromPanel(root, 'g1', 'playing');
+
+    const before = store.get().doc;
+    vi.advanceTimersByTime(5000);
+    expect(store.get().doc).toBe(before);
+    expect(store.get().doc?.updatedAt).toBe(before?.updatedAt);
+    expect(qsa('[data-live-time]', root)).toHaveLength(0);
+    expect(
+      need(qs('.play-card[data-play-card="g1-p1"] .p-time', root)).textContent
+    ).toContain('10 min');
+  });
+});
+
+describe('revisión de tramos pendientes (ticket 07)', () => {
+  /**
+   * @param {SeedPlay[]} plays
+   * @returns {Promise<HTMLElement>}
+   */
+  async function openWithSegments(plays) {
+    await seed([{ id: 'g1', title: 'Hades', plays }]);
+    const root = mount();
+    createApp(root);
+    openFromPanel(root, 'g1', 'playing');
+    return root;
+  }
+
+  /** @returns {SeedPlay[]} */
+  const twoSegments = () => [
+    {
+      status: 'playing',
+      addedAt: '2026-07-01',
+      playedSeconds: 600,
+      pendingSegments: [
+        { id: 'seg1', seconds: 2700 },
+        { id: 'seg2', seconds: 1200 },
+      ],
+    },
+  ];
+
+  it('los tramos pendientes de la más reciente se ven y se deciden uno a uno', async () => {
+    const root = await openWithSegments(twoSegments());
+
+    expect(qsa('[data-seg-row]', root).map((r) => r.getAttribute('data-seg-row'))).toEqual([
+      'seg1',
+      'seg2',
+    ]);
+    expect(qs('[data-pending-segments]', root)?.getAttribute('data-pending-segments')).toBe('2');
+
+    // «Decidir» expande el consejo dentro de la fila del tramo.
+    btn(qs('[data-seg-decide="seg1"]', root)).click();
+    expect(qs('[data-seg-row="seg1"] [data-seg-input]', root)).toBeTruthy();
+    expect(/** @type {HTMLInputElement} */ (need(qs('[data-seg-input]', root))).value).toBe('2700');
+    btn(qs('[data-seg-save-asis]', root)).click();
+
+    await vi.waitFor(() => expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(3300));
+    expect(findPlay('g1', 'g1-p1').pendingSegments).toEqual([{ id: 'seg2', seconds: 1200 }]);
+    expect(qsa('[data-seg-row]', root).map((r) => r.getAttribute('data-seg-row'))).toEqual(['seg2']);
+    expect(qs('[data-pending-segments]', root)?.getAttribute('data-pending-segments')).toBe('1');
+
+    btn(qs('[data-seg-decide="seg2"]', root)).click();
+    btn(qs('[data-seg-save-asis]', root)).click();
+    await vi.waitFor(() => expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(4500));
+    expect(findPlay('g1', 'g1-p1').pendingSegments).toBeUndefined();
+    expect(qsa('[data-seg-row]', root)).toHaveLength(0);
+  });
+
+  it('la duración es editable antes de guardar; cero descarta el tramo', async () => {
+    const root = await openWithSegments(twoSegments());
+
+    btn(qs('[data-seg-decide="seg1"]', root)).click();
+    const input = /** @type {HTMLInputElement} */ (need(qs('[data-seg-input]', root)));
+    input.value = '100';
+    btn(qs('[data-seg-save]', root)).click();
+    await vi.waitFor(() => expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(700));
+    expect(findPlay('g1', 'g1-p1').pendingSegments).toEqual([{ id: 'seg2', seconds: 1200 }]);
+
+    // Cero = descartar: el tramo sale sin sumar nada.
+    btn(qs('[data-seg-decide="seg2"]', root)).click();
+    const input2 = /** @type {HTMLInputElement} */ (need(qs('[data-seg-input]', root)));
+    input2.value = '0';
+    btn(qs('[data-seg-save]', root)).click();
+    await vi.waitFor(() => expect(findPlay('g1', 'g1-p1').pendingSegments).toBeUndefined());
+    expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(700);
+    expect(qsa('[data-seg-row]', root)).toHaveLength(0);
+  });
+
+  it('descartar un tramo lo borra sin rastro ni en pendientes ni en el consolidado', async () => {
+    const root = await openWithSegments(twoSegments());
+
+    btn(qs('[data-seg-discard="seg1"]', root)).click();
+    await vi.waitFor(() =>
+      expect(findPlay('g1', 'g1-p1').pendingSegments).toEqual([{ id: 'seg2', seconds: 1200 }])
+    );
+    expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(600);
+    expect(qs('[data-seg-row="seg1"]', root)).toBeNull();
+    expect(need(qs('.play-card[data-play-card="g1-p1"] .p-time', root)).textContent).toContain(
+      '10 min'
+    );
+  });
+
+  it('las jugadas menos recientes muestran su Tiempo jugado histórico sin botones', async () => {
+    await seed([
+      {
+        id: 'g1',
+        title: 'Hades',
+        plays: [
+          { status: 'finished', addedAt: '2026-03-01' },
+          { status: 'abandoned', addedAt: '2026-05-01', playedSeconds: 45258 },
+          { status: 'playing', addedAt: '2026-07-01', playedSeconds: 600 },
+        ],
+      },
+    ]);
+    const root = mount();
+    createApp(root);
+    openFromPanel(root, 'g1', 'playing');
+
+    const old1 = need(qs('.play-card[data-play-card="g1-p1"]', root));
+    expect(need(qs('.p-time', old1)).textContent).toContain('0 min');
+    const old2 = need(qs('.play-card[data-play-card="g1-p2"]', root));
+    expect(need(qs('.p-time', old2)).textContent).toContain('12 h 34 min');
+    for (const card of [old1, old2]) {
+      expect(qs('[data-counter-toggle]', card)).toBeNull();
+      expect(qs('[data-seg-row]', card)).toBeNull();
+      expect(qs('[data-live-time]', card)).toBeNull();
+    }
+
+    const latest = need(qs('.play-card[data-play-card="g1-p3"]', root));
+    expect(qs('[data-counter-toggle]', latest)).toBeTruthy();
+    expect(qs('.d-hero [data-counter-toggle]', root)).toBeTruthy();
+  });
+
+  it('la señalización de pendientes desaparece al decidirlos todos', async () => {
+    const root = await openWithSegments(twoSegments());
+    expect(qs('[data-pending-segments]', root)).toBeTruthy();
+
+    btn(qs('[data-seg-decide="seg1"]', root)).click();
+    btn(qs('[data-seg-save-asis]', root)).click();
+    await vi.waitFor(() =>
+      expect(qs('[data-pending-segments]', root)?.getAttribute('data-pending-segments')).toBe('1')
+    );
+
+    btn(qs('[data-seg-discard="seg2"]', root)).click();
+    await vi.waitFor(() => expect(qs('[data-pending-segments]', root)).toBeNull());
+    expect(findPlay('g1', 'g1-p1').pendingSegments).toBeUndefined();
   });
 });

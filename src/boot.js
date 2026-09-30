@@ -8,7 +8,7 @@
  * arranque cablea.
  */
 import { createApp, store } from './app.js';
-import { initLibrary } from './data/library.js';
+import { initLibrary, resumeCounter } from './data/library.js';
 import {
   restoreSavedLink,
   setConflictHandler,
@@ -43,6 +43,13 @@ export async function start(root) {
       await initLibrary();
     } catch {
       // Sin espejo accesible: la app arranca igual; el bienvenida (ticket 13) toma el control.
+    }
+    try {
+      // Reabrir con la app cerrada (ticket 05): el tiempo de pared del
+      // Contador en marcha queda como Tramo pendiente prefillado.
+      await resumeCounter();
+    } catch {
+      // El arranque nunca depende del tramo pendiente; se revisa desde la Ficha.
     }
     createApp(/** @type {HTMLElement} */ (root));
     // El diálogo de conflicto es render del estado (ADR-0004): el registro del

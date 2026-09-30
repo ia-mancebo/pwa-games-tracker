@@ -13,11 +13,15 @@ import { latestPlay } from '../domain/selectors.js';
 import { STATUSES, todayFrom } from '../domain/schema.js';
 import {
   addPlay as repoAddPlay,
+  confirmSegment as repoConfirmSegment,
   deleteGame as repoDeleteGame,
   deletePlay as repoDeletePlay,
+  discardSegment as repoDiscardSegment,
   LibraryError,
+  pauseCounter as repoPauseCounter,
   ratePlay as repoRatePlay,
   setGameStatus,
+  startCounter as repoStartCounter,
   updateGame,
   updatePlay,
 } from './library.js';
@@ -260,7 +264,8 @@ export function rateHero(gameId, rating) {
 /**
  * Añade una jugada (rejugada): nace Jugando con la plataforma de la jugada
  * más reciente si la tenía (regla de herencia del motor, spec §8.5). El
- * «hoy» se deriva de `now` (por defecto el reloj real).
+ * «hoy» se deriva de `now` (por defecto el reloj real), que es también el
+ * instante en que el Contador del juego queda auto-pausado.
  * @param {string} gameId
  * @param {Date} [now]
  * @returns {Promise<Result>}
@@ -278,6 +283,7 @@ export function addPlay(gameId, now = new Date()) {
     repoAddPlay(gameId, {
       status: 'playing',
       today: todayFrom(now),
+      now,
       ...(inherited ? { platform: inherited } : {}),
     })
   );
@@ -346,4 +352,63 @@ export function deletePlay(gameId, playId) {
  */
 export function deleteGame(gameId) {
   return toResult(repoDeleteGame(gameId));
+}
+
+/**
+ * Arranca el Contador de un juego: cronometra su jugada más reciente desde el
+ * instante `now` (por defecto el reloj real). Si otro Contador estaba en
+ * marcha, queda pausado con su tiempo a salvo como Tramo pendiente.
+ * @param {string} gameId
+ * @param {Date} [now]
+ * @returns {Promise<Result>}
+ */
+export function startCounter(gameId, now = new Date()) {
+  return toResult(repoStartCounter(gameId, now));
+}
+
+/**
+ * Pausa el Contador en marcha: deja el tramo transcurrido como Tramo pendiente
+ * de la jugada anclada y limpia el ancla. Sin Contador en marcha devuelve
+ * error NO_COUNTER.
+ * @param {Date} [now]
+ * @returns {Promise<Result>}
+ */
+export function pauseCounter(now = new Date()) {
+  return toResult(repoPauseCounter(now));
+}
+
+/**
+ * Confirma un Tramo pendiente: consolida su duración en el Tiempo jugado de la
+ * Jugada y lo quita de pendientes. Sin duración pasa la prefillada; la duración
+ * dada la sustituye; la duración 0 equivale a descartar (no suma nada). La
+ * duración sustituta debe ser entero ≥ 0; si no, error como Result sin tocar
+ * nada.
+ * @param {string} gameId
+ * @param {string} playId
+ * @param {string} segmentId
+ * @param {number|null|undefined} [secondsOverride] duración sustituta; null/undefined = prefillada
+ * @param {Date} [now]
+ * @returns {Promise<Result>}
+ */
+export function confirmSegment(gameId, playId, segmentId, secondsOverride, now = new Date()) {
+  if (secondsOverride != null && (!Number.isInteger(secondsOverride) || secondsOverride < 0)) {
+    return Promise.resolve({
+      ok: false,
+      error: new LibraryError('La duración debe ser un entero de segundos', 'BAD_SHAPE'),
+    });
+  }
+  return toResult(repoConfirmSegment(gameId, playId, segmentId, secondsOverride, now));
+}
+
+/**
+ * Descarta un Tramo pendiente: lo elimina sin rastro —ni en pendientes ni en
+ * el consolidado—, sin tocar el Tiempo jugado.
+ * @param {string} gameId
+ * @param {string} playId
+ * @param {string} segmentId
+ * @param {Date} [now]
+ * @returns {Promise<Result>}
+ */
+export function discardSegment(gameId, playId, segmentId, now = new Date()) {
+  return toResult(repoDiscardSegment(gameId, playId, segmentId, now));
 }

@@ -1,5 +1,5 @@
 /**
- * Esquema del documento v1 (spec §4). Módulo puro: sin DOM, sin IDB, sin reloj.
+ * Esquema del documento v2 (spec §4). Módulo puro: sin DOM, sin IDB, sin reloj.
  * Convenciones: fechas `YYYY-MM-DD`, campo ausente = desconocido.
  */
 
@@ -22,6 +22,16 @@ export const STATUS_LABELS = {
  */
 
 /**
+ * Tramo pendiente de revisión: duración propuesta de una pausa del Contador.
+ * @typedef {{ id: string, seconds: number }} Segment
+ */
+
+/**
+ * Ancla del Contador en marcha: juego, jugada e instante de inicio (fecha-hora ISO).
+ * @typedef {{ gameId: string, playId: string, startedAt: string }} CounterAnchor
+ */
+
+/**
  * Jugada: una partida de un juego, con lo vivido (spec §4.3).
  * `notes` es parte de v1 (decisión aditiva del ticket 12; no bumpea versión).
  * @typedef {{
@@ -33,6 +43,8 @@ export const STATUS_LABELS = {
  *   startedAt?: string,
  *   finishedAt?: string,
  *   notes?: string,
+ *   playedSeconds?: number,
+ *   pendingSegments?: Segment[],
  * }} Play
  */
 
@@ -64,15 +76,16 @@ export const STATUS_LABELS = {
  * Raíz del documento `.json` (spec §4.1).
  * @typedef {{
  *   schema: 'game-tracker',
- *   version: 1,
+ *   version: 1 | 2,
  *   updatedAt: string,
  *   games: Game[],
  *   connection?: Connection,
+ *   counter?: CounterAnchor,
  * }} Doc
  */
 
 export const SCHEMA_ID = 'game-tracker';
-export const DOC_VERSION = 1;
+export const DOC_VERSION = 2;
 
 /** Regex estricta de fecha `YYYY-MM-DD`. */
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -206,7 +219,7 @@ export function validatePlayShape(play) {
     return { ok: false, reason: 'Jugada malformada' };
   }
   const p = /** @type {Record<string, unknown>} */ (play);
-  const known = ['id', 'status', 'rating', 'platform', 'addedAt', 'startedAt', 'finishedAt', 'notes'];
+  const known = ['id', 'status', 'rating', 'platform', 'addedAt', 'startedAt', 'finishedAt', 'notes', 'playedSeconds', 'pendingSegments'];
   for (const key of Object.keys(p)) {
     if (!known.includes(key)) return { ok: false, reason: `Campo desconocido en jugada: «${key}»` };
   }
@@ -241,6 +254,35 @@ export function validatePlayShape(play) {
   }
   if (p.notes !== undefined && typeof p.notes !== 'string') {
     return { ok: false, reason: 'Las notas deben ser texto' };
+  }
+  if (p.playedSeconds !== undefined) {
+    const seconds = /** @type {unknown} */ (p.playedSeconds);
+    if (!Number.isInteger(seconds) || /** @type {number} */ (seconds) < 0) {
+      return { ok: false, reason: 'El tiempo jugado debe ser un entero mayor o igual a 0' };
+    }
+  }
+  if (p.pendingSegments !== undefined) {
+    const list = /** @type {unknown} */ (p.pendingSegments);
+    if (!Array.isArray(list)) {
+      return { ok: false, reason: 'Los tramos pendientes deben ser una lista' };
+    }
+    for (const seg of list) {
+      if (typeof seg !== 'object' || seg === null || Array.isArray(seg)) {
+        return { ok: false, reason: 'Tramo pendiente malformado' };
+      }
+      const s = /** @type {Record<string, unknown>} */ (seg);
+      for (const key of Object.keys(s)) {
+        if (key !== 'id' && key !== 'seconds') {
+          return { ok: false, reason: `Campo desconocido en tramo pendiente: «${key}»` };
+        }
+      }
+      if (typeof s.id !== 'string' || s.id === '') {
+        return { ok: false, reason: 'Tramo pendiente sin id' };
+      }
+      if (!Number.isInteger(s.seconds) || /** @type {number} */ (s.seconds) < 0) {
+        return { ok: false, reason: 'Los segundos de un tramo deben ser un entero mayor o igual a 0' };
+      }
+    }
   }
   return { ok: true };
 }
@@ -321,6 +363,33 @@ export function validateGameShape(game) {
   for (const play of /** @type {unknown[]} */ (g.plays)) {
     const res = validatePlayShape(play);
     if (!res.ok) return res;
+  }
+  return { ok: true };
+}
+
+/**
+ * Validación de forma del Contador en marcha (campo raíz opcional del doc).
+ * @param {unknown} counter
+ * @returns {{ ok: boolean, reason?: string }}
+ */
+export function validateCounterShape(counter) {
+  if (typeof counter !== 'object' || counter === null || Array.isArray(counter)) {
+    return { ok: false, reason: 'Ancla de contador malformada' };
+  }
+  const c = /** @type {Record<string, unknown>} */ (counter);
+  for (const key of Object.keys(c)) {
+    if (key !== 'gameId' && key !== 'playId' && key !== 'startedAt') {
+      return { ok: false, reason: 'Ancla de contador malformada' };
+    }
+  }
+  if (typeof c.gameId !== 'string' || c.gameId === '') {
+    return { ok: false, reason: 'Ancla de contador malformada' };
+  }
+  if (typeof c.playId !== 'string' || c.playId === '') {
+    return { ok: false, reason: 'Ancla de contador malformada' };
+  }
+  if (!isDateTime(c.startedAt)) {
+    return { ok: false, reason: 'Fecha de inicio del contador inválida' };
   }
   return { ok: true };
 }

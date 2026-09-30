@@ -6,29 +6,42 @@
  * siempre editables; géneros, plataformas, carátula, descripción y capturas
  * solo si el alta fue manual (sin `igdbId`).
  */
-import { html, qs, raw } from '../lib/dom.js';
+import { html, qs, qsa, raw } from '../lib/dom.js';
 import { formatError } from '../lib/errors.js';
+import { formatClock, formatRoundedHours } from '../lib/format.js';
 import { STATUSES, STATUS_LABELS } from '../domain/schema.js';
-import { latestPlay, gameStatus } from '../domain/selectors.js';
+import { latestPlay, gameStatus, livePlaySeconds } from '../domain/selectors.js';
 import {
   addPlay,
   commitSharedField as commitSharedFieldCommand,
   commitTitle as commitTitleCommand,
+  confirmSegment,
   deleteGame,
   deletePlay,
+  discardSegment,
+  pauseCounter,
   rateHero,
   ratePlay,
   setPlayDate,
   setPlayNotes,
   setPlayPlatform,
   setStatus,
+  startCounter,
 } from '../data/ficha.js';
 import { coverHtml } from '../ui/cover.js';
 import { statusPillHtml } from '../ui/pill.js';
 import { addTag, removeTag, tagEditorHtml } from '../ui/tags.js';
 import { galleryHtml, wireGallery } from '../ui/gallery.js';
+import { subscribeTick } from '../ui/tick.js';
 import * as nav from '../navigation.js';
 import { freshFicha } from '../app.js';
+
+/**
+ * Limpieza de la suscripción al tictac del reloj vivo: una sola a la vez
+ * (módulo); se cancela en cada render y se auto-cancela sin contenedor.
+ * @type {(() => void) | null}
+ */
+let tickOff = null;
 
 /**
  * Jugadas ordenadas de más reciente a más antigua: desc por `addedAt`,
@@ -41,6 +54,152 @@ function playsNewestFirst(game) {
     .map((play, idx) => ({ play, idx }))
     .sort((a, b) => b.play.addedAt.localeCompare(a.play.addedAt) || b.idx - a.idx)
     .map((entry) => entry.play);
+}
+
+/**
+ * ¿El Contador está anclado a esta jugada?
+ * @param {import('../domain/schema.js').Doc} doc
+ * @param {string} gameId
+ * @param {import('../domain/schema.js').Play} play
+ * @returns {boolean}
+ */
+function countingPlay(doc, gameId, play) {
+  const counter = doc.counter;
+  return Boolean(counter && counter.gameId === gameId && counter.playId === play.id);
+}
+
+/**
+ * Total vivo de una jugada (selector de dominio: Tiempo jugado consolidado
+ * más el tramo en marcha si el Contador está anclado a ella). Cálculo
+ * efímero: el Doc no se escribe por segundo.
+ * @param {import('../domain/schema.js').Doc} doc
+ * @param {import('../domain/schema.js').Play} play
+ * @param {number} nowMs
+ * @returns {number}
+ */
+function liveTotalSeconds(doc, play, nowMs) {
+  return livePlaySeconds(play, doc.counter, new Date(nowMs));
+}
+
+/**
+ * Línea «Tiempo: …» de una jugada: reloj vivo H:MM:SS mientras el Contador
+ * cuenta su tramo (elemento `data-live-time`), dato histórico redondo si no.
+ * @param {import('../domain/schema.js').Doc} doc
+ * @param {string} gameId
+ * @param {import('../domain/schema.js').Play} play
+ * @returns {string}
+ */
+function playTimeHtml(doc, gameId, play) {
+  const value = countingPlay(doc, gameId, play)
+    ? html`<span class="p-time-val mono" data-live-time="${play.id}"
+        >${formatClock(liveTotalSeconds(doc, play, Date.now()))}</span
+      >`
+    : html`<span class="p-time-val">${formatRoundedHours(play.playedSeconds ?? 0)}</span>`;
+  return html`<p class="p-time"><span class="lbl">Tiempo:</span> ${value}</p>`;
+}
+
+/**
+ * Botón Iniciar/Pausar del Contador (héroe y tarjeta de la jugada más
+ * reciente): con el Contador de ESTE juego en marcha pausa; en caso contrario
+ * inicia (el motor auto-pausa el que hubiera de otro juego).
+ * @param {import('../domain/schema.js').Game} game
+ * @param {import('../domain/schema.js').Doc} doc
+ * @returns {string}
+ */
+function counterToggleHtml(game, doc) {
+  const running = doc.counter?.gameId === game.id;
+  return html`<button type="button" class="chip" data-counter-toggle>${running ? 'Pausar' : 'Iniciar'}</button>`;
+}
+
+/**
+ * Duración + Iniciar/Pausar de la jugada que el Contador cronometra (héroe y
+ * tarjeta de la más reciente).
+ * @param {import('../domain/schema.js').Game} game
+ * @param {import('../domain/schema.js').Doc} doc
+ * @param {import('../domain/schema.js').Play} play
+ * @returns {string}
+ */
+function counterRowHtml(game, doc, play) {
+  return html`<div class="p-time-row">
+    ${playTimeHtml(doc, game.id, play)} ${counterToggleHtml(game, doc)}
+  </div>`;
+}
+
+/**
+ * Consejo del Tramo (ticket 06): duración prefillada con lo contado y cuatro
+ * salidas — guardar tal cual, guardar con otra duración, descartar o decidir
+ * después (el Tramo queda pendiente).
+ * @param {import('../domain/schema.js').Play} play
+ * @param {import('../domain/schema.js').Segment} segment
+ * @returns {string}
+ */
+function segmentAdviceHtml(play, segment) {
+  return html`<div class="seg-row seg-open" data-seg-row="${segment.id}" data-play-id="${play.id}">
+    <span class="seg-dur mono">${formatClock(segment.seconds)}</span>
+    <div class="seg-advice">
+      <label class="seg-field">
+        <span class="lbl">Duración (segundos)</span>
+        <input
+          type="number"
+          min="0"
+          step="1"
+          data-seg-input
+          value="${segment.seconds}"
+          aria-label="Duración del tramo en segundos"
+        />
+      </label>
+      <span class="inline-actions">
+        <button type="button" class="chip chip-xs" data-seg-save-asis>Guardar tal cual</button>
+        <button type="button" class="chip chip-xs" data-seg-save>Guardar</button>
+        <button type="button" class="chip chip-xs danger" data-seg-discard="${segment.id}">
+          Descartar
+        </button>
+        <button type="button" class="chip chip-xs" data-seg-later>Decidir después</button>
+      </span>
+      <p class="form-error" role="alert" data-seg-error hidden></p>
+    </div>
+  </div>`;
+}
+
+/**
+ * Fila compacta de un Tramo pendiente; con el consejo abierto (`segmentPrompt`
+ * apunta a este Tramo) la fila se expande con sus salidas.
+ * @param {import('../domain/schema.js').Play} play
+ * @param {import('../domain/schema.js').Segment} segment
+ * @param {import('../app.js').FichaUi} ficha
+ * @returns {string}
+ */
+function segmentRowHtml(play, segment, ficha) {
+  const prompt = ficha.segmentPrompt;
+  if (prompt && prompt.playId === play.id && prompt.segmentId === segment.id) {
+    return segmentAdviceHtml(play, segment);
+  }
+  return html`<div class="seg-row" data-seg-row="${segment.id}" data-play-id="${play.id}">
+    <span class="seg-dur mono">${formatClock(segment.seconds)}</span>
+    <span class="seg-actions">
+      <button type="button" class="chip chip-xs" data-seg-decide="${segment.id}">Decidir</button>
+      <button type="button" class="chip chip-xs danger" data-seg-discard="${segment.id}">
+        Descartar
+      </button>
+    </span>
+  </div>`;
+}
+
+/**
+ * Tramos pendientes de la jugada más reciente: lista señalizada para decidirlos
+ * uno a uno (ticket 07).
+ * @param {import('../domain/schema.js').Play} play
+ * @param {import('../app.js').FichaUi} ficha
+ * @returns {string}
+ */
+function pendingSegmentsHtml(play, ficha) {
+  const segments = play.pendingSegments ?? [];
+  if (segments.length === 0) return '';
+  const count = segments.length;
+  return html`<p class="seg-badge" data-pending-segments="${count}">
+    ${count === 1 ? '1 tramo pendiente de revisión' : `${count} tramos pendientes de revisión`}
+  </p>
+  <div class="seg-list">${segments.map((segment) => segmentRowHtml(play, segment, ficha))}</div>`;
 }
 
 /** Campos compartidos editables y su presentación.
@@ -252,9 +411,10 @@ function titleHtml(game, ficha) {
  * que valoran la jugada más reciente (spec §8.5).
  * @param {import('../domain/schema.js').Game} game
  * @param {import('../app.js').FichaUi} ficha
+ * @param {import('../domain/schema.js').Doc} doc
  * @returns {string}
  */
-function heroHtml(game, ficha) {
+function heroHtml(game, ficha, doc) {
   const status = gameStatus(game);
   const latest = latestPlay(game);
   return html`<div class="d-hero">
@@ -268,6 +428,7 @@ function heroHtml(game, ficha) {
           clearAttr: 'hero-rate-clear',
         })}
       </div>
+      ${counterRowHtml(game, doc, latest)}
       <p class="d-meta">Edita la valoración de la jugada más reciente (${latest.addedAt}).</p>
     </div>
   </div>`;
@@ -322,10 +483,12 @@ function platformSelectHtml(game, play, ficha) {
  * @param {import('../domain/schema.js').Game} game
  * @param {import('../domain/schema.js').Play} play
  * @param {import('../app.js').FichaUi} ficha
+ * @param {import('../domain/schema.js').Doc} doc
  * @returns {string}
  */
-function playCardHtml(game, play, ficha) {
+function playCardHtml(game, play, ficha, doc) {
   const isLast = game.plays.length <= 1;
+  const isLatest = latestPlay(game).id === play.id;
   const confirming = ficha.confirmPlay === play.id;
   const dates = html`<span class="p-dates">
     <label class="p-date">
@@ -386,6 +549,8 @@ ${play.notes ?? ''}</textarea>
         })}</span
       >
     </header>
+    ${isLatest ? counterRowHtml(game, doc, play) : playTimeHtml(doc, game.id, play)}
+    ${isLatest ? pendingSegmentsHtml(play, ficha) : ''}
     ${dates} ${platformSelectHtml(game, play, ficha)} ${notes}
     <footer class="p-foot">${foot}</footer>
   </article>`;
@@ -399,9 +564,10 @@ ${play.notes ?? ''}</textarea>
  * Marcado completo de la Ficha.
  * @param {import('../domain/schema.js').Game} game
  * @param {import('../app.js').FichaUi} ficha
+ * @param {import('../domain/schema.js').Doc} doc
  * @returns {string}
  */
-function fichaHtml(game, ficha) {
+function fichaHtml(game, ficha, doc) {
   const SHARED_NAMES = /** @type {const} */ ([
     'description',
     'coverUrl',
@@ -414,7 +580,7 @@ function fichaHtml(game, ficha) {
       <button type="button" class="chip" data-back-ficha>← Volver</button>
       ${ficha.error ? html`<p class="form-error" role="alert">${ficha.error}</p>` : ''}
     </div>
-    ${heroHtml(game, ficha)}
+    ${heroHtml(game, ficha, doc)}
     ${SHARED_NAMES.filter((name) => sharedSectionVisible(game, name)).map((name) =>
       sharedSecHtml(game, name, ficha)
     )}
@@ -445,7 +611,7 @@ function fichaHtml(game, ficha) {
           ? html`<p class="form-error" role="alert" data-play-error>${ficha.playError}</p>`
           : ''
       }
-      <div class="plays">${playsNewestFirst(game).map((play) => playCardHtml(game, play, ficha))}</div>
+      <div class="plays">${playsNewestFirst(game).map((play) => playCardHtml(game, play, ficha, doc))}</div>
       <button type="button" class="chip" data-add-play>➕ Añadir jugada</button>
     </section>
     <section class="d-sec danger-zone" data-sec="danger">
@@ -475,20 +641,44 @@ function fichaHtml(game, ficha) {
  * @param {import('../app.js').Store} store
  */
 export function renderGame(container, store) {
+  if (tickOff) {
+    tickOff();
+    tickOff = null;
+  }
   const state = store.get();
   const gameId = state.library.gameId ?? null;
   if (state.ficha.gameId !== gameId) {
     store.set({ ficha: freshFicha(gameId) });
     return;
   }
-  const game = state.doc?.games.find((g) => g.id === gameId) ?? null;
-  if (!game) {
+  const doc = state.doc;
+  const game = doc?.games.find((g) => g.id === gameId) ?? null;
+  if (!game || !doc) {
     if (gameId != null) nav.closeGame(store);
     else container.innerHTML = '';
     return;
   }
-  container.innerHTML = fichaHtml(game, state.ficha);
+  container.innerHTML = fichaHtml(game, state.ficha, doc);
   wire(container, store);
+  // Tictac efímero del reloj vivo: repinta `data-live-time` cada segundo y
+  // NUNCA re-renderiza la vista ni escribe el Doc (el store no recibe tics).
+  tickOff = subscribeTick((now) => {
+    if (!container.isConnected) {
+      if (tickOff) {
+        tickOff();
+        tickOff = null;
+      }
+      return;
+    }
+    const liveDoc = store.get().doc;
+    const liveGame = liveDoc?.games.find((g) => g.id === gameId);
+    if (!liveDoc || !liveGame) return;
+    for (const el of qsa('[data-live-time]', container)) {
+      const play = liveGame.plays.find((p) => p.id === el.getAttribute('data-live-time'));
+      if (!play) continue;
+      el.textContent = formatClock(liveTotalSeconds(liveDoc, play, now.getTime()));
+    }
+  });
 }
 
 /**
@@ -610,6 +800,49 @@ async function commitOwnPlatform(input, store) {
 }
 
 /**
+ * Guarda el Tramo del consejo con la duración escrita: vacío = guardar tal
+ * cual (la prefillada); un valor que no sea entero mayor o igual a 0 se
+ * rechaza inline (BAD_SHAPE) sin llamar al motor. Cada comando con éxito deja
+ * `segmentPrompt` a null; los errores van al slot `playError`.
+ * @param {Element} surface
+ * @param {import('../app.js').Store} store
+ * @param {string|null} raw duración escrita; null = guardar tal cual
+ */
+async function commitPromptSegment(surface, store, raw) {
+  const game = currentGame(store);
+  const prompt = store.get().ficha.segmentPrompt;
+  if (!game || !prompt) return;
+  /** @type {number|undefined} */
+  let seconds;
+  if (raw != null) {
+    const trimmed = raw.trim();
+    if (trimmed !== '') {
+      const value = Number(trimmed);
+      if (!Number.isInteger(value) || value < 0) {
+        const error = qs('[data-seg-error]', surface);
+        if (error) {
+          error.textContent = 'La duración debe ser un entero de segundos';
+          error.removeAttribute('hidden');
+        }
+        return;
+      }
+      seconds = value;
+    }
+  }
+  await runCommand(
+    store,
+    () => confirmSegment(game.id, prompt.playId, prompt.segmentId, seconds),
+    (message) => patchFicha(store, { playError: message }),
+    () => {
+      const fresh = qs('[data-seg-input]', surface);
+      if (fresh instanceof HTMLInputElement && raw != null) fresh.value = raw;
+    }
+  ).then((res) => {
+    if (res.ok) patchFicha(store, { segmentPrompt: null });
+  });
+}
+
+/**
  * Delegación de eventos sobre la superficie recién renderizada; el wrapper es
  * nuevo en cada render, así no se acumulan listeners entre renders.
  * @param {Element} container
@@ -709,6 +942,40 @@ function wire(container, store) {
       void ratePlay(game.id, playRateClear.getAttribute('data-play-id') ?? '', null);
       return;
     }
+    if (pick('[data-counter-toggle]')) {
+      // El ancla se captura ANTES del comando: pauseCounter la borra del Doc y
+      // hace falta para localizar la jugada anclada y su último tramo nuevo.
+      const anchor = store.get().doc?.counter ?? null;
+      patchFicha(store, { playError: null });
+      if (anchor && anchor.gameId === game.id) {
+        void runCommand(
+          store,
+          () => pauseCounter(),
+          (message) => patchFicha(store, { playError: message })
+        ).then((res) => {
+          if (!res.ok) return;
+          const doc = store.get().doc;
+          const play = doc?.games
+            .find((g) => g.id === anchor.gameId)
+            ?.plays.find((p) => p.id === anchor.playId);
+          const last = (play?.pendingSegments ?? []).at(-1);
+          if (!play || !last) return;
+          patchFicha(store, { segmentPrompt: { playId: play.id, segmentId: last.id } });
+          const input = qs('[data-seg-input]', container);
+          if (input instanceof HTMLInputElement) {
+            input.focus();
+            input.select();
+          }
+        });
+        return;
+      }
+      void runCommand(
+        store,
+        () => startCounter(game.id),
+        (message) => patchFicha(store, { playError: message })
+      );
+      return;
+    }
     if (pick('[data-add-play]')) {
       patchFicha(store, { playError: null });
       void runCommand(store, () => addPlay(game.id), (message) =>
@@ -736,6 +1003,47 @@ function wire(container, store) {
     }
     if (pick('[data-del-play-no]')) {
       patchFicha(store, { confirmPlay: null });
+      return;
+    }
+    const segDecide = pick('[data-seg-decide]');
+    if (segDecide) {
+      const segmentId = segDecide.getAttribute('data-seg-decide');
+      const playId = segDecide.closest('[data-seg-row]')?.getAttribute('data-play-id');
+      if (segmentId && playId) patchFicha(store, { segmentPrompt: { playId, segmentId } });
+      return;
+    }
+    if (pick('[data-seg-later]')) {
+      patchFicha(store, { segmentPrompt: null });
+      return;
+    }
+    if (pick('[data-seg-save-asis]')) {
+      void commitPromptSegment(container, store, null);
+      return;
+    }
+    const segSave = pick('[data-seg-save]');
+    if (segSave) {
+      const input = qs('[data-seg-input]', container);
+      void commitPromptSegment(
+        container,
+        store,
+        input instanceof HTMLInputElement ? input.value : ''
+      );
+      return;
+    }
+    const segDiscard = pick('[data-seg-discard]');
+    if (segDiscard) {
+      const segmentId = segDiscard.getAttribute('data-seg-discard') ?? '';
+      const playId = segDiscard.closest('[data-seg-row]')?.getAttribute('data-play-id') ?? '';
+      patchFicha(store, { playError: null });
+      void runCommand(
+        store,
+        () => discardSegment(game.id, playId, segmentId),
+        (message) => patchFicha(store, { playError: message })
+      ).then((res) => {
+        if (res.ok && store.get().ficha.segmentPrompt?.segmentId === segmentId) {
+          patchFicha(store, { segmentPrompt: null });
+        }
+      });
       return;
     }
     if (pick('[data-del-game]')) {

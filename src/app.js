@@ -4,6 +4,7 @@ import { avgRatingOfGames, gameStatus } from './domain/selectors.js';
 import { views } from './views/index.js';
 import * as welcome from './views/welcome.js';
 import { renderFilebar } from './ui/filebar.js';
+import { renderAviso } from './ui/aviso.js';
 import { openDataDialog } from './views/dataDialog.js';
 import { installBackNav } from './backnav.js';
 import { switchTab } from './navigation.js';
@@ -103,6 +104,7 @@ import { isFixedSurface, settleScroll } from './scroll.js';
  *   customPlatform: string|null,
  *   confirmPlay: string|null,
  *   playError: string|null,
+ *   segmentPrompt: { playId: string, segmentId: string } | null,
  *   confirmGame: boolean,
  *   error: string|null,
  *   titleError: string|null,
@@ -138,6 +140,7 @@ export function freshFicha(gameId) {
     customPlatform: null,
     confirmPlay: null,
     playError: null,
+    segmentPrompt: null,
     confirmGame: false,
     error: null,
     titleError: null,
@@ -325,6 +328,7 @@ export function createApp(root) {
     ${railHtml()}
     <div class="content">
       <div class="filebar-slot"></div>
+      <div class="aviso-slot"></div>
       <main class="main"></main>
     </div>
   </div>`;
@@ -385,6 +389,12 @@ export function createApp(root) {
     if (filebarSlot) {
       if (gated) filebarSlot.innerHTML = '';
       else renderFilebar(filebarSlot, store);
+    }
+    // Aviso del Contador: parte del chrome, oculto tras la puerta de bienvenida.
+    const avisoSlot = qs('.aviso-slot', root);
+    if (avisoSlot) {
+      if (gated) avisoSlot.innerHTML = '';
+      else renderAviso(avisoSlot, store);
     }
     // Solo cambió el estado de guardado (file/meta): la vista principal ya
     // está pintada y re-renderizarla re-dispararía la animación `.fade`

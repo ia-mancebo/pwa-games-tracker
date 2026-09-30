@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   initLibrary,
   newLibrary,
@@ -12,14 +12,18 @@ import {
   addTag,
   commitSharedField,
   commitTitle,
+  confirmSegment,
   deleteGame,
   deletePlay,
+  discardSegment,
+  pauseCounter,
   rateHero,
   removeTag,
   setPlayDate,
   setPlayNotes,
   setPlayPlatform,
   setStatus,
+  startCounter,
 } from './ficha.js';
 import { store } from '../app.js';
 
@@ -385,5 +389,326 @@ describe('errores como Result', () => {
       ok: false,
       error: expect.any(LibraryError),
     });
+  });
+});
+
+describe('contador de tiempo', () => {
+  const LATER = new Date('2026-08-24T10:45:00Z');
+  const T_PAUSE = new Date('2026-08-24T11:00:00Z');
+  const AUTO_PAUSE = /** @type {import('../domain/schema.js').Status[]} */ ([
+    'finished',
+    'abandoned',
+  ]);
+
+  it('iniciar crea el ancla con instante inmediato y pasa la jugada a Jugando, rellenando startedAt solo si faltaba', async () => {
+    await newLibrary(NOW);
+    const doc = await addGame({ title: 'Tunic', today: '2026-02-01', status: 'backlog' });
+    const gameId = doc.games[0].id;
+    const playId = doc.games[0].plays[0].id;
+    await expect(startCounter(gameId, NOW)).resolves.toMatchObject({ ok: true });
+    expect(store.get().doc?.counter).toEqual({ gameId, playId, startedAt: NOW.toISOString() });
+    const play = findPlay(gameId, playId);
+    expect(play.status).toBe('playing');
+    expect(play.startedAt).toBe('2026-08-24');
+  });
+
+  it('iniciar no toca un startedAt ya presente', async () => {
+    await newLibrary(NOW);
+    const doc = await addGame({ title: 'Tunic', today: '2026-02-01', status: 'backlog' });
+    const gameId = doc.games[0].id;
+    const playId = doc.games[0].plays[0].id;
+    await updatePlay(gameId, playId, { startedAt: '2026-02-05' });
+    await expect(startCounter(gameId, NOW)).resolves.toMatchObject({ ok: true });
+    const play = findPlay(gameId, playId);
+    expect(play.status).toBe('playing');
+    expect(play.startedAt).toBe('2026-02-05');
+  });
+
+  it('iniciar sobre una jugada Terminada/Abandonada la reabre a Jugando', async () => {
+    for (const status of AUTO_PAUSE) {
+      await newLibrary(NOW);
+      const doc = await addGame({ title: 'Tunic', today: '2026-02-01', status });
+      const gameId = doc.games[0].id;
+      const playId = doc.games[0].plays[0].id;
+      await expect(startCounter(gameId, NOW)).resolves.toMatchObject({ ok: true });
+      expect(findPlay(gameId, playId).status).toBe('playing');
+    }
+  });
+
+  it('iniciar un segundo Contador auto-pausa el primero', async () => {
+    await newLibrary(NOW);
+    const docA = await addGame({ title: 'A', today: '2026-02-01' });
+    const gameIdA = docA.games[0].id;
+    const playIdA = docA.games[0].plays[0].id;
+    const docB = await addGame({ title: 'B', today: '2026-02-01' });
+    const gameIdB = docB.games[1].id;
+    const playIdB = docB.games[1].plays[0].id;
+    await expect(startCounter(gameIdA, NOW)).resolves.toMatchObject({ ok: true });
+    await expect(startCounter(gameIdB, LATER)).resolves.toMatchObject({ ok: true });
+    expect(store.get().doc?.counter).toEqual({
+      gameId: gameIdB,
+      playId: playIdB,
+      startedAt: LATER.toISOString(),
+    });
+    expect(findPlay(gameIdA, playIdA).pendingSegments).toEqual([
+      { id: expect.any(String), seconds: 2700 },
+    ]);
+  });
+
+  it('pausar deja Tramo pendiente con los segundos correctos y limpia el ancla', async () => {
+    await newLibrary(NOW);
+    const doc = await addGame({ title: 'Tunic', today: '2026-02-01' });
+    const gameId = doc.games[0].id;
+    const playId = doc.games[0].plays[0].id;
+    await expect(startCounter(gameId, NOW)).resolves.toMatchObject({ ok: true });
+    await expect(pauseCounter(LATER)).resolves.toMatchObject({ ok: true });
+    expect(store.get().doc?.counter).toBeUndefined();
+    expect(findPlay(gameId, playId).pendingSegments).toEqual([
+      { id: expect.any(String), seconds: 2700 },
+    ]);
+  });
+
+  it('iniciar ignora los Tramos pendientes previos de la jugada (acumulan)', async () => {
+    await newLibrary(NOW);
+    const doc = await addGame({ title: 'Tunic', today: '2026-02-01' });
+    const gameId = doc.games[0].id;
+    const playId = doc.games[0].plays[0].id;
+    await updatePlay(gameId, playId, { pendingSegments: [{ id: 'previo', seconds: 30 }] });
+    await expect(startCounter(gameId, NOW)).resolves.toMatchObject({ ok: true });
+    await expect(pauseCounter(LATER)).resolves.toMatchObject({ ok: true });
+    expect(findPlay(gameId, playId).pendingSegments).toEqual([
+      { id: 'previo', seconds: 30 },
+      { id: expect.any(String), seconds: 2700 },
+    ]);
+  });
+
+  it('setStatus a Terminado/Abandonado auto-pausa el Contador del juego', async () => {
+    for (const status of AUTO_PAUSE) {
+      await newLibrary(NOW);
+      const doc = await addGame({ title: 'Tunic', today: '2026-02-01' });
+      const gameId = doc.games[0].id;
+      const playId = doc.games[0].plays[0].id;
+      await expect(startCounter(gameId, NOW)).resolves.toMatchObject({ ok: true });
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(T_PAUSE);
+      try {
+        await expect(setStatus(gameId, status, NOW)).resolves.toMatchObject({ ok: true });
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(store.get().doc?.counter).toBeUndefined();
+      expect(findPlay(gameId, playId).pendingSegments).toEqual([
+        { id: expect.any(String), seconds: 3600 },
+      ]);
+    }
+  });
+
+  it('setStatus a Jugando no pausa el Contador', async () => {
+    await newLibrary(NOW);
+    const doc = await addGame({ title: 'Tunic', today: '2026-02-01' });
+    const gameId = doc.games[0].id;
+    const playId = doc.games[0].plays[0].id;
+    await expect(startCounter(gameId, NOW)).resolves.toMatchObject({ ok: true });
+    await expect(setStatus(gameId, 'playing', NOW)).resolves.toMatchObject({ ok: true });
+    expect(store.get().doc?.counter).toEqual({ gameId, playId, startedAt: NOW.toISOString() });
+    expect(findPlay(gameId, playId).pendingSegments).toBeUndefined();
+  });
+
+  it('setStatus de otro juego no pausa el Contador', async () => {
+    await newLibrary(NOW);
+    const docA = await addGame({ title: 'A', today: '2026-02-01' });
+    const gameIdA = docA.games[0].id;
+    const playIdA = docA.games[0].plays[0].id;
+    const docB = await addGame({ title: 'B', today: '2026-02-01' });
+    const gameIdB = docB.games[1].id;
+    await expect(startCounter(gameIdA, NOW)).resolves.toMatchObject({ ok: true });
+    await expect(setStatus(gameIdB, 'finished', NOW)).resolves.toMatchObject({ ok: true });
+    expect(store.get().doc?.counter).toEqual({ gameId: gameIdA, playId: playIdA, startedAt: NOW.toISOString() });
+    expect(findPlay(gameIdA, playIdA).pendingSegments).toBeUndefined();
+  });
+
+  it('addPlay auto-pausa si el juego anclado coincide', async () => {
+    await newLibrary(NOW);
+    const doc = await addGame({ title: 'Tunic', today: '2026-02-01' });
+    const gameId = doc.games[0].id;
+    const playId = doc.games[0].plays[0].id;
+    await expect(startCounter(gameId, NOW)).resolves.toMatchObject({ ok: true });
+    await expect(addPlay(gameId, LATER)).resolves.toMatchObject({ ok: true });
+    expect(store.get().doc?.counter).toBeUndefined();
+    // La pausa se cierra en el instante de la operación (el now de la rejugada).
+    expect(findPlay(gameId, playId).pendingSegments).toEqual([
+      { id: expect.any(String), seconds: 2700 },
+    ]);
+    expect(findGame(gameId).plays).toHaveLength(2);
+  });
+
+  it('addPlay de otro juego no pausa el Contador', async () => {
+    await newLibrary(NOW);
+    const docA = await addGame({ title: 'A', today: '2026-02-01' });
+    const gameIdA = docA.games[0].id;
+    const playIdA = docA.games[0].plays[0].id;
+    const docB = await addGame({ title: 'B', today: '2026-02-01' });
+    const gameIdB = docB.games[1].id;
+    await expect(startCounter(gameIdA, NOW)).resolves.toMatchObject({ ok: true });
+    await expect(addPlay(gameIdB, LATER)).resolves.toMatchObject({ ok: true });
+    expect(store.get().doc?.counter).toEqual({ gameId: gameIdA, playId: playIdA, startedAt: NOW.toISOString() });
+    expect(findPlay(gameIdA, playIdA).pendingSegments).toBeUndefined();
+  });
+
+  it('borrar el juego anclado deja el Doc sin ancla y sin Tramo nuevo', async () => {
+    await newLibrary(NOW);
+    const doc = await addGame({ title: 'Tunic', today: '2026-02-01' });
+    const gameId = doc.games[0].id;
+    await expect(startCounter(gameId, NOW)).resolves.toMatchObject({ ok: true });
+    await expect(deleteGame(gameId)).resolves.toMatchObject({ ok: true });
+    expect(store.get().doc?.counter).toBeUndefined();
+    expect(store.get().doc?.games).toHaveLength(0);
+  });
+
+  it('borrar la jugada anclada deja el Doc sin ancla y sin Tramo nuevo', async () => {
+    await newLibrary(NOW);
+    const doc = await addGame({ title: 'Tunic', today: '2026-02-01' });
+    const gameId = doc.games[0].id;
+    const playId1 = doc.games[0].plays[0].id;
+    await expect(addPlay(gameId, NOW)).resolves.toMatchObject({ ok: true });
+    const playId2 = findGame(gameId).plays[1].id;
+    await expect(startCounter(gameId, NOW)).resolves.toMatchObject({ ok: true });
+    await expect(deletePlay(gameId, playId2)).resolves.toMatchObject({ ok: true });
+    expect(store.get().doc?.counter).toBeUndefined();
+    expect(findPlay(gameId, playId1).pendingSegments).toBeUndefined();
+  });
+
+  it('el Doc no sufre escrituras durante la marcha', async () => {
+    await newLibrary(NOW);
+    const doc = await addGame({ title: 'Tunic', today: TODAY });
+    const gameId = doc.games[0].id;
+    await expect(startCounter(gameId, NOW)).resolves.toMatchObject({ ok: true });
+    const frozen = store.get().doc;
+    const snapshot = structuredClone(frozen);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(store.get().doc).toBe(frozen);
+    expect(store.get().doc).toEqual(snapshot);
+  });
+
+  it('los comandos devuelven Promise<Result> y los errores llegan como Result sin lanzar', async () => {
+    await newLibrary(NOW);
+    const pause = pauseCounter(NOW);
+    expect(pause).toBeInstanceOf(Promise);
+    await expect(pause).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'NO_COUNTER', message: 'No hay contador en marcha' },
+    });
+    const start = startCounter('no-existe', NOW);
+    expect(start).toBeInstanceOf(Promise);
+    await expect(start).resolves.toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } });
+    await expect(pauseCounter(NOW)).resolves.toMatchObject({
+      ok: false,
+      error: expect.any(LibraryError),
+    });
+    await expect(startCounter('no-existe', NOW)).resolves.toMatchObject({
+      ok: false,
+      error: expect.any(LibraryError),
+    });
+  });
+});
+
+describe('consolidar tramos', () => {
+  const LATER = new Date('2026-08-24T10:45:00Z');
+  const T_START2 = new Date('2026-08-24T12:00:00Z');
+  const T_PAUSE2 = new Date('2026-08-24T12:20:00Z');
+
+  /**
+   * Siembra un juego con un Tramo pendiente de 2700s por el cauce del motor
+   * (iniciar → pausar), como hace el usuario real.
+   * @returns {Promise<{ gameId: string, playId: string, segId: string }>}
+   */
+  async function seedPendingSegment() {
+    await newLibrary(NOW);
+    const doc = await addGame({ title: 'Tunic', today: '2026-02-01' });
+    const gameId = doc.games[0].id;
+    const playId = doc.games[0].plays[0].id;
+    await startCounter(gameId, NOW);
+    await pauseCounter(LATER);
+    const segments = findPlay(gameId, playId).pendingSegments ?? [];
+    return { gameId, playId, segId: segments[0].id };
+  }
+
+  it('confirmar sin duración consolida la prefillada y quita el Tramo de pendientes', async () => {
+    const { gameId, playId, segId } = await seedPendingSegment();
+    await expect(confirmSegment(gameId, playId, segId, null, NOW)).resolves.toMatchObject({ ok: true });
+    const play = findPlay(gameId, playId);
+    expect(play.playedSeconds).toBe(2700);
+    expect(play.pendingSegments).toBeUndefined();
+  });
+
+  it('confirmar con otra duración consolida esa duración en su lugar, sumándola al Tiempo jugado', async () => {
+    const { gameId, playId, segId } = await seedPendingSegment();
+    await updatePlay(gameId, playId, { playedSeconds: 100 });
+    await expect(confirmSegment(gameId, playId, segId, 90, NOW)).resolves.toMatchObject({ ok: true });
+    const play = findPlay(gameId, playId);
+    expect(play.playedSeconds).toBe(190);
+    expect(play.pendingSegments).toBeUndefined();
+  });
+
+  it('confirmar con duración 0 no suma nada y quita el Tramo', async () => {
+    const { gameId, playId, segId } = await seedPendingSegment();
+    await expect(confirmSegment(gameId, playId, segId, 0, NOW)).resolves.toMatchObject({ ok: true });
+    const play = findPlay(gameId, playId);
+    expect(play.playedSeconds).toBeUndefined();
+    expect(play.pendingSegments).toBeUndefined();
+  });
+
+  it('descartar quita el Tramo sin rastro en pendientes ni en el consolidado', async () => {
+    const { gameId, playId, segId } = await seedPendingSegment();
+    await updatePlay(gameId, playId, { playedSeconds: 3600 });
+    await expect(discardSegment(gameId, playId, segId, NOW)).resolves.toMatchObject({ ok: true });
+    const play = findPlay(gameId, playId);
+    expect(play.playedSeconds).toBe(3600);
+    expect(play.pendingSegments).toBeUndefined();
+  });
+
+  it('varios Tramos pendientes se deciden uno a uno sin afectar al resto', async () => {
+    const { gameId, playId, segId: first } = await seedPendingSegment();
+    await startCounter(gameId, T_START2);
+    await pauseCounter(T_PAUSE2);
+    const segments = findPlay(gameId, playId).pendingSegments ?? [];
+    expect(segments).toHaveLength(2);
+    const second = segments[1].id;
+    await expect(confirmSegment(gameId, playId, first, undefined, NOW)).resolves.toMatchObject({ ok: true });
+    expect(findPlay(gameId, playId).playedSeconds).toBe(2700);
+    expect(findPlay(gameId, playId).pendingSegments).toEqual([{ id: second, seconds: 1200 }]);
+    await expect(discardSegment(gameId, playId, second, NOW)).resolves.toMatchObject({ ok: true });
+    expect(findPlay(gameId, playId).playedSeconds).toBe(2700);
+    expect(findPlay(gameId, playId).pendingSegments).toBeUndefined();
+  });
+
+  it('confirmar o descartar un Tramo inexistente devuelve NOT_FOUND sin tocar nada', async () => {
+    const { gameId, playId, segId } = await seedPendingSegment();
+    await updatePlay(gameId, playId, { playedSeconds: 3600 });
+    await expect(confirmSegment(gameId, playId, 'no-existe', null, NOW)).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'NOT_FOUND', message: 'Tramo pendiente no encontrado' },
+    });
+    await expect(discardSegment(gameId, playId, 'no-existe', NOW)).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'NOT_FOUND', message: 'Tramo pendiente no encontrado' },
+    });
+    const play = findPlay(gameId, playId);
+    expect(play.playedSeconds).toBe(3600);
+    expect(play.pendingSegments).toEqual([{ id: segId, seconds: 2700 }]);
+  });
+
+  it('duración inválida devuelve BAD_SHAPE sin tocar nada', async () => {
+    const { gameId, playId, segId } = await seedPendingSegment();
+    await updatePlay(gameId, playId, { playedSeconds: 3600 });
+    for (const bad of [-5, 1.5]) {
+      await expect(confirmSegment(gameId, playId, segId, bad, NOW)).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'BAD_SHAPE', message: 'La duración debe ser un entero de segundos' },
+      });
+    }
+    const play = findPlay(gameId, playId);
+    expect(play.playedSeconds).toBe(3600);
+    expect(play.pendingSegments).toEqual([{ id: segId, seconds: 2700 }]);
   });
 });

@@ -30,6 +30,7 @@ vi.mock('../src/ui/sheet.js', () => ({
 
 vi.mock('../src/data/library.js', () => ({
   initLibrary: vi.fn(async () => calls.push('initLibrary')),
+  resumeCounter: vi.fn(async () => calls.push('resumeCounter')),
 }));
 
 vi.mock('../src/app.js', async (importOriginal) => {
@@ -138,6 +139,13 @@ describe('start(root): orden del cableado', () => {
     expect(calls.indexOf('initSheet')).toBeLessThan(calls.indexOf('createApp'));
   });
 
+  it('resumeCounter corre después de initLibrary y antes de createApp (reabrir con app cerrada)', async () => {
+    await start(mount());
+
+    expect(calls.indexOf('resumeCounter')).toBeGreaterThan(calls.indexOf('initLibrary'));
+    expect(calls.indexOf('resumeCounter')).toBeLessThan(calls.indexOf('createApp'));
+  });
+
   it('registra el handler y la suscripción de conflicto ANTES de restoreSavedLink', async () => {
     await start(mount());
 
@@ -170,6 +178,7 @@ describe('registerSW fuera del if (root)', () => {
     await start(null);
 
     expect(calls).not.toContain('initLibrary');
+    expect(calls).not.toContain('resumeCounter');
     expect(calls).not.toContain('createApp');
   });
 });

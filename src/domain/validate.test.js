@@ -65,7 +65,7 @@ describe('createPlay / createGame / createDoc', () => {
   it('createDoc sella updatedAt ISO', () => {
     const doc = createDoc({ now: new Date('2026-08-24T10:00:00Z') });
     expect(doc.schema).toBe('game-tracker');
-    expect(doc.version).toBe(1);
+    expect(doc.version).toBe(2);
     expect(doc.updatedAt).toBe('2026-08-24T10:00:00.000Z');
     expect(doc.games).toEqual([]);
   });
@@ -96,7 +96,7 @@ describe('validateDoc', () => {
   });
 
   it('rechaza versión futura pidiendo actualizar la app', () => {
-    const res = validateDoc({ ...validDocInput(), version: 2 });
+    const res = validateDoc({ ...validDocInput(), version: 99 });
     expect(res.ok).toBe(false);
     if (!res.ok) {
       expect(res.code).toBe('FUTURE_VERSION');
@@ -208,5 +208,139 @@ describe('validatePlayShape / validateGameShape', () => {
   it('valida juego suelto', () => {
     const game = createGame({ title: 'Tunic', today: TODAY });
     expect(validateGameShape(game).ok).toBe(true);
+  });
+});
+
+describe('doc v2', () => {
+  const COUNTER = { gameId: 'g1', playId: 'p1', startedAt: '2026-08-24T10:00:00Z' };
+
+  /** Doc v2 válido con Tiempo jugado, Tramos pendientes y Contador. @returns {any} */
+  function validDocV2Input() {
+    const doc = validDocInput();
+    doc.version = 2;
+    doc.games[0].plays[0].playedSeconds = 3600;
+    doc.games[0].plays[0].pendingSegments = [{ id: 's1', seconds: 120 }];
+    doc.counter = COUNTER;
+    return doc;
+  }
+
+  it('doc v2 con playedSeconds, pendingSegments y counter valida y carga', () => {
+    const input = validDocV2Input();
+    const res = validateDoc(input);
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.doc.version).toBe(2);
+      expect(res.doc.games[0].plays[0].playedSeconds).toBe(3600);
+      expect(res.doc.games[0].plays[0].pendingSegments).toEqual([{ id: 's1', seconds: 120 }]);
+      expect(res.doc.counter).toEqual(COUNTER);
+    }
+  });
+
+  it('doc v1 sin campos nuevos sigue validando igual (sin migración)', () => {
+    const res = validateDoc(validDocInput());
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.doc.version).toBe(1);
+      expect(res.doc.games[0].plays[0].playedSeconds).toBeUndefined();
+      expect(res.doc.games[0].plays[0].pendingSegments).toBeUndefined();
+      expect(res.doc.counter).toBeUndefined();
+    }
+  });
+
+  it('doc v2 sin counter también valida (campos nuevos opcionales)', () => {
+    const doc = validDocV2Input();
+    delete doc.counter;
+    expect(validateDoc(doc).ok).toBe(true);
+  });
+
+  it('versión futura con counter en la raíz se rechaza con FUTURE_VERSION', () => {
+    const doc = validDocV2Input();
+    doc.version = 99;
+    const res = validateDoc(doc);
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.code).toBe('FUTURE_VERSION');
+      expect(res.reason).toContain('Actualiza la app');
+    }
+  });
+
+  it('la versión futura gana a los campos desconocidos de la raíz', () => {
+    const doc = validDocV2Input();
+    doc.version = 99;
+    doc.extra = true;
+    const res = validateDoc(doc);
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.code).toBe('FUTURE_VERSION');
+      expect(res.reason).toContain('Actualiza la app');
+    }
+  });
+
+  it('rechaza tiempo jugado mal tipado sin mutar el input', () => {
+    for (const playedSeconds of [-5, 1.5, '60', null, true]) {
+      const doc = validDocV2Input();
+      doc.games[0].plays[0].playedSeconds = playedSeconds;
+      const before = structuredClone(doc);
+      const res = validateDoc(doc);
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.reason).toBeTruthy();
+      expect(doc).toEqual(before);
+    }
+  });
+
+  it('rechaza tramos pendientes malformados sin mutar el input', () => {
+    const badSegments = [
+      { seconds: 5 },
+      { id: 'x', seconds: -1 },
+      { id: 'x', seconds: 1.5 },
+      { id: '', seconds: 5 },
+      { id: 'x' },
+      { id: 'x', seconds: '5' },
+      { id: 'x', seconds: 5, extra: 1 },
+    ];
+    for (const seg of badSegments) {
+      const doc = validDocV2Input();
+      doc.games[0].plays[0].pendingSegments = [seg];
+      const before = structuredClone(doc);
+      const res = validateDoc(doc);
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.reason).toBeTruthy();
+      expect(doc).toEqual(before);
+    }
+    for (const pendingSegments of ['x', {}, 5, null]) {
+      const doc = validDocV2Input();
+      doc.games[0].plays[0].pendingSegments = pendingSegments;
+      const res = validateDoc(doc);
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.reason).toBeTruthy();
+    }
+  });
+
+  it('rechaza ancla de contador malformada con razón clara', () => {
+    const cases = [
+      { counter: 'x', reason: 'Ancla de contador malformada' },
+      { counter: {}, reason: 'Ancla de contador malformada' },
+      { counter: { gameId: 'g1', playId: 'p1' }, reason: 'Fecha de inicio del contador inválida' },
+      { counter: { gameId: 'g1', playId: 'p1', startedAt: 'ayer' }, reason: 'Fecha de inicio del contador inválida' },
+      { counter: { gameId: 'g1', playId: 'p1', startedAt: '2026-08-24' }, reason: 'Fecha de inicio del contador inválida' },
+      { counter: { gameId: '', playId: 'p1', startedAt: '2026-08-24T10:00:00Z' }, reason: 'Ancla de contador malformada' },
+      { counter: { gameId: 'g1', playId: '', startedAt: '2026-08-24T10:00:00Z' }, reason: 'Ancla de contador malformada' },
+      {
+        counter: { gameId: 'g1', playId: 'p1', startedAt: '2026-08-24T10:00:00Z', extra: 1 },
+        reason: 'Ancla de contador malformada',
+      },
+    ];
+    for (const { counter, reason } of cases) {
+      const doc = validDocV2Input();
+      doc.counter = counter;
+      const before = structuredClone(doc);
+      const res = validateDoc(doc);
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.code).toBe('BAD_SHAPE');
+        expect(res.reason).toContain(reason);
+      }
+      expect(doc).toEqual(before);
+    }
   });
 });

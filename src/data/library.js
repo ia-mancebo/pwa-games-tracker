@@ -4,9 +4,9 @@
  * la verdad a largo plazo. Toda mutación reemplaza `state.doc` atómicamente,
  * marca `dirty` y valida el resultado antes de persistir.
  */
-import { createDoc, createGame, createPlay, normalizeWorkerUrl } from '../domain/schema.js';
+import { createDoc, createGame, createPlay, newId, normalizeWorkerUrl, todayFrom } from '../domain/schema.js';
 import { validateDoc } from '../domain/validate.js';
-import { latestPlay } from '../domain/selectors.js';
+import { counterElapsedSeconds, latestPlay } from '../domain/selectors.js';
 import { getState, getMeta, putMeta, putStateAndMeta } from './db.js';
 import { store } from '../app.js';
 
@@ -158,7 +158,8 @@ export function updateGame(gameId, patch) {
 }
 
 /**
- * Borrado en cascada: el juego y todas sus jugadas (spec §8.5).
+ * Borrado en cascada: el juego y todas sus jugadas (spec §8.5). Si el
+ * Contador estaba anclado al juego se borra el ancla sin Tramo (poda mínima).
  * @param {string} gameId
  */
 export function deleteGame(gameId) {
@@ -166,21 +167,27 @@ export function deleteGame(gameId) {
     const idx = doc.games.findIndex((g) => g.id === gameId);
     if (idx === -1) throw new LibraryError('Juego no encontrado', 'NOT_FOUND');
     doc.games.splice(idx, 1);
+    if (doc.counter?.gameId === gameId) delete doc.counter;
   }, { now: new Date() });
 }
 
 /**
  * Añade una jugada (rejugada). Nace Jugando por defecto, plataforma heredable.
+ * Auto-pausa el Contador del juego (una de las cuatro formas de pausa), en el
+ * instante de la operación; `addedAt` y `updatedAt` usan el «hoy» sintético.
  * @param {string} gameId
- * @param {{ status?: import('../domain/schema.js').Status, today: string, platform?: import('../domain/schema.js').Platform, notes?: string }} input
+ * @param {{ status?: import('../domain/schema.js').Status, today: string, now?: Date, platform?: import('../domain/schema.js').Platform, notes?: string }} input
  */
 export function addPlay(gameId, input) {
+  const today = new Date(`${input.today}T12:00:00Z`);
+  const pauseNow = input.now ?? new Date();
   return mutate((doc) => {
+    if (doc.counter?.gameId === gameId) pauseAnchor(doc, pauseNow);
     const game = findGame(doc, gameId);
     game.plays.push(
       createPlay({ status: input.status ?? 'playing', today: input.today, platform: input.platform, notes: input.notes }),
     );
-  }, { now: new Date(`${input.today}T12:00:00Z`) });
+  }, { now: today });
 }
 
 /**
@@ -197,7 +204,8 @@ export function updatePlay(gameId, playId, patch) {
 }
 
 /**
- * Borra una jugada respetando el mínimo de una por juego (spec §8.5).
+ * Borra una jugada respetando el mínimo de una por juego (spec §8.5). Si el
+ * Contador estaba anclado a la jugada se borra el ancla sin Tramo (poda mínima).
  * @param {string} gameId
  * @param {string} playId
  */
@@ -210,6 +218,7 @@ export function deletePlay(gameId, playId) {
     const idx = game.plays.findIndex((p) => p.id === playId);
     if (idx === -1) throw new LibraryError('Jugada no encontrada', 'NOT_FOUND');
     game.plays.splice(idx, 1);
+    if (doc.counter?.gameId === gameId && doc.counter?.playId === playId) delete doc.counter;
   }, { now: new Date() });
 }
 
@@ -217,17 +226,23 @@ export function deletePlay(gameId, playId) {
  * Cambia el Estado del juego: opera sobre la jugada más reciente; nunca crea
  * ni borra jugadas (spec §8.5). Al pasar a Jugando sugiere `startedAt` y al
  * pasar a Terminado sugiere `finishedAt` (spec §4.3), solo si están vacíos.
+ * Marcar Terminado/Abandonado auto-pausa el Contador del juego; los demás
+ * estados lo dejan en marcha.
  * @param {string} gameId
  * @param {import('../domain/schema.js').Status} status
  * @param {string} today
  */
 export function setGameStatus(gameId, status, today) {
+  const now = new Date();
   return mutate((doc) => {
+    if ((status === 'finished' || status === 'abandoned') && doc.counter?.gameId === gameId) {
+      pauseAnchor(doc, now);
+    }
     const play = latestPlay(findGame(doc, gameId));
-    play.status = status;
-    if (status === 'playing' && play.startedAt == null) play.startedAt = today;
+    if (status === 'playing') openPlayAsPlaying(play, today);
+    else play.status = status;
     if (status === 'finished' && play.finishedAt == null) play.finishedAt = today;
-  }, { now: new Date() });
+  }, { now });
 }
 
 /**
@@ -242,6 +257,140 @@ export function ratePlay(gameId, playId, rating) {
     if (rating === null) delete play.rating;
     else play.rating = rating;
   }, { now: new Date() });
+}
+
+/**
+ * Semántica compartida de «pasar la Jugada a Jugando»: el Estado cambia y
+ * `startedAt` se sugiere SOLO si faltaba (spec §4.3). La usa setGameStatus
+ * (al marcar Jugando) y startCounter (al reabrir Terminadas/Abandonadas).
+ * @param {import('../domain/schema.js').Play} play
+ * @param {string} today fecha YYYY-MM-DD del día de la operación
+ */
+function openPlayAsPlaying(play, today) {
+  play.status = 'playing';
+  if (play.startedAt == null) play.startedAt = today;
+}
+
+/**
+ * Pausa el ancla del Contador del draft: el tiempo transcurrido queda como
+ * Tramo pendiente de la jugada anclada y el ancla se borra. Poda mínima: si el
+ * juego o la jugada ya no existen, solo se borra el ancla.
+ * @param {import('../domain/schema.js').Doc} draft
+ * @param {Date} now
+ */
+function pauseAnchor(draft, now) {
+  const counter = draft.counter;
+  if (!counter) return;
+  delete draft.counter;
+  const play = draft.games
+    .find((g) => g.id === counter.gameId)
+    ?.plays.find((p) => p.id === counter.playId);
+  if (!play) return;
+  const seconds = counterElapsedSeconds(counter, now);
+  play.pendingSegments = [...(play.pendingSegments ?? []), { id: newId(), seconds }];
+}
+
+/**
+ * Arranca el Contador de un juego sobre su jugada más reciente: el ancla se
+ * escribe al instante (permite contar con la app cerrada) y la jugada pasa a
+ * Jugando con {@link openPlayAsPlaying}; así se reabren también
+ * Terminadas/Abandonadas. Si ya había otro Contador en marcha, se pausa antes
+ * dejando su tiempo a salvo.
+ * @param {string} gameId
+ * @param {Date} now
+ * @returns {Promise<import('../domain/schema.js').Doc>}
+ */
+export function startCounter(gameId, now) {
+  return mutate((doc) => {
+    if (doc.counter) pauseAnchor(doc, now);
+    const play = latestPlay(findGame(doc, gameId));
+    doc.counter = { gameId, playId: play.id, startedAt: now.toISOString() };
+    if (play.status !== 'playing') openPlayAsPlaying(play, todayFrom(now));
+  }, { now });
+}
+
+/**
+ * Pausa el Contador en marcha: deja el tramo transcurrido como Tramo pendiente
+ * de la jugada anclada y limpia el ancla.
+ * @param {Date} now
+ * @returns {Promise<import('../domain/schema.js').Doc>}
+ */
+export function pauseCounter(now) {
+  return mutate((doc) => {
+    if (!doc.counter) throw new LibraryError('No hay contador en marcha', 'NO_COUNTER');
+    pauseAnchor(doc, now);
+  }, { now });
+}
+
+/**
+ * Quita un Tramo pendiente de la jugada del draft y lo devuelve; si la lista
+ * queda vacía se borra el campo (spec §4: los arrays vacíos se omiten).
+ * @param {import('../domain/schema.js').Play} play
+ * @param {string} segmentId
+ * @returns {import('../domain/schema.js').Segment}
+ */
+function dropSegment(play, segmentId) {
+  const segments = play.pendingSegments ?? [];
+  const idx = segments.findIndex((s) => s.id === segmentId);
+  if (idx === -1) throw new LibraryError('Tramo pendiente no encontrado', 'NOT_FOUND');
+  const [segment] = segments.splice(idx, 1);
+  if (segments.length === 0) delete play.pendingSegments;
+  return segment;
+}
+
+/**
+ * Confirma un Tramo pendiente: consolida su duración —la prefillada o la
+ * sustituta `secondsOverride`— en el Tiempo jugado de la Jugada y lo quita de
+ * pendientes. Duración 0 equivale a descartar: quita el Tramo sin sumar. Un
+ * `secondsOverride` que no sea entero ≥ 0 devuelve error sin tocar nada.
+ * @param {string} gameId
+ * @param {string} playId
+ * @param {string} segmentId
+ * @param {number|null|undefined} secondsOverride duración sustituta; null/undefined = prefillada
+ * @param {Date} now
+ * @returns {Promise<import('../domain/schema.js').Doc>}
+ */
+export function confirmSegment(gameId, playId, segmentId, secondsOverride, now) {
+  return mutate((doc) => {
+    if (secondsOverride != null && (!Number.isInteger(secondsOverride) || secondsOverride < 0)) {
+      throw new LibraryError('La duración debe ser un entero de segundos', 'BAD_SHAPE');
+    }
+    const play = findPlay(doc, gameId, playId);
+    const segment = dropSegment(play, segmentId);
+    const duration = secondsOverride != null ? secondsOverride : segment.seconds;
+    if (duration > 0) play.playedSeconds = (play.playedSeconds ?? 0) + duration;
+  }, { now });
+}
+
+/**
+ * Descarta un Tramo pendiente: lo elimina sin rastro —ni en pendientes ni en
+ * el consolidado—, sin tocar el Tiempo jugado.
+ * @param {string} gameId
+ * @param {string} playId
+ * @param {string} segmentId
+ * @param {Date} now
+ * @returns {Promise<import('../domain/schema.js').Doc>}
+ */
+export function discardSegment(gameId, playId, segmentId, now) {
+  return mutate((doc) => {
+    dropSegment(findPlay(doc, gameId, playId), segmentId);
+  }, { now });
+}
+
+/**
+ * Reabrir con la app cerrada (ticket 05, ADR-0011): si el Doc trae el ancla de
+ * un Contador en marcha, el tiempo transcurrido mientras la app estaba cerrada
+ * se deja como Tramo pendiente prefillado en la jugada anclada y el ancla se
+ * deshace. Es tiempo de pared (ahora − instante de inicio), SIN tope ni
+ * corrección: el usuario revisa el Tramo y decide. Sin doc o sin ancla no toca
+ * nada; la poda mínima de `pauseAnchor` cubre anclas huérfanas.
+ * @param {Date} [now] instante de reapertura (tiempo de pared)
+ * @returns {Promise<import('../domain/schema.js').Doc | null>}
+ */
+export async function resumeCounter(now = new Date()) {
+  const doc = store.get().doc;
+  if (!doc?.counter) return doc ?? null;
+  return pauseCounter(now);
 }
 
 /**

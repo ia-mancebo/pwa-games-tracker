@@ -33,11 +33,12 @@ function need(el) {
 /**
  * Siembra la biblioteca importando un doc (misma vía que la bienvenida).
  * @param {object[]} games
+ * @param {1|2} [version] v2 cuando la siembra lleva campos de tiempo
  */
-async function seed(games) {
+async function seed(games, version = 1) {
   await importDoc({
     schema: 'game-tracker',
-    version: 1,
+    version,
     updatedAt: '2026-08-23T10:00:00Z',
     games,
   });
@@ -72,6 +73,15 @@ const SAMPLE_GAMES = [
     plays: [{ id: 'g3-p1', status: 'backlog', addedAt: '2026-07-01' }],
   },
 ];
+
+/**
+ * Bloque «Tiempo jugado» del dashboard.
+ * @param {HTMLElement} root
+ * @returns {Element}
+ */
+function timeBlock(root) {
+  return need(qs('[data-time-stats]', root));
+}
 
 /**
  * Pone la app en la pestaña Estadísticas sobre un root montado.
@@ -129,8 +139,11 @@ describe('dashboard de estadísticas', () => {
     // Sin plataforma/género/etiquetas ni valoraciones: esas cuatro cajas
     // muestran su aviso como <p class="d-meta"> real; devuelto como cadena
     // plana llegaba ESCAPADO al interpolarse en la plantilla html. «Terminados
-    // en el tiempo» siempre pinta su ventana de 12 meses, sin aviso.
-    const notices = qsa('section.cardbox > p.d-meta', root);
+    // en el tiempo» siempre pinta su ventana de 12 meses, sin aviso; el bloque
+    // «Tiempo jugado» pinta su línea de total, que no es un aviso.
+    const notices = qsa('section.cardbox > p.d-meta', root).filter(
+      (p) => !p.closest('[data-time-stats]'),
+    );
     expect(notices).toHaveLength(4);
     for (const p of notices.slice(0, 3)) expect(p.textContent?.trim()).toBe('Sin datos.');
     expect(notices[3].textContent?.trim()).toBe('Sin valoraciones todavía.');
@@ -210,5 +223,58 @@ describe('dashboard de estadísticas', () => {
       'Cuando añadas juegos verás aquí tus estadísticas.',
     );
     expect(qs('[data-kpi]', root)).toBeNull();
+  });
+
+  it('el bloque «Tiempo jugado» suma solo lo consolidado y lo reparte por Estado de cada jugada', async () => {
+    await seed(
+      [
+        {
+          id: 't1',
+          title: 'Hades',
+          plays: [
+            {
+              id: 't1-p1',
+              status: 'playing',
+              addedAt: '2026-05-01',
+              playedSeconds: 3600,
+              pendingSegments: [{ id: 's1', seconds: 6000 }],
+            },
+            { id: 't1-p2', status: 'finished', addedAt: '2026-04-01', playedSeconds: 45258 },
+          ],
+        },
+        {
+          id: 't2',
+          title: 'Gris',
+          plays: [
+            { id: 't2-p1', status: 'finished', addedAt: '2026-07-01' },
+            { id: 't2-p2', status: 'abandoned', addedAt: '2026-07-02', playedSeconds: 300 },
+          ],
+        },
+      ],
+      2,
+    );
+    const root = mount();
+    openStats(root);
+
+    const text = timeBlock(root).textContent ?? '';
+    // 3600 + 45258 + 300 consolidados; el Tramo pendiente de 6000 no suma.
+    expect(text).toContain('Total: 13 h 39 min');
+    expect(text).toContain('Quiero jugar: 0 min');
+    expect(text).toContain('Jugando: 1 h');
+    expect(text).toContain('Terminado: 12 h 34 min');
+    expect(text).toContain('Abandonado: 5 min');
+  });
+
+  it('con una biblioteca sin tiempos el bloque «Tiempo jugado» muestra «0 min»', async () => {
+    await seed(SAMPLE_GAMES);
+    const root = mount();
+    openStats(root);
+
+    const text = timeBlock(root).textContent ?? '';
+    expect(text).toContain('Total: 0 min');
+    expect(text).toContain('Quiero jugar: 0 min');
+    expect(text).toContain('Jugando: 0 min');
+    expect(text).toContain('Terminado: 0 min');
+    expect(text).toContain('Abandonado: 0 min');
   });
 });

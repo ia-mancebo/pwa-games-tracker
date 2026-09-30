@@ -1579,6 +1579,99 @@ button.plate:hover {
   font-weight: 600;
 }
 
+/* Contador y tramos pendientes (tickets 06-07): tiempo vivo/histórico,
+   botón Iniciar/Pausar, filas de tramos y consejo de pausa */
+.p-time {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.p-time-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.p-time-val {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.seg-badge {
+  align-self: flex-start;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: var(--st-backlog);
+  background: color-mix(in srgb, var(--st-backlog) 13%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--st-backlog) 45%, transparent);
+}
+
+.seg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.seg-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 7px 10px;
+}
+
+.seg-row.seg-open {
+  align-items: flex-start;
+  border-color: color-mix(in srgb, var(--acc) 45%, transparent);
+}
+
+.seg-dur {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+
+.seg-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.seg-advice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.seg-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 220px;
+}
+
+.seg-advice input[type='number'] {
+  background: var(--bg1);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 7px 11px;
+  font-size: 0.92rem;
+  color: var(--ink);
+  font-family: inherit;
+}
+
 /* Zona de riesgo: borrado del juego con confirmación inline */
 .danger-zone {
   border: 1px solid color-mix(in srgb, var(--st-abandoned) 35%, transparent);
@@ -1920,6 +2013,40 @@ button.pill-btn:hover {
 }
 
 .ro-banner-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Aviso del Contador (ticket 08): barra compacta clicable en el chrome */
+.aviso {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+  background: color-mix(in srgb, var(--st-backlog) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--st-backlog) 40%, transparent);
+  border-radius: 10px;
+  padding: 8px 6px 8px 12px;
+  margin: 2px 0 10px;
+  font-size: 0.82rem;
+  text-align: left;
+}
+
+.aviso:hover {
+  border-color: color-mix(in srgb, var(--st-backlog) 70%, transparent);
+}
+
+.aviso-title {
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.aviso-pendientes {
+  color: var(--st-backlog);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
   min-width: 0;
   overflow-wrap: anywhere;
 }

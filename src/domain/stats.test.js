@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeStats, filterOptions } from './stats.js';
+import { computeStats, computeTimeStats, filterOptions } from './stats.js';
 import { chipsForDoc } from './selectors.js';
 
 /**
@@ -272,6 +272,97 @@ describe('computeStats · filtros', () => {
     const f = { platform: 'Switch', genre: null, tag: null };
     const months = computeStats(d, f, NOW).finishedByMonth;
     expect(months.reduce((sum, m) => sum + m.count, 0)).toBe(0);
+  });
+});
+
+describe('computeTimeStats', () => {
+  it('total suma solo el tiempo consolidado de todas las jugadas de todos los juegos', () => {
+    const d = doc([
+      game({
+        id: 'a',
+        plays: [
+          { id: 'p1', status: 'playing', addedAt: '2026-01-01', playedSeconds: 3600 },
+          { id: 'p2', status: 'finished', addedAt: '2026-02-01', playedSeconds: 1800 },
+        ],
+      }),
+      game({
+        id: 'b',
+        title: 'Celeste',
+        plays: [{ id: 'p3', status: 'abandoned', addedAt: '2026-03-01', playedSeconds: 600 }],
+      }),
+    ]);
+    expect(computeTimeStats(d, NOW).total).toBe(6000);
+  });
+
+  it('los Tramos pendientes no suman', () => {
+    const d = doc([
+      game({
+        id: 'a',
+        plays: [
+          {
+            id: 'p1',
+            status: 'playing',
+            addedAt: '2026-01-01',
+            playedSeconds: 3600,
+            pendingSegments: [
+              { id: 's1', seconds: 600 },
+              { id: 's2', seconds: 900 },
+            ],
+          },
+        ],
+      }),
+    ]);
+    expect(computeTimeStats(d, NOW).total).toBe(3600);
+    expect(computeTimeStats(d, NOW).byStatus.playing).toBe(3600);
+  });
+
+  it('las jugadas sin campo cuentan 0', () => {
+    const d = doc([
+      game({
+        id: 'a',
+        plays: [
+          { id: 'p1', status: 'playing', addedAt: '2026-01-01', playedSeconds: 90 },
+          { id: 'p2', status: 'finished', addedAt: '2026-02-01' },
+          { id: 'p3', status: 'backlog', addedAt: '2026-03-01', pendingSegments: [{ id: 's1', seconds: 60 }] },
+        ],
+      }),
+    ]);
+    expect(computeTimeStats(d, NOW).total).toBe(90);
+  });
+
+  it('el reparto es por el Estado de cada jugada, no por el del juego', () => {
+    const d = doc([
+      game({
+        id: 'a',
+        plays: [
+          { id: 'p1', status: 'finished', addedAt: '2026-01-01', playedSeconds: 3600 },
+          { id: 'p2', status: 'finished', addedAt: '2026-02-01', playedSeconds: 1800 },
+          { id: 'p3', status: 'playing', addedAt: '2026-03-01', playedSeconds: 600 },
+        ],
+      }),
+    ]);
+    expect(computeTimeStats(d, NOW).byStatus).toEqual({
+      backlog: 0,
+      playing: 600,
+      finished: 5400,
+      abandoned: 0,
+    });
+    expect(computeTimeStats(d, NOW).total).toBe(6000);
+  });
+
+  it('doc vacío → 0 en total y en los cuatro estados', () => {
+    const s = computeTimeStats(doc([]), NOW);
+    expect(s.total).toBe(0);
+    expect(s.byStatus).toEqual({ backlog: 0, playing: 0, finished: 0, abandoned: 0 });
+  });
+
+  it('now no afecta al cálculo: solo consolidado, sin reloj', () => {
+    const d = doc([
+      game({ id: 'a', plays: [{ id: 'p1', status: 'playing', addedAt: '2026-01-01', playedSeconds: 60 }] }),
+    ]);
+    expect(computeTimeStats(d, new Date('2027-01-01T00:00:00Z'))).toEqual(
+      computeTimeStats(d, new Date('1999-01-01T00:00:00Z')),
+    );
   });
 });
 

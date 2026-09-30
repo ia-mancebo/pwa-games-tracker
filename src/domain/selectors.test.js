@@ -12,6 +12,10 @@ import {
   allPlatforms,
   SHELF_ORDER,
   round1,
+  counterElapsedSeconds,
+  livePlaySeconds,
+  pendingSegmentCount,
+  firstPendingGame,
 } from './selectors.js';
 
 const TODAY = '2026-08-24';
@@ -199,5 +203,73 @@ describe('createPlay con plataforma propia', () => {
   it('acepta id null', () => {
     const play = createPlay({ today: TODAY, platform: { id: null, name: 'Emulador' } });
     expect(play.platform?.id).toBeNull();
+  });
+});
+
+describe('contador y tramos', () => {
+  const NOW = new Date('2026-08-24T10:00:00Z');
+
+  /** Doc mínimo con la ancla y pendientes dados. @param {any} partial @returns {any} */
+  function doc(partial) {
+    return {
+      schema: 'game-tracker',
+      version: 2,
+      updatedAt: '2026-08-24T00:00:00Z',
+      games: partial.games,
+      ...(partial.counter ? { counter: partial.counter } : {}),
+    };
+  }
+
+  it('counterElapsedSeconds mide el tramo en marcha y nunca baja de 0', () => {
+    const counter = { gameId: 'a', playId: 'a-p0', startedAt: '2026-08-24T09:30:00Z' };
+    expect(counterElapsedSeconds(counter, NOW)).toBe(1800);
+    expect(counterElapsedSeconds(counter, new Date('2026-08-24T09:00:00Z'))).toBe(0);
+  });
+
+  it('livePlaySeconds suma lo consolidado y el tramo en marcha solo de la jugada anclada', () => {
+    const counter = { gameId: 'a', playId: 'a-p0', startedAt: '2026-08-24T09:30:00Z' };
+    const anchored = /** @type {any} */ ({
+      id: 'a-p0',
+      status: 'playing',
+      addedAt: TODAY,
+      playedSeconds: 100,
+    });
+    const other = /** @type {any} */ ({
+      id: 'a-p1',
+      status: 'backlog',
+      addedAt: TODAY,
+      playedSeconds: 500,
+    });
+    expect(livePlaySeconds(anchored, counter, NOW)).toBe(1900);
+    expect(livePlaySeconds(other, counter, NOW)).toBe(500);
+    expect(livePlaySeconds(anchored, null, NOW)).toBe(100);
+  });
+
+  it('pendingSegmentCount cuenta los tramos pendientes de toda la biblioteca', () => {
+    const a = {
+      ...game('A', [{ addedAt: TODAY }]),
+      plays: [{ id: 'a-p0', status: 'playing', addedAt: TODAY, playedSeconds: 60, pendingSegments: [{ id: 's1', seconds: 10 }, { id: 's2', seconds: 20 }] }],
+    };
+    const b = {
+      ...game('B', [{ addedAt: TODAY }]),
+      plays: [{ id: 'b-p0', status: 'finished', addedAt: TODAY, pendingSegments: [{ id: 's3', seconds: 5 }] }],
+    };
+    const clean = game('C', [{ addedAt: TODAY }]);
+    expect(pendingSegmentCount(doc({ games: [a, b, clean] }))).toBe(3);
+    expect(pendingSegmentCount(doc({ games: [clean] }))).toBe(0);
+  });
+
+  it('firstPendingGame devuelve el primer juego con tramos pendientes, o null', () => {
+    const pending = { id: 'p', seconds: 1 };
+    const a = {
+      ...game('A', [{ addedAt: TODAY }]),
+      plays: [{ id: 'a-p0', status: 'playing', addedAt: TODAY }],
+    };
+    const b = {
+      ...game('B', [{ addedAt: TODAY }]),
+      plays: [{ id: 'b-p0', status: 'finished', addedAt: TODAY, pendingSegments: [pending] }],
+    };
+    expect(firstPendingGame(doc({ games: [a, b] }))?.id).toBe('b');
+    expect(firstPendingGame(doc({ games: [a] }))).toBeNull();
   });
 });

@@ -15,6 +15,12 @@ Glosario del dominio. Sin detalles de implementación: los términos y nada más
 - **Jugada**: una partida de un juego, con su propio estado, valoración, plataforma jugada, fechas y notas. Todo juego tiene al menos una.
 - **Estado**: ciclo de vida de una jugada. Valores: **Quiero jugar**, **Jugando**, **Terminado**, **Abandonado**.
 - **Estado del juego**: el Estado con el que se muestra y cuenta un Juego: el de su jugada más reciente.
+- **Jugada más reciente**: la Jugada de un Juego incorporada más tarde. Define el Estado del juego y es la que recibe la Valoración del héroe de la Ficha.
+- **Contador**: cronómetro ligado a la Jugada más reciente de un Juego. Iniciar lo pone en marcha y Pausar lo detiene; al detenerse produce un Tramo con lo contado. Solo puede haber uno en marcha en toda la Biblioteca: iniciar otro lo detiene antes; también se detiene al Terminar o Abandonar su Jugada, o al añadir otra Jugada a ese Juego. Con la app cerrada sigue contando: al reabrir, el tiempo transcurrido queda como Tramo.
+- **Tramo**: tiempo contado por un Contador entre Iniciar y Pausar. Queda pendiente de la decisión del usuario: guardarlo tal cual, guardarlo con otra duración o descartarlo. Solo un Tramo confirmado suma al Tiempo jugado; uno descartado no deja rastro.
+- **Consolidar**: sumar al Tiempo jugado de una Jugada un Tramo que el usuario ha guardado.
+- **Tiempo jugado**: duración acumulada de una Jugada, formada al Consolidar sus Tramos confirmados. Ni el usuario ni la app modifican lo ya guardado.
+- **Aviso de contador**: aviso fijo presente en todas las pantallas mientras haya un Contador en marcha o un Tramo pendiente: muestra el Juego, el tiempo transcurrido y un botón de Pausar, y señala los Tramos pendientes de revisión. Pulsar el resto abre la Ficha de su Juego.
 - **Valoración**: nota de 1 a 5 estrellas que el usuario da a una jugada. Puede existir en cualquier estado.
 - **Plataforma**: hardware en el que se juega (PS5, Switch, PC…). Cada juego indica en cuáles puede jugarse; cada jugada registra en cuál se jugó, y esta puede ser propia (p. ej. un emulador), ajena a la lista oficial.
 - **Género**: categoría oficial del juego según la fuente de datos externa (terror, acción, plataformas…).

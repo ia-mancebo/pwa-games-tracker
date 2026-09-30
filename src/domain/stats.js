@@ -151,3 +151,28 @@ export function computeStats(doc, filters, now) {
 export function filterOptions(doc) {
   return chipsForDoc(doc);
 }
+
+/**
+ * Tiempo jugado consolidado de toda la Biblioteca (ticket 09): suma
+ * `playedSeconds` de todas las Jugadas de todos los juegos, sin filtros. Los
+ * Tramos pendientes no suman y las Jugadas sin campo cuentan 0; el reparto
+ * va por el Estado de cada Jugada (no el del juego).
+ * @param {import('./schema.js').Doc} doc
+ * @param {Date} now homogéneo con el módulo; el cálculo no depende del reloj
+ * @returns {{ total: number, byStatus: Record<import('./schema.js').Status, number> }}
+ */
+export function computeTimeStats(doc, now) {
+  void now;
+  /** @type {Record<import('./schema.js').Status, number>} */
+  const byStatus = { backlog: 0, playing: 0, finished: 0, abandoned: 0 };
+  for (const status of STATUSES) byStatus[status] = 0;
+  let total = 0;
+  for (const game of doc.games) {
+    for (const play of game.plays) {
+      const seconds = play.playedSeconds ?? 0;
+      total += seconds;
+      byStatus[play.status] += seconds;
+    }
+  }
+  return { total, byStatus };
+}

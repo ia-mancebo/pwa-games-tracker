@@ -87,7 +87,7 @@ describe('puerta de bienvenida', () => {
     await handleNewLibrary();
     expect(store.get().doc).toEqual({
       schema: 'game-tracker',
-      version: 1,
+      version: 2,
       updatedAt: expect.any(String),
       games: [],
     });

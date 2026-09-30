@@ -1,13 +1,14 @@
 /**
  * Dashboard de estadísticas (ticket 24, spec §8.7): vista de solo lectura con
  * tres filtros globales (plataforma, género, etiqueta propia) que recompute
- * KPIs, distribuciones, terminados en el tiempo y Top 5 valorado. Único
- * elemento clicable: cada fila del Top 5 abre la Ficha en Biblioteca.
+ * KPIs, distribuciones, terminados en el tiempo, tiempo jugado y Top 5
+ * valorado. Único elemento clicable: cada fila del Top 5 abre la Ficha en
+ * Biblioteca.
  */
 import { html } from '../lib/dom.js';
-import { STATUS_LABELS } from '../domain/schema.js';
-import { computeStats, filterOptions } from '../domain/stats.js';
-import { formatAvg } from '../lib/format.js';
+import { STATUSES, STATUS_LABELS } from '../domain/schema.js';
+import { computeStats, computeTimeStats, filterOptions } from '../domain/stats.js';
+import { formatAvg, formatRoundedHours } from '../lib/format.js';
 import { coverHtml, starsHtml } from '../ui/cover.js';
 import { chipRowHtml } from '../ui/chips.js';
 import * as nav from '../navigation.js';
@@ -88,12 +89,34 @@ function topSectionHtml(top) {
 }
 
 /**
+ * Bloque «Tiempo jugado» (ticket 09): total consolidado de la Biblioteca y
+ * reparto por Estado de cada Jugada, los cuatro siempre visibles.
+ * @param {ReturnType<typeof computeTimeStats>} timeStats
+ * @returns {string}
+ */
+function timeSectionHtml(timeStats) {
+  return html`<section class="cardbox" data-time-stats>
+    <h3>Tiempo jugado</h3>
+    <p class="d-meta">Total: <strong>${formatRoundedHours(timeStats.total)}</strong></p>
+    <div class="d-status">
+      ${STATUSES.map(
+        (status) =>
+          html`<span class="chip static st-${status}"
+            >${STATUS_LABELS[status]}: ${formatRoundedHours(timeStats.byStatus[status])}</span
+          >`,
+      )}
+    </div>
+  </section>`;
+}
+
+/**
  * Cuerpo del dashboard bajo los filtros.
  * @param {import('../domain/schema.js').Doc} doc
  * @param {ReturnType<typeof computeStats>} stats
+ * @param {ReturnType<typeof computeTimeStats>} timeStats
  * @returns {string}
  */
-function bodyHtml(doc, stats) {
+function bodyHtml(doc, stats, timeStats) {
   if (doc.games.length === 0) {
     return html`<p class="empty">
       <b>Sin datos todavía</b>Cuando añadas juegos verás aquí tus estadísticas.
@@ -125,6 +148,7 @@ function bodyHtml(doc, stats) {
       <section class="cardbox"
         ><h3>Terminados en el tiempo</h3>${distBodyHtml(months)}</section
       >
+      ${timeSectionHtml(timeStats)}
       ${topSectionHtml(stats.top5)}
     </div>`;
 }
@@ -194,6 +218,7 @@ export function render(container, store) {
   const filters = state.stats ?? { platform: null, genre: null, tag: null };
   const options = filterOptions(doc);
   const stats = computeStats(doc, filters, new Date());
+  const timeStats = computeTimeStats(doc, new Date());
   container.innerHTML = html`<div class="fade">
     <header class="view-head">
       <h1>Estadísticas</h1>
@@ -217,7 +242,7 @@ export function render(container, store) {
         )}
       </div>
     </div>
-    ${bodyHtml(doc, stats)}
+    ${bodyHtml(doc, stats, timeStats)}
   </div>`;
   wire(container, store);
 }

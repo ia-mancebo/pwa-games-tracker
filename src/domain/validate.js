@@ -8,6 +8,7 @@ import {
   DOC_VERSION,
   validateGameShape,
   validateConnectionShape,
+  validateCounterShape,
   isDateTime,
 } from './schema.js';
 
@@ -45,12 +46,7 @@ export function validateDoc(candidate) {
     return { ok: false, code: 'BAD_SCHEMA', reason: 'El archivo no tiene la estructura esperada.' };
   }
   const obj = /** @type {Record<string, unknown>} */ (root);
-  const known = ['schema', 'version', 'updatedAt', 'games', 'connection'];
-  for (const key of Object.keys(obj)) {
-    if (!known.includes(key)) {
-      return { ok: false, code: 'BAD_SHAPE', reason: `Campo desconocido en la raíz: «${key}»` };
-    }
-  }
+  const known = ['schema', 'version', 'updatedAt', 'games', 'connection', 'counter'];
   if (obj.schema !== SCHEMA_ID) {
     return {
       ok: false,
@@ -68,6 +64,11 @@ export function validateDoc(candidate) {
       reason: `Este archivo usa una versión más nueva (v${obj.version}). Actualiza la app.`,
     };
   }
+  for (const key of Object.keys(obj)) {
+    if (!known.includes(key)) {
+      return { ok: false, code: 'BAD_SHAPE', reason: `Campo desconocido en la raíz: «${key}»` };
+    }
+  }
   if (!isDateTime(obj.updatedAt)) {
     return { ok: false, code: 'BAD_TYPE', reason: 'Fecha de actualización inválida.' };
   }
@@ -75,6 +76,12 @@ export function validateDoc(candidate) {
     const res = validateConnectionShape(obj.connection);
     if (!res.ok) {
       return { ok: false, code: 'BAD_SHAPE', reason: res.reason ?? 'Conexión inválida.' };
+    }
+  }
+  if (obj.counter !== undefined) {
+    const res = validateCounterShape(obj.counter);
+    if (!res.ok) {
+      return { ok: false, code: 'BAD_SHAPE', reason: res.reason ?? 'Ancla de contador inválida.' };
     }
   }
   if (!Array.isArray(obj.games)) {

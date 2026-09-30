@@ -199,3 +199,58 @@ function uniqueByKeySorted(items) {
   for (const item of items) byId.set(item.id, item);
   return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, 'es'));
 }
+
+/**
+ * Segundos de pared del tramo en marcha de un Contador, desde su ancla hasta
+ * `now` (entero, sin tope: lo revisa el usuario). Único cálculo compartido por
+ * el motor (src/data/library.js), la Ficha y el Aviso.
+ * @param {import('./schema.js').CounterAnchor} counter
+ * @param {Date} now
+ * @returns {number}
+ */
+export function counterElapsedSeconds(counter, now) {
+  return Math.max(0, Math.floor((now.getTime() - Date.parse(counter.startedAt)) / 1000));
+}
+
+/**
+ * Total vivo de una jugada: Tiempo jugado consolidado más el tramo en marcha
+ * si el Contador está anclado a su juego y jugada. Cálculo efímero: el Doc
+ * nunca se escribe por segundo.
+ * @param {import('./schema.js').Play} play
+ * @param {import('./schema.js').CounterAnchor|null|undefined} counter ancla del Doc
+ * @param {Date} now
+ * @returns {number}
+ */
+export function livePlaySeconds(play, counter, now) {
+  const base = play.playedSeconds ?? 0;
+  if (!counter) return base;
+  const elapsed =
+    counter.playId === play.id ? counterElapsedSeconds(counter, now) : 0;
+  return base + elapsed;
+}
+
+/**
+ * Tramos pendientes de revisión de toda la Biblioteca.
+ * @param {import('./schema.js').Doc} doc
+ * @returns {number}
+ */
+export function pendingSegmentCount(doc) {
+  let total = 0;
+  for (const game of doc.games) {
+    for (const play of game.plays) total += play.pendingSegments?.length ?? 0;
+  }
+  return total;
+}
+
+/**
+ * Primer juego del Doc con algún Tramo pendiente (orden del documento): el que
+ * abre el Aviso cuando no hay Contador en marcha.
+ * @param {import('./schema.js').Doc} doc
+ * @returns {import('./schema.js').Game|null}
+ */
+export function firstPendingGame(doc) {
+  return (
+    doc.games.find((game) => game.plays.some((play) => (play.pendingSegments?.length ?? 0) > 0)) ??
+    null
+  );
+}
