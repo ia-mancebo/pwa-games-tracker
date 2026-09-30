@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatAvg, formatClock, formatRoundedHours } from './format.js';
+import { formatAvg, formatClock, formatRoundedHours, parseClock } from './format.js';
 
 describe('formatAvg', () => {
   it('guión si no hay dato', () => {
@@ -85,5 +85,73 @@ describe('formatRoundedHours', () => {
   it('negativos se tratan como 0', () => {
     expect(formatRoundedHours(-1)).toBe('0 min');
     expect(formatRoundedHours(-45258)).toBe('0 min');
+  });
+});
+
+describe('parseClock', () => {
+  it('acepta H:MM:SS con dígitos sin relleno obligatorio', () => {
+    expect(parseClock('12:34:00')).toBe(45240);
+    expect(parseClock('0:05:30')).toBe(330);
+    expect(parseClock('1:2:3')).toBe(3723);
+    expect(parseClock('0:00:00')).toBe(0);
+  });
+
+  it('dos componentes son horas:minutos, nunca minutos:segundos (ADR-0012)', () => {
+    expect(parseClock('1:30')).toBe(5400);
+    expect(parseClock('0:05')).toBe(300);
+  });
+
+  it('un número suelto son segundos', () => {
+    expect(parseClock('90')).toBe(90);
+    expect(parseClock('0')).toBe(0);
+    expect(parseClock('5')).toBe(5);
+  });
+
+  it('recorta los espacios exteriores', () => {
+    expect(parseClock('  45  ')).toBe(45);
+    expect(parseClock('5 ')).toBe(5);
+    expect(parseClock(' 1:30 ')).toBe(5400);
+  });
+
+  it('rechaza vacío y solo espacios', () => {
+    expect(parseClock('')).toBeNull();
+    expect(parseClock('   ')).toBeNull();
+  });
+
+  it('rechaza lo no numérico, negativos y decimales', () => {
+    expect(parseClock('abc')).toBeNull();
+    expect(parseClock('-5')).toBeNull();
+    expect(parseClock('1.5:00')).toBeNull();
+    expect(parseClock('12:34:56:78')).toBeNull();
+  });
+
+  it('rechaza decimales sueltos con coma o punto', () => {
+    expect(parseClock('1,5')).toBeNull();
+    expect(parseClock('1.5')).toBeNull();
+  });
+
+  it('rechaza componentes vacíos: ni :30 ni 12:', () => {
+    expect(parseClock(':30')).toBeNull();
+    expect(parseClock('12:')).toBeNull();
+  });
+
+  it('solo dígitos puros por componente: sin espacios interiores, signos ni notación', () => {
+    // Decisiones: los espacios se recortan solo en los extremos del texto, y un
+    // número suelto son dígitos (ni '+5', ni '1e3', ni '0x10').
+    expect(parseClock('1 : 30')).toBeNull();
+    expect(parseClock('1: 30')).toBeNull();
+    expect(parseClock('+5')).toBeNull();
+    expect(parseClock('1e3')).toBeNull();
+    expect(parseClock('0x10')).toBeNull();
+  });
+
+  it('sin tope de rango: minutos y segundos se suman tal cual', () => {
+    // Decisión: no es un reloj de pared; 0:90 son 90 min y no se rechaza.
+    expect(parseClock('0:90')).toBe(5400);
+    expect(parseClock('1:00:90')).toBe(3690);
+  });
+
+  it('desbordes no enteros seguros se rechazan', () => {
+    expect(parseClock('9'.repeat(300))).toBeNull();
   });
 });

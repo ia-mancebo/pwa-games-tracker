@@ -43,3 +43,27 @@ export function formatRoundedHours(seconds) {
   if (h > 0) return `${h} h`;
   return `${m} min`;
 }
+
+/**
+ * Duración escrita por el usuario → segundos, o `null` si no es válida.
+ * Acepta `H:MM:SS`, `H:MM` (horas:minutos, nunca minutos:segundos — ADR-0012),
+ * dígitos sin relleno obligatorio (`1:2:3` = 3723) y un número suelto = segundos.
+ * Los espacios se recortan solo en los extremos del texto. Rechaza vacío,
+ * negativos, decimales y todo lo no numérico (cada componente son dígitos puros).
+ * @param {string} text
+ * @returns {number|null}
+ */
+export function parseClock(text) {
+  const parts = text.trim().split(':');
+  if (parts.length > 3) return null;
+  /** @type {number[]} */
+  const nums = [];
+  for (const part of parts) {
+    if (!/^\d+$/.test(part)) return null;
+    nums.push(Number(part));
+  }
+  const [h, m, s] = nums;
+  const seconds =
+    nums.length === 1 ? h : nums.length === 2 ? h * 3600 + m * 60 : h * 3600 + m * 60 + s;
+  return Number.isSafeInteger(seconds) ? seconds : null;
+}

@@ -321,7 +321,9 @@ describe('edición en línea de jugadas', () => {
     finish.value = '2026-08-01';
     finish.dispatchEvent(new Event('focusout', { bubbles: true }));
 
-    const notesBox = /** @type {HTMLTextAreaElement} */ (need(qs('textarea[data-play-notes]', card)));
+    const notesBox = /** @type {HTMLTextAreaElement} */ (
+      need(qs('textarea[data-play-notes]', card))
+    );
     notesBox.value = 'Segunda vuelta al DLC';
     notesBox.dispatchEvent(new Event('change', { bubbles: true }));
 
@@ -420,11 +422,13 @@ describe('edición en línea de jugadas', () => {
 
     select.value = '__own__';
     select.dispatchEvent(new Event('change', { bubbles: true }));
-    const own = /** @type {HTMLInputElement} */ (await vi.waitFor(() => {
-      const el = qs('input[data-platform-name]', root);
-      expect(el).toBeTruthy();
-      return el;
-    }));
+    const own = /** @type {HTMLInputElement} */ (
+      await vi.waitFor(() => {
+        const el = qs('input[data-platform-name]', root);
+        expect(el).toBeTruthy();
+        return el;
+      })
+    );
     own.value = 'RetroArch';
     own.dispatchEvent(new Event('change', { bubbles: true }));
     await vi.waitFor(() => {
@@ -440,7 +444,11 @@ describe('edición en línea de jugadas', () => {
         title: 'Hades',
         platforms: [{ id: 130, name: 'Nintendo Switch' }],
         plays: [
-          { status: 'finished', addedAt: '2026-03-01', platform: { id: 130, name: 'Nintendo Switch' } },
+          {
+            status: 'finished',
+            addedAt: '2026-03-01',
+            platform: { id: 130, name: 'Nintendo Switch' },
+          },
         ],
       },
     ]);
@@ -484,9 +492,7 @@ describe('edición en línea de jugadas', () => {
     expect(findPlay('g1', 'g1-p1').status).toBe('backlog');
     expect(findGame('g1').plays).toHaveLength(2);
     expect(need(qs('.d-hero .pill', root)).classList.contains('st-abandoned')).toBe(true);
-    expect(
-      need(qs('[data-set-status="abandoned"]', root)).classList.contains('on')
-    ).toBe(true);
+    expect(need(qs('[data-set-status="abandoned"]', root)).classList.contains('on')).toBe(true);
   });
 
   it('borrar la última jugada está bloqueado; borrar otra pide confirmación y funciona', async () => {
@@ -599,10 +605,9 @@ describe('reglas de edición de datos compartidos (spec §8.5)', () => {
     await vi.waitFor(() =>
       expect(findGame('gm').genres?.map((g) => g.name)).toEqual(['Puzle', 'Plataformas'])
     );
-    expect(qsa('[data-sec="genres"] .chip.static', root).map((c) => c.textContent?.trim())).toEqual([
-      'Puzle',
-      'Plataformas',
-    ]);
+    expect(qsa('[data-sec="genres"] .chip.static', root).map((c) => c.textContent?.trim())).toEqual(
+      ['Puzle', 'Plataformas']
+    );
 
     btn(qs('[data-edit-field="platforms"]', root)).click();
     const pfInput = /** @type {HTMLInputElement} */ (need(qs('[data-field-input]', root)));
@@ -678,7 +683,9 @@ describe('borrado de juego', () => {
     openFromPanel(root, 'g1', 'playing');
 
     btn(qs('[data-del-game]', root)).click();
-    expect(need(qs('.danger-msg', root)).textContent).toContain('Se borrarán el juego y todas sus jugadas');
+    expect(need(qs('.danger-msg', root)).textContent).toContain(
+      'Se borrarán el juego y todas sus jugadas'
+    );
 
     btn(qs('[data-del-game-yes]', root)).click();
 
@@ -693,7 +700,9 @@ describe('borrado de juego', () => {
   });
 
   it('«No» en la confirmación deja todo como estaba', async () => {
-    await seed([{ id: 'g1', title: 'Hades', plays: [{ status: 'playing', addedAt: '2026-07-01' }] }]);
+    await seed([
+      { id: 'g1', title: 'Hades', plays: [{ status: 'playing', addedAt: '2026-07-01' }] },
+    ]);
     const root = mount();
     createApp(root);
     openFromPanel(root, 'g1', 'playing');
@@ -888,9 +897,9 @@ describe('contador en la Ficha: iniciar/pausar y tiempo vivo (ticket 06)', () =>
     expect(store.get().doc).toBe(before);
     expect(store.get().doc?.updatedAt).toBe(before?.updatedAt);
     expect(qsa('[data-live-time]', root)).toHaveLength(0);
-    expect(
-      need(qs('.play-card[data-play-card="g1-p1"] .p-time', root)).textContent
-    ).toContain('10 min');
+    expect(need(qs('.play-card[data-play-card="g1-p1"] .p-time', root)).textContent).toContain(
+      '10 min'
+    );
   });
 });
 
@@ -937,7 +946,9 @@ describe('revisión de tramos pendientes (ticket 07)', () => {
 
     await vi.waitFor(() => expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(3300));
     expect(findPlay('g1', 'g1-p1').pendingSegments).toEqual([{ id: 'seg2', seconds: 1200 }]);
-    expect(qsa('[data-seg-row]', root).map((r) => r.getAttribute('data-seg-row'))).toEqual(['seg2']);
+    expect(qsa('[data-seg-row]', root).map((r) => r.getAttribute('data-seg-row'))).toEqual([
+      'seg2',
+    ]);
     expect(qs('[data-pending-segments]', root)?.getAttribute('data-pending-segments')).toBe('1');
 
     btn(qs('[data-seg-decide="seg2"]', root)).click();
@@ -1025,5 +1036,303 @@ describe('revisión de tramos pendientes (ticket 07)', () => {
     btn(qs('[data-seg-discard="seg2"]', root)).click();
     await vi.waitFor(() => expect(qs('[data-pending-segments]', root)).toBeNull());
     expect(findPlay('g1', 'g1-p1').pendingSegments).toBeUndefined();
+  });
+});
+
+describe('duración del Tramo con formas de reloj (ticket 01)', () => {
+  it('«Guardar» acepta H:MM (horas:minutos) y suma sobre el Tiempo jugado', async () => {
+    const root = await openPausedFicha();
+    const input = /** @type {HTMLInputElement} */ (need(qs('[data-seg-input]', root)));
+    input.value = '1:30';
+    btn(qs('[data-seg-save]', root)).click();
+    await vi.waitFor(() => expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(6000));
+    expect(findPlay('g1', 'g1-p1').pendingSegments).toBeUndefined();
+    expect(qs('[data-seg-input]', root)).toBeNull();
+  });
+
+  it('«Guardar» acepta H:MM:SS sin relleno (1:2:3 = 3723 s)', async () => {
+    const root = await openPausedFicha();
+    const input = /** @type {HTMLInputElement} */ (need(qs('[data-seg-input]', root)));
+    input.value = '1:2:3';
+    btn(qs('[data-seg-save]', root)).click();
+    await vi.waitFor(() => expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(4323));
+  });
+
+  it('texto no numérico se rechaza inline con las formas aceptadas, sin mutar el doc', async () => {
+    const root = await openPausedFicha();
+    const input = /** @type {HTMLInputElement} */ (need(qs('[data-seg-input]', root)));
+    input.value = 'abc';
+    btn(qs('[data-seg-save]', root)).click();
+    const error = need(qs('[data-seg-error]', root));
+    expect(error.hasAttribute('hidden')).toBe(false);
+    expect(error.textContent).toContain('H:MM:SS');
+    expect(error.textContent).toContain('horas:minutos');
+    expect(error.textContent).toContain('entero de segundos');
+    expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(600);
+    expect(findPlay('g1', 'g1-p1').pendingSegments).toEqual([
+      { id: expect.any(String), seconds: 2700 },
+    ]);
+    expect(store.get().ficha.segmentPrompt).toBeTruthy();
+    expect(qs('[data-seg-input]', root)).toBeTruthy();
+  });
+
+  it('campo vacío guarda tal cual la duración prefill, como antes del cambio', async () => {
+    const root = await openPausedFicha();
+    const input = /** @type {HTMLInputElement} */ (need(qs('[data-seg-input]', root)));
+    input.value = '';
+    btn(qs('[data-seg-save]', root)).click();
+    await vi.waitFor(() => expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(3300));
+    expect(findPlay('g1', 'g1-p1').pendingSegments).toBeUndefined();
+  });
+});
+
+describe('corrección del Tiempo jugado (ticket 03)', () => {
+  it('el lápiz de corrección está siempre visible en el héroe y en cada tarjeta', async () => {
+    await seed([
+      {
+        id: 'g1',
+        title: 'Hades',
+        plays: [
+          { status: 'finished', addedAt: '2026-03-01', playedSeconds: 600 },
+          { status: 'playing', addedAt: '2026-07-01', playedSeconds: 3600 },
+        ],
+      },
+    ]);
+    const root = mount();
+    createApp(root);
+    openFromPanel(root, 'g1', 'playing');
+
+    const pencils = qsa('[data-edit-time]', root);
+    expect(pencils).toHaveLength(3);
+    for (const pencil of pencils) {
+      expect(pencil.getAttribute('aria-label')).toBe('Corregir tiempo jugado');
+    }
+    expect(qs('.d-hero [data-edit-time]', root)?.getAttribute('data-edit-time')).toBe('g1-p2');
+    expect(qs('.play-card[data-play-card="g1-p1"] [data-edit-time]', root)).toBeTruthy();
+    expect(qs('.play-card[data-play-card="g1-p2"] [data-edit-time]', root)).toBeTruthy();
+  });
+
+  it('pulsar el lápiz abre el campo prefilled con el valor exacto en H:MM:SS', async () => {
+    await seed([
+      {
+        id: 'g1',
+        title: 'Hades',
+        plays: [
+          { status: 'finished', addedAt: '2026-03-01', playedSeconds: 600 },
+          { status: 'playing', addedAt: '2026-07-01' },
+        ],
+      },
+    ]);
+    const root = mount();
+    createApp(root);
+    openFromPanel(root, 'g1', 'playing');
+
+    btn(qs('.play-card[data-play-card="g1-p1"] [data-edit-time]', root)).click();
+    expect(/** @type {HTMLInputElement} */ (need(qs('[data-time-input]', root))).value).toBe(
+      '0:10:00'
+    );
+
+    btn(qs('.play-card[data-play-card="g1-p2"] [data-edit-time]', root)).click();
+    expect(/** @type {HTMLInputElement} */ (need(qs('[data-time-input]', root))).value).toBe(
+      '0:00:00'
+    );
+  });
+
+  it('el editor es único y vive en la fila del lápiz pulsado (héroe repite la más reciente)', async () => {
+    await seed([
+      {
+        id: 'g1',
+        title: 'Hades',
+        plays: [{ status: 'playing', addedAt: '2026-07-01', playedSeconds: 600 }],
+      },
+    ]);
+    const root = mount();
+    createApp(root);
+    openFromPanel(root, 'g1', 'playing');
+
+    btn(qs('.d-hero [data-edit-time]', root)).click();
+    expect(qsa('[data-time-input]', root)).toHaveLength(1);
+    const heroInput = need(qs('.d-hero [data-time-input]', root));
+
+    // El otro lápiz de la MISMA jugada revela/foca el editor abierto, sin duplicarlo.
+    btn(qs('.play-card[data-play-card="g1-p1"] [data-edit-time]', root)).click();
+    expect(qsa('[data-time-input]', root)).toHaveLength(1);
+    expect(qs('.d-hero [data-time-input]', root)).toBe(heroInput);
+    expect(document.activeElement).toBe(heroInput);
+  });
+
+  it('«Cancelar» y Escape cierran el campo sin cambiar el doc', async () => {
+    await seed([
+      {
+        id: 'g1',
+        title: 'Hades',
+        plays: [
+          { status: 'finished', addedAt: '2026-03-01', playedSeconds: 600 },
+          { status: 'playing', addedAt: '2026-07-01' },
+        ],
+      },
+    ]);
+    const root = mount();
+    createApp(root);
+    openFromPanel(root, 'g1', 'playing');
+
+    btn(qs('.play-card[data-play-card="g1-p1"] [data-edit-time]', root)).click();
+    const input = /** @type {HTMLInputElement} */ (need(qs('[data-time-input]', root)));
+    input.value = '99:00:00';
+    btn(qs('[data-time-cancel]', root)).click();
+    expect(qs('[data-time-input]', root)).toBeNull();
+    expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(600);
+
+    // Escape igual, sobre la jugada sin campo (ausente = intacto).
+    btn(qs('.play-card[data-play-card="g1-p2"] [data-edit-time]', root)).click();
+    const input2 = /** @type {HTMLInputElement} */ (need(qs('[data-time-input]', root)));
+    input2.value = '1:00:00';
+    input2.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(qs('[data-time-input]', root)).toBeNull();
+    expect(findPlay('g1', 'g1-p2').playedSeconds).toBeUndefined();
+  });
+
+  it('«Corregir» con H:MM:SS aplica el comando y la Ficha muestra el valor al instante', async () => {
+    await seed([
+      {
+        id: 'g1',
+        title: 'Hades',
+        plays: [{ status: 'playing', addedAt: '2026-07-01', playedSeconds: 600 }],
+      },
+    ]);
+    const root = mount();
+    createApp(root);
+    openFromPanel(root, 'g1', 'playing');
+
+    btn(qs('.play-card[data-play-card="g1-p1"] [data-edit-time]', root)).click();
+    const input = /** @type {HTMLInputElement} */ (need(qs('[data-time-input]', root)));
+    input.value = '1:30:00';
+    btn(qs('[data-time-save]', root)).click();
+    await vi.waitFor(() => expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(5400));
+    expect(qs('[data-time-input]', root)).toBeNull();
+    const card = need(qs('.play-card[data-play-card="g1-p1"]', root));
+    expect(need(qs('.p-time-val', card)).textContent).toContain('1 h 30 min');
+  });
+
+  it('acepta H:MM (horas:minutos) y segundos sueltos; Enter también aplica', async () => {
+    await seed([
+      {
+        id: 'g1',
+        title: 'Hades',
+        plays: [{ status: 'playing', addedAt: '2026-07-01', playedSeconds: 600 }],
+      },
+    ]);
+    const root = mount();
+    createApp(root);
+    openFromPanel(root, 'g1', 'playing');
+
+    btn(qs('.play-card[data-play-card="g1-p1"] [data-edit-time]', root)).click();
+    const input = /** @type {HTMLInputElement} */ (need(qs('[data-time-input]', root)));
+    input.value = '1:30';
+    btn(qs('[data-time-save]', root)).click();
+    await vi.waitFor(() => expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(5400));
+
+    btn(qs('.play-card[data-play-card="g1-p1"] [data-edit-time]', root)).click();
+    const input2 = /** @type {HTMLInputElement} */ (need(qs('[data-time-input]', root)));
+    input2.value = '90';
+    input2.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await vi.waitFor(() => expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(90));
+    expect(qs('[data-time-input]', root)).toBeNull();
+  });
+
+  it('entrada inválida muestra el aviso inline sin cerrar el campo ni perder lo tecleado', async () => {
+    await seed([
+      {
+        id: 'g1',
+        title: 'Hades',
+        plays: [{ status: 'playing', addedAt: '2026-07-01', playedSeconds: 600 }],
+      },
+    ]);
+    const root = mount();
+    createApp(root);
+    openFromPanel(root, 'g1', 'playing');
+
+    btn(qs('.play-card[data-play-card="g1-p1"] [data-edit-time]', root)).click();
+    const input = /** @type {HTMLInputElement} */ (need(qs('[data-time-input]', root)));
+    input.value = '-5';
+    btn(qs('[data-time-save]', root)).click();
+    const error = need(qs('[data-time-error]', root));
+    expect(error.hasAttribute('hidden')).toBe(false);
+    expect(error.textContent).toContain('H:MM:SS');
+    expect(error.textContent).toContain('horas:minutos');
+    expect(error.textContent).toContain('segundos');
+    expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(600);
+    const kept = /** @type {HTMLInputElement} */ (need(qs('[data-time-input]', root)));
+    expect(kept.value).toBe('-5');
+
+    kept.value = 'abc';
+    btn(qs('[data-time-save]', root)).click();
+    expect(need(qs('[data-time-error]', root)).hasAttribute('hidden')).toBe(false);
+    expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(600);
+    expect(/** @type {HTMLInputElement} */ (need(qs('[data-time-input]', root))).value).toBe('abc');
+  });
+
+  it('con el Contador en marcha, corregir lo auto-pausa y el Aviso señala el Tramo pendiente', async () => {
+    await seed(
+      [
+        {
+          id: 'g1',
+          title: 'Hades',
+          plays: [{ status: 'playing', addedAt: '2026-07-01', playedSeconds: 600 }],
+        },
+      ],
+      { gameId: 'g1', playId: 'g1-p1', startedAt: T0 }
+    );
+    const root = mount();
+    createApp(root);
+    openFromPanel(root, 'g1', 'playing');
+
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(PAUSE_MS));
+    try {
+      btn(qs('.play-card[data-play-card="g1-p1"] [data-edit-time]', root)).click();
+      // El editor sustituye al valor (y a su reloj vivo) de su fila; el héroe
+      // sigue mostrando el reloj vivo mientras el campo está abierto.
+      expect(qs('.play-card [data-live-time]', root)).toBeNull();
+      expect(qs('.d-hero [data-live-time]', root)).toBeTruthy();
+      const input = /** @type {HTMLInputElement} */ (need(qs('[data-time-input]', root)));
+      input.value = '100';
+      btn(qs('[data-time-save]', root)).click();
+      await vi.waitFor(() => expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(100));
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(store.get().doc?.counter).toBeUndefined();
+    expect(findPlay('g1', 'g1-p1').pendingSegments).toEqual([
+      { id: expect.any(String), seconds: 2700 },
+    ]);
+    expect(qsa('[data-live-time]', root)).toHaveLength(0);
+    expect(need(qs('[data-aviso-pendientes]', root)).getAttribute('data-aviso-pendientes')).toBe(
+      '1'
+    );
+  });
+
+  it('la corrección sobrevive a la recarga desde IndexedDB (cauce del repositorio)', async () => {
+    await seed([
+      {
+        id: 'g1',
+        title: 'Hades',
+        plays: [{ status: 'playing', addedAt: '2026-07-01', playedSeconds: 600 }],
+      },
+    ]);
+    const root = mount();
+    createApp(root);
+    openFromPanel(root, 'g1', 'playing');
+
+    btn(qs('.play-card[data-play-card="g1-p1"] [data-edit-time]', root)).click();
+    const input = /** @type {HTMLInputElement} */ (need(qs('[data-time-input]', root)));
+    input.value = '1:30:00';
+    btn(qs('[data-time-save]', root)).click();
+    await vi.waitFor(() => expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(5400));
+
+    // Recarga desde IndexedDB: la corrección sigue ahí.
+    store.set({ doc: null, ready: false });
+    await initLibrary();
+    expect(findPlay('g1', 'g1-p1').playedSeconds).toBe(5400);
   });
 });

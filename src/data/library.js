@@ -4,7 +4,14 @@
  * la verdad a largo plazo. Toda mutación reemplaza `state.doc` atómicamente,
  * marca `dirty` y valida el resultado antes de persistir.
  */
-import { createDoc, createGame, createPlay, newId, normalizeWorkerUrl, todayFrom } from '../domain/schema.js';
+import {
+  createDoc,
+  createGame,
+  createPlay,
+  newId,
+  normalizeWorkerUrl,
+  todayFrom,
+} from '../domain/schema.js';
 import { validateDoc } from '../domain/validate.js';
 import { counterElapsedSeconds, latestPlay } from '../domain/selectors.js';
 import { getState, getMeta, putMeta, putStateAndMeta } from './db.js';
@@ -34,13 +41,12 @@ export async function initLibrary() {
   const [doc, meta] = await Promise.all([getState(), getMeta()]);
   store.set({
     doc,
-    meta:
-      meta ?? {
-        dirty: doc != null,
-        updatedAt: doc?.updatedAt ?? null,
-        lastSavedFileHash: null,
-        connectedFileName: null,
-      },
+    meta: meta ?? {
+      dirty: doc != null,
+      updatedAt: doc?.updatedAt ?? null,
+      lastSavedFileHash: null,
+      connectedFileName: null,
+    },
     ready: true,
   });
 }
@@ -127,9 +133,12 @@ export function mutate(fn, { now }) {
  * @param {{ title: string, status?: import('../domain/schema.js').Status, today: string, igdbId?: number, coverUrl?: string, description?: string, screenshots?: string[], genres?: {id:number,name:string}[], platforms?: {id:number,name:string}[], tags?: string[] }} input
  */
 export function addGame(input) {
-  return mutate((doc) => {
-    doc.games.push(createGame(input));
-  }, { now: new Date(`${input.today}T12:00:00Z`) });
+  return mutate(
+    (doc) => {
+      doc.games.push(createGame(input));
+    },
+    { now: new Date(`${input.today}T12:00:00Z`) }
+  );
 }
 
 /**
@@ -151,10 +160,13 @@ function applyPatch(target, patch) {
  * @param {Partial<import('../domain/schema.js').Game>} patch
  */
 export function updateGame(gameId, patch) {
-  return mutate((doc) => {
-    const game = findGame(doc, gameId);
-    applyPatch(game, patch);
-  }, { now: new Date() });
+  return mutate(
+    (doc) => {
+      const game = findGame(doc, gameId);
+      applyPatch(game, patch);
+    },
+    { now: new Date() }
+  );
 }
 
 /**
@@ -163,12 +175,15 @@ export function updateGame(gameId, patch) {
  * @param {string} gameId
  */
 export function deleteGame(gameId) {
-  return mutate((doc) => {
-    const idx = doc.games.findIndex((g) => g.id === gameId);
-    if (idx === -1) throw new LibraryError('Juego no encontrado', 'NOT_FOUND');
-    doc.games.splice(idx, 1);
-    if (doc.counter?.gameId === gameId) delete doc.counter;
-  }, { now: new Date() });
+  return mutate(
+    (doc) => {
+      const idx = doc.games.findIndex((g) => g.id === gameId);
+      if (idx === -1) throw new LibraryError('Juego no encontrado', 'NOT_FOUND');
+      doc.games.splice(idx, 1);
+      if (doc.counter?.gameId === gameId) delete doc.counter;
+    },
+    { now: new Date() }
+  );
 }
 
 /**
@@ -181,13 +196,21 @@ export function deleteGame(gameId) {
 export function addPlay(gameId, input) {
   const today = new Date(`${input.today}T12:00:00Z`);
   const pauseNow = input.now ?? new Date();
-  return mutate((doc) => {
-    if (doc.counter?.gameId === gameId) pauseAnchor(doc, pauseNow);
-    const game = findGame(doc, gameId);
-    game.plays.push(
-      createPlay({ status: input.status ?? 'playing', today: input.today, platform: input.platform, notes: input.notes }),
-    );
-  }, { now: today });
+  return mutate(
+    (doc) => {
+      if (doc.counter?.gameId === gameId) pauseAnchor(doc, pauseNow);
+      const game = findGame(doc, gameId);
+      game.plays.push(
+        createPlay({
+          status: input.status ?? 'playing',
+          today: input.today,
+          platform: input.platform,
+          notes: input.notes,
+        })
+      );
+    },
+    { now: today }
+  );
 }
 
 /**
@@ -197,10 +220,13 @@ export function addPlay(gameId, input) {
  * @param {Partial<import('../domain/schema.js').Play>} patch
  */
 export function updatePlay(gameId, playId, patch) {
-  return mutate((doc) => {
-    const play = findPlay(doc, gameId, playId);
-    applyPatch(play, patch);
-  }, { now: new Date() });
+  return mutate(
+    (doc) => {
+      const play = findPlay(doc, gameId, playId);
+      applyPatch(play, patch);
+    },
+    { now: new Date() }
+  );
 }
 
 /**
@@ -210,16 +236,19 @@ export function updatePlay(gameId, playId, patch) {
  * @param {string} playId
  */
 export function deletePlay(gameId, playId) {
-  return mutate((doc) => {
-    const game = findGame(doc, gameId);
-    if (game.plays.length <= 1) {
-      throw new LibraryError('Un juego necesita al menos una jugada', 'LAST_PLAY');
-    }
-    const idx = game.plays.findIndex((p) => p.id === playId);
-    if (idx === -1) throw new LibraryError('Jugada no encontrada', 'NOT_FOUND');
-    game.plays.splice(idx, 1);
-    if (doc.counter?.gameId === gameId && doc.counter?.playId === playId) delete doc.counter;
-  }, { now: new Date() });
+  return mutate(
+    (doc) => {
+      const game = findGame(doc, gameId);
+      if (game.plays.length <= 1) {
+        throw new LibraryError('Un juego necesita al menos una jugada', 'LAST_PLAY');
+      }
+      const idx = game.plays.findIndex((p) => p.id === playId);
+      if (idx === -1) throw new LibraryError('Jugada no encontrada', 'NOT_FOUND');
+      game.plays.splice(idx, 1);
+      if (doc.counter?.gameId === gameId && doc.counter?.playId === playId) delete doc.counter;
+    },
+    { now: new Date() }
+  );
 }
 
 /**
@@ -234,15 +263,18 @@ export function deletePlay(gameId, playId) {
  */
 export function setGameStatus(gameId, status, today) {
   const now = new Date();
-  return mutate((doc) => {
-    if ((status === 'finished' || status === 'abandoned') && doc.counter?.gameId === gameId) {
-      pauseAnchor(doc, now);
-    }
-    const play = latestPlay(findGame(doc, gameId));
-    if (status === 'playing') openPlayAsPlaying(play, today);
-    else play.status = status;
-    if (status === 'finished' && play.finishedAt == null) play.finishedAt = today;
-  }, { now });
+  return mutate(
+    (doc) => {
+      if ((status === 'finished' || status === 'abandoned') && doc.counter?.gameId === gameId) {
+        pauseAnchor(doc, now);
+      }
+      const play = latestPlay(findGame(doc, gameId));
+      if (status === 'playing') openPlayAsPlaying(play, today);
+      else play.status = status;
+      if (status === 'finished' && play.finishedAt == null) play.finishedAt = today;
+    },
+    { now }
+  );
 }
 
 /**
@@ -252,11 +284,14 @@ export function setGameStatus(gameId, status, today) {
  * @param {number|null} rating 1–5 o null para quitar
  */
 export function ratePlay(gameId, playId, rating) {
-  return mutate((doc) => {
-    const play = findPlay(doc, gameId, playId);
-    if (rating === null) delete play.rating;
-    else play.rating = rating;
-  }, { now: new Date() });
+  return mutate(
+    (doc) => {
+      const play = findPlay(doc, gameId, playId);
+      if (rating === null) delete play.rating;
+      else play.rating = rating;
+    },
+    { now: new Date() }
+  );
 }
 
 /**
@@ -301,12 +336,15 @@ function pauseAnchor(draft, now) {
  * @returns {Promise<import('../domain/schema.js').Doc>}
  */
 export function startCounter(gameId, now) {
-  return mutate((doc) => {
-    if (doc.counter) pauseAnchor(doc, now);
-    const play = latestPlay(findGame(doc, gameId));
-    doc.counter = { gameId, playId: play.id, startedAt: now.toISOString() };
-    if (play.status !== 'playing') openPlayAsPlaying(play, todayFrom(now));
-  }, { now });
+  return mutate(
+    (doc) => {
+      if (doc.counter) pauseAnchor(doc, now);
+      const play = latestPlay(findGame(doc, gameId));
+      doc.counter = { gameId, playId: play.id, startedAt: now.toISOString() };
+      if (play.status !== 'playing') openPlayAsPlaying(play, todayFrom(now));
+    },
+    { now }
+  );
 }
 
 /**
@@ -316,10 +354,13 @@ export function startCounter(gameId, now) {
  * @returns {Promise<import('../domain/schema.js').Doc>}
  */
 export function pauseCounter(now) {
-  return mutate((doc) => {
-    if (!doc.counter) throw new LibraryError('No hay contador en marcha', 'NO_COUNTER');
-    pauseAnchor(doc, now);
-  }, { now });
+  return mutate(
+    (doc) => {
+      if (!doc.counter) throw new LibraryError('No hay contador en marcha', 'NO_COUNTER');
+      pauseAnchor(doc, now);
+    },
+    { now }
+  );
 }
 
 /**
@@ -351,15 +392,18 @@ function dropSegment(play, segmentId) {
  * @returns {Promise<import('../domain/schema.js').Doc>}
  */
 export function confirmSegment(gameId, playId, segmentId, secondsOverride, now) {
-  return mutate((doc) => {
-    if (secondsOverride != null && (!Number.isInteger(secondsOverride) || secondsOverride < 0)) {
-      throw new LibraryError('La duración debe ser un entero de segundos', 'BAD_SHAPE');
-    }
-    const play = findPlay(doc, gameId, playId);
-    const segment = dropSegment(play, segmentId);
-    const duration = secondsOverride != null ? secondsOverride : segment.seconds;
-    if (duration > 0) play.playedSeconds = (play.playedSeconds ?? 0) + duration;
-  }, { now });
+  return mutate(
+    (doc) => {
+      if (secondsOverride != null && (!Number.isInteger(secondsOverride) || secondsOverride < 0)) {
+        throw new LibraryError('La duración debe ser un entero de segundos', 'BAD_SHAPE');
+      }
+      const play = findPlay(doc, gameId, playId);
+      const segment = dropSegment(play, segmentId);
+      const duration = secondsOverride != null ? secondsOverride : segment.seconds;
+      if (duration > 0) play.playedSeconds = (play.playedSeconds ?? 0) + duration;
+    },
+    { now }
+  );
 }
 
 /**
@@ -372,9 +416,40 @@ export function confirmSegment(gameId, playId, segmentId, secondsOverride, now) 
  * @returns {Promise<import('../domain/schema.js').Doc>}
  */
 export function discardSegment(gameId, playId, segmentId, now) {
-  return mutate((doc) => {
-    dropSegment(findPlay(doc, gameId, playId), segmentId);
-  }, { now });
+  return mutate(
+    (doc) => {
+      dropSegment(findPlay(doc, gameId, playId), segmentId);
+    },
+    { now }
+  );
+}
+
+/**
+ * Corrección manual del Tiempo jugado (ADR-0012): un set absoluto del campo
+ * `playedSeconds` —no una resta—, entero ≥ 0. Si el Contador está anclado a
+ * esa jugada se auto-pausa antes (igual que addPlay); los Tramos pendientes
+ * quedan intactos y la consolidación posterior suma sobre la base corregida.
+ * El 0 deja el campo ausente (spec §4: los campos vacíos se omiten).
+ * @param {string} gameId
+ * @param {string} playId
+ * @param {number} seconds
+ * @param {Date} now
+ * @returns {Promise<import('../domain/schema.js').Doc>}
+ */
+export function setPlayTime(gameId, playId, seconds, now) {
+  return mutate(
+    (doc) => {
+      if (!Number.isInteger(seconds) || seconds < 0) {
+        throw new LibraryError('El tiempo jugado debe ser un entero de segundos', 'BAD_SHAPE');
+      }
+      const play = findPlay(doc, gameId, playId);
+      // Auto-pausa igual que addPlay, pero solo si el ancla es de ESTA jugada.
+      if (doc.counter?.gameId === gameId && doc.counter?.playId === playId) pauseAnchor(doc, now);
+      if (seconds > 0) play.playedSeconds = seconds;
+      else delete play.playedSeconds;
+    },
+    { now }
+  );
 }
 
 /**
@@ -423,7 +498,10 @@ export async function markSaved({ hash, now, doc }) {
  */
 export async function saveExportName(name) {
   const trimmed = name.trim();
-  const meta = { ...store.get().meta, exportFileName: trimmed.length > 0 ? trimmed : DEFAULT_EXPORT_NAME };
+  const meta = {
+    ...store.get().meta,
+    exportFileName: trimmed.length > 0 ? trimmed : DEFAULT_EXPORT_NAME,
+  };
   await putMeta(meta);
   store.set({ meta });
   return meta.exportFileName;
@@ -438,16 +516,19 @@ export async function saveExportName(name) {
  */
 export function saveWorkerUrl(url) {
   const cleaned = normalizeWorkerUrl(url);
-  return mutate((doc) => {
-    if (cleaned === '') {
-      if (doc.connection) {
-        delete doc.connection.workerUrl;
-        if (Object.keys(doc.connection).length === 0) delete doc.connection;
+  return mutate(
+    (doc) => {
+      if (cleaned === '') {
+        if (doc.connection) {
+          delete doc.connection.workerUrl;
+          if (Object.keys(doc.connection).length === 0) delete doc.connection;
+        }
+        return;
       }
-      return;
-    }
-    doc.connection = { ...doc.connection, workerUrl: cleaned };
-  }, { now: new Date() }).then(() => cleaned);
+      doc.connection = { ...doc.connection, workerUrl: cleaned };
+    },
+    { now: new Date() }
+  ).then(() => cleaned);
 }
 
 /**

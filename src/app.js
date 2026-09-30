@@ -95,7 +95,9 @@ import { isFixedSurface, settleScroll } from './scroll.js';
  * snapshot de historial: restaurar el historial nunca resucita un formulario
  * abierto ni una confirmación de borrado pendiente. El guard de re-render de
  * la vista (src/views/game.js) re-siembra el slice ante un gameId distinto
- * (botón atrás del móvil, cambio de pestaña).
+ * (botón atrás del móvil, cambio de pestaña). El editor del Tiempo jugado
+ * (`editTime`) solo se pinta en la fila origen del lápiz (`editTimeRow`): el
+ * héroe repite la jugada más reciente y dos campos a la vez romperían el DOM.
  * @typedef {{
  *   gameId: string|null,
  *   editTitle: boolean,
@@ -108,6 +110,10 @@ import { isFixedSurface, settleScroll } from './scroll.js';
  *   confirmGame: boolean,
  *   error: string|null,
  *   titleError: string|null,
+ *   editTime: string|null,
+ *   editTimeRow: 'hero'|'card'|null,
+ *   editTimeError: string|null,
+ *   editTimeDraft: string,
  * }} FichaUi
  */
 
@@ -144,6 +150,10 @@ export function freshFicha(gameId) {
     confirmGame: false,
     error: null,
     titleError: null,
+    editTime: null,
+    editTimeRow: null,
+    editTimeError: null,
+    editTimeDraft: '',
   };
 }
 

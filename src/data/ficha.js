@@ -21,6 +21,7 @@ import {
   pauseCounter as repoPauseCounter,
   ratePlay as repoRatePlay,
   setGameStatus,
+  setPlayTime as repoSetPlayTime,
   startCounter as repoStartCounter,
   updateGame,
   updatePlay,
@@ -331,6 +332,30 @@ export function setPlayPlatform(gameId, playId, platform) {
  */
 export function setPlayNotes(gameId, playId, value) {
   return toResult(updatePlay(gameId, playId, { notes: value === '' ? undefined : value }));
+}
+
+/**
+ * Corrige el Tiempo jugado de una jugada (ADR-0012): un set absoluto del
+ * entero de segundos —no una resta—; vale alza, baja y 0. Si el Contador está
+ * anclado a esa jugada la corrección lo auto-pausa antes (igual que addPlay);
+ * los Tramos pendientes quedan intactos y la confirmación posterior suma sobre
+ * la base corregida. `seconds` debe ser entero ≥ 0; si no, error como Result
+ * sin tocar nada. El «ahora» de la auto-pausa es `now` (por defecto el reloj
+ * real).
+ * @param {string} gameId
+ * @param {string} playId
+ * @param {number} seconds
+ * @param {Date} [now]
+ * @returns {Promise<Result>}
+ */
+export function setPlayTime(gameId, playId, seconds, now = new Date()) {
+  if (!Number.isInteger(seconds) || seconds < 0) {
+    return Promise.resolve({
+      ok: false,
+      error: new LibraryError('El tiempo jugado debe ser un entero de segundos', 'BAD_SHAPE'),
+    });
+  }
+  return toResult(repoSetPlayTime(gameId, playId, seconds, now));
 }
 
 /**

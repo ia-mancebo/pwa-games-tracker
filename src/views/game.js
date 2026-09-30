@@ -8,7 +8,7 @@
  */
 import { html, qs, qsa, raw } from '../lib/dom.js';
 import { formatError } from '../lib/errors.js';
-import { formatClock, formatRoundedHours } from '../lib/format.js';
+import { formatClock, formatRoundedHours, parseClock } from '../lib/format.js';
 import { STATUSES, STATUS_LABELS } from '../domain/schema.js';
 import { latestPlay, gameStatus, livePlaySeconds } from '../domain/selectors.js';
 import {
@@ -25,6 +25,7 @@ import {
   setPlayDate,
   setPlayNotes,
   setPlayPlatform,
+  setPlayTime as setPlayTimeCommand,
   setStatus,
   startCounter,
 } from '../data/ficha.js';
@@ -83,19 +84,68 @@ function liveTotalSeconds(doc, play, nowMs) {
 
 /**
  * Línea «Tiempo: …» de una jugada: reloj vivo H:MM:SS mientras el Contador
- * cuenta su tramo (elemento `data-live-time`), dato histórico redondo si no.
+ * cuenta su tramo (elemento `data-live-time`), dato histórico redondo si no y
+ * el lápiz de corrección siempre visible (ADR-0012). El héroe repite la fila
+ * de la jugada más reciente, así que el editor inline solo se pinta en la
+ * fila ORIGEN del lápiz pulsado (`ficha.editTimeRow`): un solo campo en el
+ * DOM y el otro lápiz de la misma jugada revela/foca el abierto. El editor
+ * sustituye al valor de su fila (y por tanto a su reloj vivo y a su lápiz).
  * @param {import('../domain/schema.js').Doc} doc
  * @param {string} gameId
  * @param {import('../domain/schema.js').Play} play
+ * @param {import('../app.js').FichaUi} ficha
+ * @param {'hero'|'card'} row fila cuyo lápiz puede abrir el editor
  * @returns {string}
  */
-function playTimeHtml(doc, gameId, play) {
+function playTimeHtml(doc, gameId, play, ficha, row) {
+  if (ficha.editTime === play.id && ficha.editTimeRow === row) {
+    return timeEditHtml(ficha);
+  }
   const value = countingPlay(doc, gameId, play)
     ? html`<span class="p-time-val mono" data-live-time="${play.id}"
         >${formatClock(liveTotalSeconds(doc, play, Date.now()))}</span
       >`
     : html`<span class="p-time-val">${formatRoundedHours(play.playedSeconds ?? 0)}</span>`;
-  return html`<p class="p-time"><span class="lbl">Tiempo:</span> ${value}</p>`;
+  return html`<p class="p-time">
+    <span class="lbl">Tiempo:</span> ${value}
+    <button
+      type="button"
+      class="chip chip-xs p-time-edit-btn"
+      data-edit-time="${play.id}"
+      aria-label="Corregir tiempo jugado"
+    >
+      ✎
+    </button>
+  </p>`;
+}
+
+/**
+ * Formulario inline de corrección del Tiempo jugado (ADR-0012): campo de
+ * reloj prefilled, Corregir/Cancelar y aviso inline. Lo tecleado vive en el
+ * DOM entre repintados; `editTimeDraft` solo repinta lo sembrado al abrir o
+ * lo que haya que restaurar tras un error.
+ * @param {import('../app.js').FichaUi} ficha
+ * @returns {string}
+ */
+function timeEditHtml(ficha) {
+  return html`<div class="p-time-edit">
+    <input
+      type="text"
+      class="mono"
+      inputmode="numeric"
+      data-time-input
+      value="${ficha.editTimeDraft}"
+      aria-label="Tiempo jugado en horas, minutos y segundos (H:MM:SS)"
+      placeholder="H:MM:SS"
+    />
+    <span class="inline-actions">
+      <button type="button" class="chip chip-xs" data-time-save>Corregir</button>
+      <button type="button" class="chip chip-xs" data-time-cancel>Cancelar</button>
+    </span>
+    <p class="form-error" role="alert" data-time-error${ficha.editTimeError ? '' : ' hidden'}>
+      ${ficha.editTimeError ?? ''}
+    </p>
+  </div>`;
 }
 
 /**
@@ -108,20 +158,25 @@ function playTimeHtml(doc, gameId, play) {
  */
 function counterToggleHtml(game, doc) {
   const running = doc.counter?.gameId === game.id;
-  return html`<button type="button" class="chip" data-counter-toggle>${running ? 'Pausar' : 'Iniciar'}</button>`;
+  return html`<button type="button" class="chip" data-counter-toggle>
+    ${running ? 'Pausar' : 'Iniciar'}
+  </button>`;
 }
 
 /**
  * Duración + Iniciar/Pausar de la jugada que el Contador cronometra (héroe y
- * tarjeta de la más reciente).
+ * tarjeta de la más reciente); la fila decide si alberga el editor del
+ * Tiempo jugado (ver playTimeHtml).
  * @param {import('../domain/schema.js').Game} game
  * @param {import('../domain/schema.js').Doc} doc
  * @param {import('../domain/schema.js').Play} play
+ * @param {import('../app.js').FichaUi} ficha
+ * @param {'hero'|'card'} row fila cuyo lápiz puede abrir el editor
  * @returns {string}
  */
-function counterRowHtml(game, doc, play) {
+function counterRowHtml(game, doc, play, ficha, row) {
   return html`<div class="p-time-row">
-    ${playTimeHtml(doc, game.id, play)} ${counterToggleHtml(game, doc)}
+    ${playTimeHtml(doc, game.id, play, ficha, row)} ${counterToggleHtml(game, doc)}
   </div>`;
 }
 
@@ -138,14 +193,14 @@ function segmentAdviceHtml(play, segment) {
     <span class="seg-dur mono">${formatClock(segment.seconds)}</span>
     <div class="seg-advice">
       <label class="seg-field">
-        <span class="lbl">Duración (segundos)</span>
+        <span class="lbl">Duración (H:MM:SS o segundos)</span>
         <input
-          type="number"
-          min="0"
-          step="1"
+          type="text"
+          inputmode="numeric"
+          class="mono"
           data-seg-input
           value="${segment.seconds}"
-          aria-label="Duración del tramo en segundos"
+          aria-label="Duración del tramo (H:MM:SS o segundos)"
         />
       </label>
       <span class="inline-actions">
@@ -197,9 +252,9 @@ function pendingSegmentsHtml(play, ficha) {
   if (segments.length === 0) return '';
   const count = segments.length;
   return html`<p class="seg-badge" data-pending-segments="${count}">
-    ${count === 1 ? '1 tramo pendiente de revisión' : `${count} tramos pendientes de revisión`}
-  </p>
-  <div class="seg-list">${segments.map((segment) => segmentRowHtml(play, segment, ficha))}</div>`;
+      ${count === 1 ? '1 tramo pendiente de revisión' : `${count} tramos pendientes de revisión`}
+    </p>
+    <div class="seg-list">${segments.map((segment) => segmentRowHtml(play, segment, ficha))}</div>`;
 }
 
 /** Campos compartidos editables y su presentación.
@@ -428,7 +483,7 @@ function heroHtml(game, ficha, doc) {
           clearAttr: 'hero-rate-clear',
         })}
       </div>
-      ${counterRowHtml(game, doc, latest)}
+      ${counterRowHtml(game, doc, latest, ficha, 'hero')}
       <p class="d-meta">Edita la valoración de la jugada más reciente (${latest.addedAt}).</p>
     </div>
   </div>`;
@@ -549,9 +604,13 @@ ${play.notes ?? ''}</textarea>
         })}</span
       >
     </header>
-    ${isLatest ? counterRowHtml(game, doc, play) : playTimeHtml(doc, game.id, play)}
-    ${isLatest ? pendingSegmentsHtml(play, ficha) : ''}
-    ${dates} ${platformSelectHtml(game, play, ficha)} ${notes}
+    ${
+      isLatest
+        ? counterRowHtml(game, doc, play, ficha, 'card')
+        : playTimeHtml(doc, game.id, play, ficha, 'card')
+    }
+    ${isLatest ? pendingSegmentsHtml(play, ficha) : ''} ${dates}
+    ${platformSelectHtml(game, play, ficha)} ${notes}
     <footer class="p-foot">${foot}</footer>
   </article>`;
 }
@@ -611,7 +670,9 @@ function fichaHtml(game, ficha, doc) {
           ? html`<p class="form-error" role="alert" data-play-error>${ficha.playError}</p>`
           : ''
       }
-      <div class="plays">${playsNewestFirst(game).map((play) => playCardHtml(game, play, ficha, doc))}</div>
+      <div class="plays">
+        ${playsNewestFirst(game).map((play) => playCardHtml(game, play, ficha, doc))}
+      </div>
       <button type="button" class="chip" data-add-play>➕ Añadir jugada</button>
     </section>
     <section class="d-sec danger-zone" data-sec="danger">
@@ -705,6 +766,26 @@ function patchFicha(store, patch) {
 }
 
 /**
+ * Foca y selecciona el campo del editor del Tiempo jugado recién pintado.
+ * @param {Element} surface
+ */
+function focusTimeInput(surface) {
+  const input = qs('[data-time-input]', surface);
+  if (input instanceof HTMLInputElement) {
+    input.focus();
+    input.select();
+  }
+}
+
+/**
+ * Cierra el editor del Tiempo jugado limpiando su trozo del slice (ADR-0006).
+ * @param {import('../app.js').Store} store
+ */
+function closeTimeEditor(store) {
+  patchFicha(store, { editTime: null, editTimeRow: null, editTimeError: null, editTimeDraft: '' });
+}
+
+/**
  * Ejecuta un comando del motor (Promise<Result>) y, si falla, escribe el
  * error en el slot del slice que corresponda y conserva lo tecleado en el
  * formulario activo: el repinto reconstruye el formulario desde el doc, así
@@ -787,6 +868,55 @@ async function commitField(surface, store) {
 }
 
 /**
+ * Aplica la corrección del Tiempo jugado tecleada (ADR-0012): parsea el reloj
+ * con el parser compartido y llama al comando setPlayTime. Lo no parseable
+ * deja el campo abierto con el aviso y lo tecleado; si el parseo pasa, el
+ * campo se cierra antes de correr el comando y un Result de error lo reabre
+ * con lo tecleado y su aviso (mismo patrón que commitField).
+ * @param {Element} surface
+ * @param {import('../app.js').Store} store
+ */
+async function commitTime(surface, store) {
+  const game = currentGame(store);
+  const ficha = store.get().ficha;
+  const playId = ficha.editTime;
+  const row = ficha.editTimeRow;
+  if (!game || !playId || !row) return;
+  const input = qs('[data-time-input]', surface);
+  const raw = input instanceof HTMLInputElement ? input.value : '';
+  const seconds = parseClock(raw);
+  if (seconds == null) {
+    // El campo sigue abierto: el aviso con las formas aceptadas y lo tecleado
+    // intacto (editTimeDraft re-pinta el input tras el repinto).
+    patchFicha(store, {
+      editTimeError: 'Escribe un tiempo válido: H:MM:SS, H:MM (horas:minutos) o segundos sueltos',
+      editTimeDraft: raw,
+    });
+    focusTimeInput(surface);
+    return;
+  }
+  closeTimeEditor(store);
+  await runCommand(
+    store,
+    () => setPlayTimeCommand(game.id, playId, seconds),
+    (message) =>
+      patchFicha(store, {
+        editTime: playId,
+        editTimeRow: row,
+        editTimeError: message,
+        editTimeDraft: raw,
+      }),
+    () => {
+      const fresh = qs('[data-time-input]', surface);
+      if (fresh instanceof HTMLInputElement) {
+        fresh.value = raw;
+        fresh.focus();
+      }
+    }
+  );
+}
+
+/**
  * Guarda la plataforma propia escrita a mano para una jugada.
  * @param {HTMLInputElement} input
  * @param {import('../app.js').Store} store
@@ -801,9 +931,10 @@ async function commitOwnPlatform(input, store) {
 
 /**
  * Guarda el Tramo del consejo con la duración escrita: vacío = guardar tal
- * cual (la prefillada); un valor que no sea entero mayor o igual a 0 se
- * rechaza inline (BAD_SHAPE) sin llamar al motor. Cada comando con éxito deja
- * `segmentPrompt` a null; los errores van al slot `playError`.
+ * cual (la prefillada); lo demás pasa por `parseClock` (H:MM:SS, H:MM
+ * horas:minutos o segundos sueltos) y lo no válido se rechaza inline sin
+ * llamar al motor. Cada comando con éxito deja `segmentPrompt` a null; los
+ * errores van al slot `playError`.
  * @param {Element} surface
  * @param {import('../app.js').Store} store
  * @param {string|null} raw duración escrita; null = guardar tal cual
@@ -817,11 +948,12 @@ async function commitPromptSegment(surface, store, raw) {
   if (raw != null) {
     const trimmed = raw.trim();
     if (trimmed !== '') {
-      const value = Number(trimmed);
-      if (!Number.isInteger(value) || value < 0) {
+      const value = parseClock(trimmed);
+      if (value == null) {
         const error = qs('[data-seg-error]', surface);
         if (error) {
-          error.textContent = 'La duración debe ser un entero de segundos';
+          error.textContent =
+            'Duración no válida. Acepta H:MM:SS, H:MM (horas:minutos) o un entero de segundos';
           error.removeAttribute('hidden');
         }
         return;
@@ -942,6 +1074,35 @@ function wire(container, store) {
       void ratePlay(game.id, playRateClear.getAttribute('data-play-id') ?? '', null);
       return;
     }
+    const editTimeBtn = pick('[data-edit-time]');
+    if (editTimeBtn) {
+      const playId = editTimeBtn.getAttribute('data-edit-time') ?? '';
+      const play = game.plays.find((p) => p.id === playId);
+      if (!play) return;
+      if (store.get().ficha.editTime === playId) {
+        // El otro lápiz de la misma jugada (héroe/tarjeta): revela/foca el
+        // editor ya abierto, sin pisar lo tecleado.
+        focusTimeInput(container);
+        return;
+      }
+      patchFicha(store, {
+        editTime: playId,
+        editTimeRow: editTimeBtn.closest('.d-hero') ? 'hero' : 'card',
+        editTimeError: null,
+        editTimeDraft: formatClock(play.playedSeconds ?? 0),
+        playError: null,
+      });
+      focusTimeInput(container);
+      return;
+    }
+    if (pick('[data-time-cancel]')) {
+      closeTimeEditor(store);
+      return;
+    }
+    if (pick('[data-time-save]')) {
+      void commitTime(container, store);
+      return;
+    }
     if (pick('[data-counter-toggle]')) {
       // El ancla se captura ANTES del comando: pauseCounter la borra del Doc y
       // hace falta para localizar la jugada anclada y su último tramo nuevo.
@@ -978,8 +1139,10 @@ function wire(container, store) {
     }
     if (pick('[data-add-play]')) {
       patchFicha(store, { playError: null });
-      void runCommand(store, () => addPlay(game.id), (message) =>
-        patchFicha(store, { playError: message })
+      void runCommand(
+        store,
+        () => addPlay(game.id),
+        (message) => patchFicha(store, { playError: message })
       );
       return;
     }
@@ -1051,8 +1214,10 @@ function wire(container, store) {
       return;
     }
     if (pick('[data-del-game-yes]')) {
-      void runCommand(store, () => deleteGame(game.id), (message) =>
-        patchFicha(store, { error: message })
+      void runCommand(
+        store,
+        () => deleteGame(game.id),
+        (message) => patchFicha(store, { error: message })
       ).then((res) => {
         if (res.ok) {
           // La Ficha ya no existe: su entrada de historial se sustituye por
@@ -1126,6 +1291,15 @@ function wire(container, store) {
         void commitTitle(container, store);
       } else if (e.key === 'Escape') {
         patchFicha(store, { editTitle: false, titleError: null });
+      }
+      return;
+    }
+    if (target.matches('[data-time-input]')) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        void commitTime(container, store);
+      } else if (e.key === 'Escape') {
+        closeTimeEditor(store);
       }
       return;
     }

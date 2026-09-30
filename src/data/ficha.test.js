@@ -22,6 +22,7 @@ import {
   setPlayDate,
   setPlayNotes,
   setPlayPlatform,
+  setPlayTime,
   setStatus,
   startCounter,
 } from './ficha.js';
@@ -90,13 +91,15 @@ describe('commitSharedField', () => {
     await newLibrary(NOW);
     const doc = await addGame({ title: 'Hades', today: TODAY });
     const gameId = doc.games[0].id;
-    await expect(commitSharedField(gameId, 'description', '  Hecho a mano.  ')).resolves.toMatchObject(
-      { ok: true }
-    );
+    await expect(
+      commitSharedField(gameId, 'description', '  Hecho a mano.  ')
+    ).resolves.toMatchObject({ ok: true });
     expect(findGame(gameId).description).toBe('Hecho a mano.');
-    await expect(commitSharedField(gameId, 'coverUrl', '  https://x.jpg  ')).resolves.toMatchObject({
-      ok: true,
-    });
+    await expect(commitSharedField(gameId, 'coverUrl', '  https://x.jpg  ')).resolves.toMatchObject(
+      {
+        ok: true,
+      }
+    );
     expect(findGame(gameId).coverUrl).toBe('https://x.jpg');
     await expect(commitSharedField(gameId, 'description', '')).resolves.toMatchObject({ ok: true });
     expect(findGame(gameId).description).toBeUndefined();
@@ -308,9 +311,9 @@ describe('setPlayPlatform', () => {
     const doc = await addGame({ title: 'Hades', today: TODAY });
     const gameId = doc.games[0].id;
     const playId = doc.games[0].plays[0].id;
-    await expect(setPlayPlatform(gameId, playId, { id: null, name: 'RetroArch' })).resolves.toMatchObject(
-      { ok: true }
-    );
+    await expect(
+      setPlayPlatform(gameId, playId, { id: null, name: 'RetroArch' })
+    ).resolves.toMatchObject({ ok: true });
     expect(findPlay(gameId, playId).platform).toEqual({ id: null, name: 'RetroArch' });
   });
 
@@ -323,9 +326,9 @@ describe('setPlayPlatform', () => {
     });
     const gameId = doc.games[0].id;
     const playId = doc.games[0].plays[0].id;
-    await expect(setPlayPlatform(gameId, playId, { id: 130, name: 'Nintendo Switch' })).resolves.toMatchObject(
-      { ok: true }
-    );
+    await expect(
+      setPlayPlatform(gameId, playId, { id: 130, name: 'Nintendo Switch' })
+    ).resolves.toMatchObject({ ok: true });
     expect(findPlay(gameId, playId).platform).toEqual({ id: 130, name: 'Nintendo Switch' });
   });
 
@@ -337,9 +340,9 @@ describe('setPlayPlatform', () => {
     await updatePlay(gameId, playId, { platform: { id: null, name: 'RetroArch' } });
     await expect(setPlayPlatform(gameId, playId, null)).resolves.toMatchObject({ ok: true });
     expect(findPlay(gameId, playId).platform).toBeUndefined();
-    await expect(setPlayPlatform(gameId, playId, { id: 130, name: 'Nintendo Switch' })).resolves.toMatchObject(
-      { ok: true }
-    );
+    await expect(
+      setPlayPlatform(gameId, playId, { id: 130, name: 'Nintendo Switch' })
+    ).resolves.toMatchObject({ ok: true });
     await expect(setPlayPlatform(gameId, playId, undefined)).resolves.toMatchObject({ ok: true });
     expect(findPlay(gameId, playId).platform).toBeUndefined();
   });
@@ -523,7 +526,11 @@ describe('contador de tiempo', () => {
     const gameIdB = docB.games[1].id;
     await expect(startCounter(gameIdA, NOW)).resolves.toMatchObject({ ok: true });
     await expect(setStatus(gameIdB, 'finished', NOW)).resolves.toMatchObject({ ok: true });
-    expect(store.get().doc?.counter).toEqual({ gameId: gameIdA, playId: playIdA, startedAt: NOW.toISOString() });
+    expect(store.get().doc?.counter).toEqual({
+      gameId: gameIdA,
+      playId: playIdA,
+      startedAt: NOW.toISOString(),
+    });
     expect(findPlay(gameIdA, playIdA).pendingSegments).toBeUndefined();
   });
 
@@ -551,7 +558,11 @@ describe('contador de tiempo', () => {
     const gameIdB = docB.games[1].id;
     await expect(startCounter(gameIdA, NOW)).resolves.toMatchObject({ ok: true });
     await expect(addPlay(gameIdB, LATER)).resolves.toMatchObject({ ok: true });
-    expect(store.get().doc?.counter).toEqual({ gameId: gameIdA, playId: playIdA, startedAt: NOW.toISOString() });
+    expect(store.get().doc?.counter).toEqual({
+      gameId: gameIdA,
+      playId: playIdA,
+      startedAt: NOW.toISOString(),
+    });
     expect(findPlay(gameIdA, playIdA).pendingSegments).toBeUndefined();
   });
 
@@ -635,7 +646,9 @@ describe('consolidar tramos', () => {
 
   it('confirmar sin duración consolida la prefillada y quita el Tramo de pendientes', async () => {
     const { gameId, playId, segId } = await seedPendingSegment();
-    await expect(confirmSegment(gameId, playId, segId, null, NOW)).resolves.toMatchObject({ ok: true });
+    await expect(confirmSegment(gameId, playId, segId, null, NOW)).resolves.toMatchObject({
+      ok: true,
+    });
     const play = findPlay(gameId, playId);
     expect(play.playedSeconds).toBe(2700);
     expect(play.pendingSegments).toBeUndefined();
@@ -644,7 +657,9 @@ describe('consolidar tramos', () => {
   it('confirmar con otra duración consolida esa duración en su lugar, sumándola al Tiempo jugado', async () => {
     const { gameId, playId, segId } = await seedPendingSegment();
     await updatePlay(gameId, playId, { playedSeconds: 100 });
-    await expect(confirmSegment(gameId, playId, segId, 90, NOW)).resolves.toMatchObject({ ok: true });
+    await expect(confirmSegment(gameId, playId, segId, 90, NOW)).resolves.toMatchObject({
+      ok: true,
+    });
     const play = findPlay(gameId, playId);
     expect(play.playedSeconds).toBe(190);
     expect(play.pendingSegments).toBeUndefined();
@@ -652,7 +667,9 @@ describe('consolidar tramos', () => {
 
   it('confirmar con duración 0 no suma nada y quita el Tramo', async () => {
     const { gameId, playId, segId } = await seedPendingSegment();
-    await expect(confirmSegment(gameId, playId, segId, 0, NOW)).resolves.toMatchObject({ ok: true });
+    await expect(confirmSegment(gameId, playId, segId, 0, NOW)).resolves.toMatchObject({
+      ok: true,
+    });
     const play = findPlay(gameId, playId);
     expect(play.playedSeconds).toBeUndefined();
     expect(play.pendingSegments).toBeUndefined();
@@ -674,7 +691,9 @@ describe('consolidar tramos', () => {
     const segments = findPlay(gameId, playId).pendingSegments ?? [];
     expect(segments).toHaveLength(2);
     const second = segments[1].id;
-    await expect(confirmSegment(gameId, playId, first, undefined, NOW)).resolves.toMatchObject({ ok: true });
+    await expect(confirmSegment(gameId, playId, first, undefined, NOW)).resolves.toMatchObject({
+      ok: true,
+    });
     expect(findPlay(gameId, playId).playedSeconds).toBe(2700);
     expect(findPlay(gameId, playId).pendingSegments).toEqual([{ id: second, seconds: 1200 }]);
     await expect(discardSegment(gameId, playId, second, NOW)).resolves.toMatchObject({ ok: true });
@@ -710,5 +729,155 @@ describe('consolidar tramos', () => {
     const play = findPlay(gameId, playId);
     expect(play.playedSeconds).toBe(3600);
     expect(play.pendingSegments).toEqual([{ id: segId, seconds: 2700 }]);
+  });
+});
+
+describe('setPlayTime (corrección del Tiempo jugado)', () => {
+  const LATER = new Date('2026-08-24T10:45:00Z');
+
+  /**
+   * Siembra un juego con una jugada y, si se pide, su Tiempo jugado ya guardado.
+   * @param {number|null} playedSeconds
+   * @returns {Promise<{ gameId: string, playId: string }>}
+   */
+  async function seedPlay(playedSeconds) {
+    await newLibrary(NOW);
+    const doc = await addGame({ title: 'Tunic', today: '2026-02-01' });
+    const gameId = doc.games[0].id;
+    const playId = doc.games[0].plays[0].id;
+    if (playedSeconds != null) await updatePlay(gameId, playId, { playedSeconds });
+    return { gameId, playId };
+  }
+
+  it('set al alza reemplaza el Tiempo jugado guardado', async () => {
+    const { gameId, playId } = await seedPlay(600);
+    await expect(setPlayTime(gameId, playId, 3600, NOW)).resolves.toMatchObject({ ok: true });
+    const play = findPlay(gameId, playId);
+    expect(play.playedSeconds).toBe(3600);
+    expect(Object.hasOwn(play, 'playedSeconds')).toBe(true);
+  });
+
+  it('set a la baja reemplaza el valor y set a 0 deja el campo ausente', async () => {
+    const { gameId, playId } = await seedPlay(600);
+    await expect(setPlayTime(gameId, playId, 58, NOW)).resolves.toMatchObject({ ok: true });
+    expect(findPlay(gameId, playId).playedSeconds).toBe(58);
+    await expect(setPlayTime(gameId, playId, 0, NOW)).resolves.toMatchObject({ ok: true });
+    expect(Object.hasOwn(findPlay(gameId, playId), 'playedSeconds')).toBe(false);
+  });
+
+  it('sobre una Jugada sin Tiempo jugado el set aplica sobre base 0', async () => {
+    const { gameId, playId } = await seedPlay(null);
+    await expect(setPlayTime(gameId, playId, 3600, NOW)).resolves.toMatchObject({ ok: true });
+    expect(findPlay(gameId, playId).playedSeconds).toBe(3600);
+    await expect(setPlayTime(gameId, playId, 0, NOW)).resolves.toMatchObject({ ok: true });
+    expect(Object.hasOwn(findPlay(gameId, playId), 'playedSeconds')).toBe(false);
+  });
+
+  it('segundos inválidos devuelven BAD_SHAPE sin mutar el doc', async () => {
+    const { gameId, playId } = await seedPlay(600);
+    await expect(startCounter(gameId, NOW)).resolves.toMatchObject({ ok: true });
+    for (const bad of [-5, 1.5, NaN]) {
+      await expect(setPlayTime(gameId, playId, bad, LATER)).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'BAD_SHAPE', message: 'El tiempo jugado debe ser un entero de segundos' },
+      });
+    }
+    expect(findPlay(gameId, playId).playedSeconds).toBe(600);
+    expect(store.get().doc?.counter).toEqual({ gameId, playId, startedAt: NOW.toISOString() });
+  });
+
+  it('corregir la Jugada anclada auto-pausa el Contador y aplica el set', async () => {
+    const { gameId, playId } = await seedPlay(600);
+    await expect(startCounter(gameId, NOW)).resolves.toMatchObject({ ok: true });
+    await expect(setPlayTime(gameId, playId, 100, LATER)).resolves.toMatchObject({ ok: true });
+    expect(store.get().doc?.counter).toBeUndefined();
+    const play = findPlay(gameId, playId);
+    expect(play.pendingSegments).toEqual([{ id: expect.any(String), seconds: 2700 }]);
+    expect(play.playedSeconds).toBe(100);
+  });
+
+  it('con segundos inválidos no auto-pausa el Contador', async () => {
+    const { gameId, playId } = await seedPlay(600);
+    await expect(startCounter(gameId, NOW)).resolves.toMatchObject({ ok: true });
+    await expect(setPlayTime(gameId, playId, -5, LATER)).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'BAD_SHAPE' },
+    });
+    expect(store.get().doc?.counter).toEqual({ gameId, playId, startedAt: NOW.toISOString() });
+    expect(findPlay(gameId, playId).pendingSegments).toBeUndefined();
+  });
+
+  it('corregir otra Jugada del mismo juego no toca el Contador', async () => {
+    const { gameId, playId: playId1 } = await seedPlay(600);
+    await addPlay(gameId, NOW);
+    const playId2 = findGame(gameId).plays[1].id;
+    await expect(startCounter(gameId, NOW)).resolves.toMatchObject({ ok: true });
+    await expect(setPlayTime(gameId, playId1, 100, LATER)).resolves.toMatchObject({ ok: true });
+    expect(store.get().doc?.counter).toEqual({
+      gameId,
+      playId: playId2,
+      startedAt: NOW.toISOString(),
+    });
+    expect(findPlay(gameId, playId2).pendingSegments).toBeUndefined();
+    expect(findPlay(gameId, playId1).playedSeconds).toBe(100);
+  });
+
+  it('corregir la Jugada de otro juego no toca el Contador', async () => {
+    await newLibrary(NOW);
+    const docA = await addGame({ title: 'A', today: '2026-02-01' });
+    const gameIdA = docA.games[0].id;
+    const playIdA = docA.games[0].plays[0].id;
+    const docB = await addGame({ title: 'B', today: '2026-02-01' });
+    const gameIdB = docB.games[1].id;
+    const playIdB = docB.games[1].plays[0].id;
+    await expect(startCounter(gameIdA, NOW)).resolves.toMatchObject({ ok: true });
+    await expect(setPlayTime(gameIdB, playIdB, 100, LATER)).resolves.toMatchObject({ ok: true });
+    expect(store.get().doc?.counter).toEqual({
+      gameId: gameIdA,
+      playId: playIdA,
+      startedAt: NOW.toISOString(),
+    });
+    expect(findPlay(gameIdA, playIdA).pendingSegments).toBeUndefined();
+    expect(findPlay(gameIdB, playIdB).playedSeconds).toBe(100);
+  });
+
+  it('los Tramos pendientes quedan intactos y la confirmación posterior suma sobre la base corregida', async () => {
+    await newLibrary(NOW);
+    const doc = await addGame({ title: 'Tunic', today: '2026-02-01' });
+    const gameId = doc.games[0].id;
+    const playId = doc.games[0].plays[0].id;
+    await expect(startCounter(gameId, NOW)).resolves.toMatchObject({ ok: true });
+    await expect(pauseCounter(LATER)).resolves.toMatchObject({ ok: true });
+    await updatePlay(gameId, playId, { playedSeconds: 600 });
+    await expect(setPlayTime(gameId, playId, 100, NOW)).resolves.toMatchObject({ ok: true });
+    const play = findPlay(gameId, playId);
+    expect(play.playedSeconds).toBe(100);
+    const segments = play.pendingSegments ?? [];
+    expect(segments).toEqual([{ id: expect.any(String), seconds: 2700 }]);
+    await expect(confirmSegment(gameId, playId, segments[0].id, null, NOW)).resolves.toMatchObject({
+      ok: true,
+    });
+    expect(findPlay(gameId, playId).playedSeconds).toBe(2800);
+    expect(findPlay(gameId, playId).pendingSegments).toBeUndefined();
+  });
+
+  it('el comando nunca lanza: devuelve Promise<Result> y NOT_FOUND sin tocar nada', async () => {
+    await newLibrary(NOW);
+    const missing = setPlayTime('no-existe', 'x', 5);
+    expect(missing).toBeInstanceOf(Promise);
+    await expect(missing).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'NOT_FOUND', message: 'Juego no encontrado' },
+    });
+    await expect(setPlayTime('no-existe', 'x', 5, NOW)).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'NOT_FOUND' },
+    });
+    const doc = await addGame({ title: 'Tunic', today: TODAY });
+    const gameId = doc.games[0].id;
+    const playId = doc.games[0].plays[0].id;
+    expect(setPlayTime(gameId, playId, 5)).toBeInstanceOf(Promise);
+    await expect(setPlayTime(gameId, playId, 5)).resolves.toMatchObject({ ok: true });
+    expect(findPlay(gameId, playId).playedSeconds).toBe(5);
   });
 });
