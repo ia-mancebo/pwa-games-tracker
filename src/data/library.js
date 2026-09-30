@@ -363,6 +363,31 @@ export function confirmSegment(gameId, playId, segmentId, secondsOverride, now) 
 }
 
 /**
+ * Corrección manual del Tiempo jugado (ADR-0012): set absoluto del campo —
+ * subir y bajar son la misma operación—, que reemplaza el valor guardado.
+ * Si el Contador está anclado a ESA Jugada, auto-pausa reutilizando
+ * pauseAnchor (Tramo pendiente + ancla limpia) antes del set; el ancla de
+ * otra Jugada o juego no se toca. Un `seconds` que no sea entero ≥ 0 lanza
+ * error sin mutar; 0 deja el campo ausente (convención del repo).
+ * @param {string} gameId
+ * @param {string} playId
+ * @param {number} seconds
+ * @param {Date} now
+ * @returns {Promise<import('../domain/schema.js').Doc>}
+ */
+export function setPlayTime(gameId, playId, seconds, now) {
+  return mutate((doc) => {
+    if (!Number.isInteger(seconds) || seconds < 0) {
+      throw new LibraryError('El tiempo jugado debe ser un entero de segundos', 'BAD_SHAPE');
+    }
+    const play = findPlay(doc, gameId, playId);
+    if (doc.counter?.gameId === gameId && doc.counter?.playId === playId) pauseAnchor(doc, now);
+    if (seconds > 0) play.playedSeconds = seconds;
+    else delete play.playedSeconds;
+  }, { now });
+}
+
+/**
  * Descarta un Tramo pendiente: lo elimina sin rastro —ni en pendientes ni en
  * el consolidado—, sin tocar el Tiempo jugado.
  * @param {string} gameId

@@ -43,6 +43,7 @@ tests/               # setup de vitest y tests de integración
 - **UI strings en español**; tokens de Estado en inglés en los datos (`backlog|playing|finished|abandoned`).
 - **Render**: funciones que devuelven/insertan DOM; sin virtual DOM. Usa `html` (tagged template de `src/lib/dom.js`) y `esc()` para todo texto dinámico. Re-render de la vista activa tras cada cambio de estado.
 - **Navegación client-side**: las vistas (Biblioteca, Novedades, Estadísticas) son estado en el store; cero rutas de URL.
+- **Affordance explícita**: toda acción editable de la UI se anuncia con un control visible (botón, lápiz, pastilla), no solo al tocar o con hover: en móvil no hay hover y lo invisible no se descubre. P. ej., Corregir el Tiempo jugado de una Jugada en la Ficha va con un lápiz visible junto a su valor.
 - **FSA/permisos**: feature detection (`'showOpenFilePicker' in self`), manejo de `AbortError` siempre.
 - Sin comentarios salvo cuando explican una decisión no obvia (referencia a § de la spec si aplica).
 - No añadas dependencias sin necesidad; el runtime de la app no debe crecer sin motivo (objetivo: fluido hasta 5.000 juegos).

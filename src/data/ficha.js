@@ -21,6 +21,7 @@ import {
   pauseCounter as repoPauseCounter,
   ratePlay as repoRatePlay,
   setGameStatus,
+  setPlayTime as repoSetPlayTime,
   startCounter as repoStartCounter,
   updateGame,
   updatePlay,
@@ -331,6 +332,28 @@ export function setPlayPlatform(gameId, playId, platform) {
  */
 export function setPlayNotes(gameId, playId, value) {
   return toResult(updatePlay(gameId, playId, { notes: value === '' ? undefined : value }));
+}
+
+/**
+ * Corrección manual del Tiempo jugado de una Jugada (ADR-0012): establece el
+ * valor dado como Tiempo jugado —set absoluto, no resta—. `seconds` debe ser
+ * entero ≥ 0; si no, error BAD_SHAPE como Result sin tocar nada. Si el
+ * Contador está anclado a ESA Jugada la corrección lo auto-pausa (su tiempo
+ * queda como Tramo pendiente); los Tramos pendientes no se consumen.
+ * @param {string} gameId
+ * @param {string} playId
+ * @param {number} seconds
+ * @param {Date} [now]
+ * @returns {Promise<Result>}
+ */
+export function setPlayTime(gameId, playId, seconds, now = new Date()) {
+  if (!Number.isInteger(seconds) || seconds < 0) {
+    return Promise.resolve({
+      ok: false,
+      error: new LibraryError('El tiempo jugado debe ser un entero de segundos', 'BAD_SHAPE'),
+    });
+  }
+  return toResult(repoSetPlayTime(gameId, playId, seconds, now));
 }
 
 /**

@@ -108,6 +108,9 @@ import { isFixedSurface, settleScroll } from './scroll.js';
  *   confirmGame: boolean,
  *   error: string|null,
  *   titleError: string|null,
+ *   editTime: string|null,
+ *   editTimeError: string|null,
+ *   editTimeDraft: string,
  * }} FichaUi
  */
 
@@ -144,6 +147,9 @@ export function freshFicha(gameId) {
     confirmGame: false,
     error: null,
     titleError: null,
+    editTime: null,
+    editTimeError: null,
+    editTimeDraft: '',
   };
 }
 
