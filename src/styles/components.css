@@ -1603,12 +1603,6 @@ button.plate:hover {
   color: var(--ink);
 }
 
-.p-time-edit-btn {
-  padding: 2px 8px;
-  font-size: 0.8rem;
-  line-height: 1;
-}
-
 .seg-badge {
   align-self: flex-start;
   font-size: 0.72rem;
@@ -1676,29 +1670,6 @@ button.plate:hover {
   font-size: 0.92rem;
   color: var(--ink);
   font-family: inherit;
-}
-
-/* Corrección del Tiempo jugado (ADR-0012): editor inline con lápiz visible */
-.p-time-edit {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.p-time-edit input[type='text'] {
-  background: var(--bg2);
-  border: 1px solid color-mix(in srgb, var(--acc) 45%, transparent);
-  border-radius: 9px;
-  padding: 7px 11px;
-  font-size: 0.92rem;
-  color: var(--ink);
-  font-family: var(--mono);
-  width: 9ch;
-  min-width: 9ch;
-}
-.p-time-edit .form-error {
-  margin-top: 0;
-  flex-basis: 100%;
 }
 
 /* Zona de riesgo: borrado del juego con confirmación inline */

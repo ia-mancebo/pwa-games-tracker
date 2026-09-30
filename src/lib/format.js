@@ -43,29 +43,3 @@ export function formatRoundedHours(seconds) {
   if (h > 0) return `${h} h`;
   return `${m} min`;
 }
-
-/**
- * Parser de reloj tecleado → segundos enteros ≥ 0, o null si no es un tiempo
- * válido. Recorta espacios; admite `H:MM:SS`, `H:MM` (dos componentes siempre
- * a escala de horas, nunca M:SS) o segundos sueltos. Cada componente debe ser
- * solo dígitos; los valores ≥ 60 se normalizan posicionalmente (H*3600+M*60+S)
- * para no perder lo tecleado a la baja.
- * @param {unknown} text
- * @returns {number|null}
- */
-export function parseClock(text) {
-  if (typeof text !== 'string') return null;
-  const trimmed = text.trim();
-  if (trimmed === '') return null;
-  const parts = trimmed.split(':');
-  if (parts.length > 3) return null;
-  /** @type {number[]} */
-  const values = [];
-  for (const part of parts) {
-    if (!/^\d+$/.test(part)) return null;
-    values.push(Number(part));
-  }
-  if (values.length === 3) return values[0] * 3600 + values[1] * 60 + values[2];
-  if (values.length === 2) return values[0] * 3600 + values[1] * 60;
-  return values[0];
-}

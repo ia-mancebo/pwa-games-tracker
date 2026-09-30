@@ -8,7 +8,7 @@
  */
 import { html, qs, qsa, raw } from '../lib/dom.js';
 import { formatError } from '../lib/errors.js';
-import { formatClock, formatRoundedHours, parseClock } from '../lib/format.js';
+import { formatClock, formatRoundedHours } from '../lib/format.js';
 import { STATUSES, STATUS_LABELS } from '../domain/schema.js';
 import { latestPlay, gameStatus, livePlaySeconds } from '../domain/selectors.js';
 import {
@@ -25,7 +25,6 @@ import {
   setPlayDate,
   setPlayNotes,
   setPlayPlatform,
-  setPlayTime as setPlayTimeCommand,
   setStatus,
   startCounter,
 } from '../data/ficha.js';
@@ -84,46 +83,19 @@ function liveTotalSeconds(doc, play, nowMs) {
 
 /**
  * Línea «Tiempo: …» de una jugada: reloj vivo H:MM:SS mientras el Contador
- * cuenta su tramo (elemento `data-live-time`), dato histórico redondo si no,
- * y el lápiz de corrección siempre visible (ADR-0012). La fila del héroe
- * repite la de la jugada más reciente, así que el editor inline vive SOLO en
- * la que tiene el lápiz origen (`editable`): un solo campo en el DOM, el
- * paso deliberado de la corrección no se duplica.
+ * cuenta su tramo (elemento `data-live-time`), dato histórico redondo si no.
  * @param {import('../domain/schema.js').Doc} doc
  * @param {string} gameId
  * @param {import('../domain/schema.js').Play} play
- * @param {import('../app.js').FichaUi} ficha
- * @param {boolean} editable la fila puede abrir su editor aquí
  * @returns {string}
  */
-function playTimeHtml(doc, gameId, play, ficha, editable) {
-  if (editable && ficha.editTime === play.id) {
-    return html`<div class="p-time-edit">
-      <input
-        type="text"
-        class="mono"
-        inputmode="numeric"
-        data-time-input
-        value="${ficha.editTimeDraft}"
-        aria-label="Tiempo jugado en horas, minutos y segundos (H:MM:SS)"
-        placeholder="H:MM:SS"
-      />
-      <span class="inline-actions">
-        <button type="button" class="chip chip-xs" data-time-save>Corregir</button>
-        <button type="button" class="chip chip-xs" data-time-cancel>Cancelar</button>
-      </span>
-      <p class="form-error" role="alert" data-time-error${ficha.editTimeError ? '' : ' hidden'}>
-        ${ficha.editTimeError ?? ''}
-      </p>
-    </div>`;
-  }
+function playTimeHtml(doc, gameId, play) {
   const value = countingPlay(doc, gameId, play)
     ? html`<span class="p-time-val mono" data-live-time="${play.id}"
         >${formatClock(liveTotalSeconds(doc, play, Date.now()))}</span
       >`
     : html`<span class="p-time-val">${formatRoundedHours(play.playedSeconds ?? 0)}</span>`;
-  return html`<p class="p-time"><span class="lbl">Tiempo:</span> ${value}
-    <button type="button" class="chip chip-xs p-time-edit-btn" data-edit-time="${play.id}" aria-label="Corregir tiempo jugado">✎</button></p>`;
+  return html`<p class="p-time"><span class="lbl">Tiempo:</span> ${value}</p>`;
 }
 
 /**
@@ -141,18 +113,15 @@ function counterToggleHtml(game, doc) {
 
 /**
  * Duración + Iniciar/Pausar de la jugada que el Contador cronometra (héroe y
- * tarjeta de la más reciente). El héroe no abre el editor aquí: su lápiz
- * revela/foca el de la tarjeta (editores duplicados no).
+ * tarjeta de la más reciente).
  * @param {import('../domain/schema.js').Game} game
  * @param {import('../domain/schema.js').Doc} doc
  * @param {import('../domain/schema.js').Play} play
- * @param {import('../app.js').FichaUi} ficha
- * @param {boolean} [editable] la fila puede albergar el editor inline
  * @returns {string}
  */
-function counterRowHtml(game, doc, play, ficha, editable = false) {
+function counterRowHtml(game, doc, play) {
   return html`<div class="p-time-row">
-    ${playTimeHtml(doc, game.id, play, ficha, editable)} ${counterToggleHtml(game, doc)}
+    ${playTimeHtml(doc, game.id, play)} ${counterToggleHtml(game, doc)}
   </div>`;
 }
 
@@ -459,7 +428,7 @@ function heroHtml(game, ficha, doc) {
           clearAttr: 'hero-rate-clear',
         })}
       </div>
-      ${counterRowHtml(game, doc, latest, ficha)}
+      ${counterRowHtml(game, doc, latest)}
       <p class="d-meta">Edita la valoración de la jugada más reciente (${latest.addedAt}).</p>
     </div>
   </div>`;
@@ -580,7 +549,7 @@ ${play.notes ?? ''}</textarea>
         })}</span
       >
     </header>
-    ${isLatest ? counterRowHtml(game, doc, play, ficha, true) : playTimeHtml(doc, game.id, play, ficha, true)}
+    ${isLatest ? counterRowHtml(game, doc, play) : playTimeHtml(doc, game.id, play)}
     ${isLatest ? pendingSegmentsHtml(play, ficha) : ''}
     ${dates} ${platformSelectHtml(game, play, ficha)} ${notes}
     <footer class="p-foot">${foot}</footer>
@@ -736,14 +705,6 @@ function patchFicha(store, patch) {
 }
 
 /**
- * Cierra el editor del Tiempo jugado limpiando su trozo del slice ficha.
- * @param {import('../app.js').Store} store
- */
-function closeTimeEditor(store) {
-  patchFicha(store, { editTime: null, editTimeError: null, editTimeDraft: '' });
-}
-
-/**
  * Ejecuta un comando del motor (Promise<Result>) y, si falla, escribe el
  * error en el slot del slice que corresponda y conserva lo tecleado en el
  * formulario activo: el repinto reconstruye el formulario desde el doc, así
@@ -818,45 +779,6 @@ async function commitField(surface, store) {
     () => {
       const fresh = qs(`[data-field-form="${name}"] [data-field-input]`, surface);
       if (fresh instanceof HTMLInputElement || fresh instanceof HTMLTextAreaElement) {
-        fresh.value = raw;
-        fresh.focus();
-      }
-    }
-  );
-}
-
-/**
- * Aplica la corrección del Tiempo jugado tecleada: parsea el reloj y llama al
- * comando setPlayTime. Entrada inválida deja el campo abierto con el aviso
- * inline (sin cerrar); error de motor lo reabre con lo tecleado tras el
- * repinto (mismo patrón que commitField).
- * @param {Element} surface
- * @param {import('../app.js').Store} store
- */
-async function commitTime(surface, store) {
-  const game = currentGame(store);
-  const ficha = store.get().ficha;
-  const playId = ficha.editTime;
-  if (!game || !playId) return;
-  const input = qs('[data-time-input]', surface);
-  const raw = input instanceof HTMLInputElement ? input.value : '';
-  const seconds = parseClock(raw);
-  if (seconds === null) {
-    patchFicha(store, {
-      editTime: playId,
-      editTimeError: 'Escribe un tiempo válido: H:MM:SS, H:MM o segundos',
-      editTimeDraft: raw,
-    });
-    return;
-  }
-  closeTimeEditor(store);
-  await runCommand(
-    store,
-    () => setPlayTimeCommand(game.id, playId, seconds),
-    (message) => patchFicha(store, { editTime: playId, editTimeError: message, editTimeDraft: raw }),
-    () => {
-      const fresh = qs('[data-time-input]', surface);
-      if (fresh instanceof HTMLInputElement) {
         fresh.value = raw;
         fresh.focus();
       }
@@ -1018,32 +940,6 @@ function wire(container, store) {
     const playRateClear = pick('[data-play-rate-clear]');
     if (playRateClear) {
       void ratePlay(game.id, playRateClear.getAttribute('data-play-id') ?? '', null);
-      return;
-    }
-    const editTime = pick('[data-edit-time]');
-    if (editTime) {
-      const playId = editTime.getAttribute('data-edit-time');
-      const play = game.plays.find((p) => p.id === playId);
-      if (!play) return;
-      patchFicha(store, {
-        editTime: playId,
-        editTimeError: null,
-        editTimeDraft: formatClock(play.playedSeconds ?? 0),
-        playError: null,
-      });
-      const input = qs('[data-time-input]', container);
-      if (input instanceof HTMLInputElement) {
-        input.focus();
-        input.select();
-      }
-      return;
-    }
-    if (pick('[data-time-cancel]')) {
-      closeTimeEditor(store);
-      return;
-    }
-    if (pick('[data-time-save]')) {
-      void commitTime(container, store);
       return;
     }
     if (pick('[data-counter-toggle]')) {
@@ -1230,15 +1126,6 @@ function wire(container, store) {
         void commitTitle(container, store);
       } else if (e.key === 'Escape') {
         patchFicha(store, { editTitle: false, titleError: null });
-      }
-      return;
-    }
-    if (target.matches('[data-time-input]')) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        void commitTime(container, store);
-      } else if (e.key === 'Escape') {
-        closeTimeEditor(store);
       }
       return;
     }
