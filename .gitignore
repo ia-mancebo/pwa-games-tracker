@@ -2,6 +2,7 @@ node_modules/
 dist/
 dev-dist/
 coverage/
+.worktrees/
 *.local
 .DS_Store
 Thumbs.db

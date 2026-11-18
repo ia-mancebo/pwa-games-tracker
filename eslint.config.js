@@ -1,7 +1,16 @@
 import js from '@eslint/js';
 
 export default [
-  { ignores: ['dist/**', 'dev-dist/**', 'node_modules/**', '.scratch/**', 'coverage/**'] },
+  {
+    ignores: [
+      'dist/**',
+      'dev-dist/**',
+      'node_modules/**',
+      '.scratch/**',
+      'coverage/**',
+      '.worktrees/**',
+    ],
+  },
   js.configs.recommended,
   {
     languageOptions: {
