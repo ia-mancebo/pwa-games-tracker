@@ -26,6 +26,7 @@ export default [
         CustomEvent: 'readonly',
         Event: 'readonly',
         KeyboardEvent: 'readonly',
+        MouseEvent: 'readonly',
         requestAnimationFrame: 'readonly',
         cancelAnimationFrame: 'readonly',
         setTimeout: 'readonly',

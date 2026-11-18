@@ -413,12 +413,9 @@ export function createApp(root) {
     // puerta de bienvenida (ready/doc) y el toggle readonly (tabRole) ya
     // quedan cubiertos por la comparación.
     if (prev && VIEW_SLICES.every((k) => state[k] === prev[k])) return;
-    // Superficie fija (Panel del Estado y drill-down de Novedades): la tabla
-    // scrollea dentro y la columna de contenido se fija a la ventana
-    // (src/scroll.js + components.css).
-    root.classList.toggle('surface-fixed', isFixedSurface(state));
     // Puerta de bienvenida: sin biblioteca no se renderiza ninguna pestaña.
     if (gated) {
+      root.classList.toggle('surface-fixed', isFixedSurface(state));
       welcome.render(main, store);
       return;
     }
@@ -429,6 +426,12 @@ export function createApp(root) {
     // saliente (documento y cardbox de las superficies fijas), y se aplica
     // DESPUÉS, sobre el DOM nuevo (documento y cardbox entrante).
     const scrollTarget = settleScroll(prev, state, main);
+    // La clase surface-fixed se cambia DESPUÉS de capturar: al salir de una
+    // superficie fija, quitarla quita el overflow-y del cardbox saliente
+    // (components.css) y su scrollTop pasa a leerse 0 — la captura vería cero
+    // y el «volver» no repondría nada. jsdom no detecta esto (su scrollTop es
+    // una propiedad plana); el guardrail es npm run test:scroll.
+    root.classList.toggle('surface-fixed', isFixedSurface(state));
     view.render(main, store);
     if (scrollTarget) {
       if (scrollTarget.doc != null) window.scrollTo(0, scrollTarget.doc);

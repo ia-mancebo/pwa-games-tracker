@@ -1,13 +1,19 @@
 /**
  * Regression test (scroll real): la Ficha y el drill-down de Novedades llegan
  * arriba al abrirse y el botón atrás del navegador devuelve a la Estantería y
- * al tablón con su scroll conservado. jsdom no puede verificar el atrás real:
- * el navegador restaura su propio scroll por entrada de historial
- * (scrollRestoration) y puede pisar el nuestro según el orden de los eventos.
- * Este script conduce Edge headless contra un dev server real: siembra una
- * biblioteca grande por la bienvenida y una instantánea de Novedades por IDB,
- * scrollea cada base, abre un hijo (Ficha / sección) y vuelve con `goBack()`
- * midiendo el scroll en varios instantes.
+ * al tablón con su scroll conservado. Además, la tabla del Panel (superficie
+ * fija: la tabla scrollea DENTRO del cardbox, no el documento) conserva su
+ * scroll interno al irse a la Ficha y volver, y reabrir el Panel desde la
+ * Estantería es pantalla nueva. jsdom no puede verificar nada de esto: su
+ * scrollTop es una propiedad plana sin semántica de overflow ni layout (el
+ * bug de 2026-11 — quitar surface-fixed antes de capturar hacía leer 0 — era
+ * invisible para la suite de vitest), y el navegador restaura su propio scroll
+ * por entrada de historial (scrollRestoration) y puede pisar el nuestro según
+ * el orden de los eventos. Este script conduce Edge headless contra un dev
+ * server real: siembra una biblioteca grande por la bienvenida y una
+ * instantánea de Novedades por IDB, scrollea cada base, abre un hijo
+ * (Ficha / sección) y vuelve con `goBack()` o con «← Volver» midiendo el
+ * scroll en varios instantes.
  *
  * Uso: npm run test:scroll  (o node scripts/check-scroll-restore.mjs)
  */
@@ -166,6 +172,59 @@ async function main() {
 
     await assertBackRestores(page, '.shelves [data-game-id]', tapPosShelves, 'la Estantería');
 
+    // Panel de un Estado («Quiero jugar» = backlog): superficie fija, la tabla
+    // scrollea DENTRO del cardbox. Debe conservar su scroll interno al irse a
+    // la Ficha y volver («← Volver»), y reabrirse desde la Estantería como
+    // pantalla nueva. Siembra y clic en la MISMA tarea síncrona: un clic de
+    // puntero auto-scrollea el cardbox (scrollIntoViewIfNeeded) y arruinaría
+    // la medición.
+    await page.click('[data-open-panel="backlog"]');
+    await page.waitForSelector('.cardbox.tight .b-row', { timeout: 10000 });
+
+    const panelTop = await page.evaluate(() => {
+      const box = document.querySelector('.cardbox.tight');
+      box.scrollTop = 300;
+      const at = box.scrollTop;
+      // Fila presente en el panel abierto (los ids de la fixture reparten
+      // Estados por módulo; no todos los gNNN están en este Estado).
+      const row = document.querySelectorAll('.cardbox.tight .b-row')[10];
+      row.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      return at;
+    });
+    if (panelTop !== 300) {
+      throw new Error(`RED: la tabla del Panel no scrollea (scrollTop=${panelTop}, objetivo 300)`);
+    }
+    await page.waitForSelector('[data-back-ficha]', { timeout: 10000 });
+    await page.click('[data-back-ficha]');
+    await page.waitForSelector('.cardbox.tight .b-row', { timeout: 10000 });
+    const panelSamples = [];
+    for (const delay of [0, 100, 300, 600]) {
+      if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+      panelSamples.push(
+        await page.evaluate(() => Math.round(document.querySelector('.cardbox.tight').scrollTop))
+      );
+    }
+    if (panelSamples.some((y) => y !== panelTop)) {
+      throw new Error(
+        `RED: al volver de la Ficha, la tabla del Panel no conserva su scroll (muestras ${panelSamples.join(', ')}; esperado ${panelTop})`
+      );
+    }
+    console.log(
+      `  la tabla del Panel restaurada a ${panelTop}px al volver de la Ficha (${panelSamples.join(', ')})`
+    );
+
+    await page.click('[data-back-shelves]');
+    await page.waitForSelector('.shelves [data-game-id]', { timeout: 10000 });
+    await page.click('[data-open-panel="backlog"]');
+    await page.waitForSelector('.cardbox.tight .b-row', { timeout: 10000 });
+    const freshTop = await page.evaluate(() =>
+      Math.round(document.querySelector('.cardbox.tight').scrollTop)
+    );
+    if (freshTop !== 0) {
+      throw new Error(`RED: reabrir el Panel no es pantalla nueva (scrollTop=${freshTop}, esperado 0)`);
+    }
+    console.log('  reabrir el Panel desde la Estantería: arriba (0)');
+
     // Instantánea de Novedades por IDB (el tablón siempre se pinta desde ahí).
     await page.evaluate(async (snap) => {
       const db = await new Promise((resolve, reject) => {
@@ -206,12 +265,23 @@ async function main() {
 
     await assertBackRestores(page, '[data-nsection="recientes"]', tapPosBoard, 'el tablón');
 
-    console.log(`GREEN: Ficha y drill-down arriba; Estantería y tablón restaurados tras el atrás`);
+    console.log(
+      `GREEN: Ficha y drill-down arriba; Estantería, tablón y Panel restaurados tras el volver`
+    );
   } finally {
-    await browser.close();
+    // browser.close() puede colgar tras la navegación por historial (Edge
+    // headless + service worker): se acota a 5s — el veredicto ya está impreso.
+    await Promise.race([
+      browser.close().catch(() => {}),
+      new Promise((resolve) => setTimeout(resolve, 5000)),
+    ]);
     await rm(dir, { recursive: true, force: true });
   }
 }
+
+/** Watchdog: si algo cuelga igualmente, salida forzada con el código ya fijado. */
+const watchdog = setTimeout(() => process.exit(process.exitCode ?? 1), 60_000);
+watchdog.unref();
 
 main()
   .catch((err) => {
@@ -220,4 +290,7 @@ main()
   })
   .finally(() => {
     server?.kill();
+    // Salida explícita: el proceso de vite puede dejar el bucle de eventos
+    // vivo en Windows y el script se queda colgado tras el veredicto.
+    process.exit(process.exitCode ?? 0);
   });
