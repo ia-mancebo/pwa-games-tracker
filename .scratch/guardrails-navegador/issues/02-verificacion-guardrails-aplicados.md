@@ -4,13 +4,13 @@
 
 **Blocked by:** None (can start immediately; independiente del ticket 01).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] El check de scroll termina con EXIT=0 e imprime «la tabla del Panel restaurada a 300px al volver de la Ficha» y «reabrir el Panel desde la Estantería: arriba (0)» junto a los escenarios previos (Estantería/tablón por el atrás, Ficha/drill-down arriba).
-- [ ] El check devuelve el control al shell tras el veredicto (sin timeout del proceso: race de 5 s sobre el cierre del navegador y watchdog de 60 s presentes y comentados).
-- [ ] La suite rápida queda en verde: typecheck, lint, test.
-- [ ] Confirmados los tres artefactos de la sesión: los escenarios del Panel en el check, el global `MouseEvent` en la configuración del linter y el comentario del invariante de orden (capturar antes de cambiar la clase de superficie fija) en el sitio del render.
-- [ ] La corrida no deja procesos Edge huérfanos.
+- [x] El check de scroll termina con EXIT=0 e imprime «la tabla del Panel restaurada a 300px al volver de la Ficha» y «reabrir el Panel desde la Estantería: arriba (0)» junto a los escenarios previos (Estantería/tablón por el atrás, Ficha/drill-down arriba).
+- [x] El check devuelve el control al shell tras el veredicto (sin timeout del proceso: race de 5 s sobre el cierre del navegador y watchdog de 60 s presentes y comentados).
+- [x] La suite rápida queda en verde: typecheck, lint, test.
+- [x] Confirmados los tres artefactos de la sesión: los escenarios del Panel en el check, el global `MouseEvent` en la configuración del linter y el comentario del invariante de orden (capturar antes de cambiar la clase de superficie fija) en el sitio del render.
+- [x] La corrida no deja procesos Edge huérfanos.
 
 ## Comentarios
 
@@ -29,3 +29,5 @@
 - **Procesos Edge**: antes = 9; después = 9 (delta 0, sin huérfanos). `Get-CimInstance` dio acceso denegado en este entorno; el conteo se hizo con `Get-Process` y la inspección de CommandLine con `wmic`: los 9 son la sesión normal del usuario (`--user-data-dir=...\Microsoft\Edge\User Data`, padre 4216), ninguno del perfil temporal del script.
 - **Suite rápida**: `npm run typecheck` ⇒ EXIT=0; `npm run lint` ⇒ EXIT=0; `npm test` ⇒ EXIT=0 (47 archivos, 698 tests en verde).
 - **Desviaciones**: ninguna. No se tocó código de la app ni otros archivos de `.scratch`.
+
+**2026-11-18 — Cierre tras code review.** El review del eje spec encontró tres brechas contra el spec y una contra la story 8, corregidas en `7c0615a`: (1) story 5 exigía también el atrás del sistema — nueva pata Panel→Ficha→`page.goBack()` con siembra 340 en el cardbox, restituida y muestreada 0/100/300/600; (2) spec.md:37 «cada aserción muestrea» — el reabrir-Panel ahora muestrea 0 en los cuatro instantes; (3) story 8 — `process.exitCode = 0` se fija justo tras el veredicto GREEN, así el watchdog de 60 s ya no puede sacar con 1 tras un GREEN si la limpieza se cuelga; (4) refactor: la cadencia de muestreo y la aserción viven en un ayudante parametrizado (lector scrollY/scrollTop, navegación atrás/clic) con el selector `.cardbox.tight` en constante; las líneas de veredicto del ticket quedan byte a byte. Corrida final: EXIT=0, GREEN con la pata nueva («la tabla del Panel restaurada a 340px tras el atrás»), typecheck/lint/test en verde (698 tests), Edge 9 antes / 9 después (sin huérfanos).

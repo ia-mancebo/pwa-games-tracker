@@ -4,14 +4,15 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] La línea-puntero abre con el disparador (cambios de UI/scroll/navegación) y después nombra el gate.
-- [ ] Lista los seis scripts con su asunto en tres o cuatro palabras cada uno, con nombres exactos según los scripts de `package.json` (nada inventado ni renombrado).
-- [ ] Incluye la regla permanente «regla nueva de scroll/navegación ⇒ escenario en el check de navegador».
-- [ ] Es una sola línea añadida; AGENTS.md no crece con un párrafo por check ni duplica lo que el entorno ya dice.
-- [ ] Suite rápida en verde tras el cambio (typecheck, lint, test).
+- [x] La línea-puntero abre con el disparador (cambios de UI/scroll/navegación) y después nombra el gate.
+- [x] Lista los seis scripts con su asunto en tres o cuatro palabras cada uno, con nombres exactos según los scripts de `package.json` (nada inventado ni renombrado).
+- [x] Incluye la regla permanente «regla nueva de scroll/navegación ⇒ escenario en el check de navegador».
+- [x] Es una sola línea añadida; AGENTS.md no crece con un párrafo por check ni duplica lo que el entorno ya dice.
+- [x] Suite rápida en verde tras el cambio (typecheck, lint, test).
 
 ## Comentarios
 
 - 2026-11-18: Añadida UNA línea-puntero en AGENTS.md (Dev environment), con el disparador delante («Cambios de UI, scroll o navegación ⇒ correr el `test:*` de navegador relevante antes de darse por terminado»), los seis scripts con nombres exactos de `package.json` y su asunto en 3 palabras (`test:scroll` scroll y navegación, `test:layout` layout de escritorio, `test:layout:mobile` layout en móvil, `test:overflow:mobile` desbordes horizontales móviles, `test:add-online:overflow` alta online: overflow, `test:aviso` aviso del contador), más la regla permanente «regla nueva de scroll/navegación ⇒ escenario en el check de navegador». Sin tocar código de la app. Verificado en verde: `npm run typecheck`, `npm run lint`, `npm test` (47 archivos, 698 tests). Commit: `45a8096`.
+- 2026-11-18: Cierre. El code review del eje estándares señaló que el vocabulario del glosario (`CONTEXT.md`, «Aviso de contador») manda sobre «aviso del contador»; corregido en la misma línea (commit `c86e991`). Suite en verde tras el cambio.
