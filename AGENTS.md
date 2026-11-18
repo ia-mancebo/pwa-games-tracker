@@ -6,7 +6,7 @@
   - Prepend to PATH per command in PowerShell:
     `$env:Path = "C:\Users\elfri\AppData\Local\Temp\opencode\node\node-v26.7.0-win-x64;$env:Path"`
 - Run `npm run typecheck`, `npm run lint`, `npm test` before finishing any code change.
-- Cambios de UI, scroll o navegación ⇒ correr el `test:*` de navegador relevante antes de darse por terminado: `test:scroll` scroll y navegación, `test:layout` layout de escritorio, `test:layout:mobile` layout en móvil, `test:overflow:mobile` desbordes horizontales móviles, `test:add-online:overflow` alta online: overflow, `test:aviso` aviso del contador; regla nueva de scroll/navegación ⇒ escenario en el check de navegador.
+- Cambios de UI, scroll o navegación ⇒ correr el `test:*` de navegador relevante antes de darse por terminado: `test:scroll` scroll y navegación, `test:layout` layout de escritorio, `test:layout:mobile` layout en móvil, `test:overflow:mobile` desbordes horizontales móviles, `test:add-online:overflow` alta online: overflow, `test:aviso` aviso de contador; regla nueva de scroll/navegación ⇒ escenario en el check de navegador.
 
 ## Agent skills
 
