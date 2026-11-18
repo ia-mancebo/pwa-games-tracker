@@ -20,12 +20,11 @@
  * `Get-Process msedge`) y exigir delta 0. Para distinguir un huérfano de la
  * sesión normal del usuario basta el perfil: el huérfano apunta al perfil
  * temporal que lanza este script, no al perfil del navegador del usuario
- * (`--user-data-dir=...\Microsoft\Edge\User Data`). Nota: la vía de línea de
- * comandos directa por WMI da acceso denegado en esta máquina (p. ej.
- * `Get-CimInstance`); la receta que funciona es conteo por proceso +
- * inspección con las herramientas alternativas (`Get-Process` para contar,
- * `wmic process where "name='msedge.exe'" get commandline` para la
- * CommandLine).
+ * (`--user-data-dir=...\Microsoft\Edge\User Data`). Nota: la vía de
+ * PowerShell por CIM/WMI da acceso denegado en esta máquina (p. ej.
+ * `Get-CimInstance`); la receta que funciona es conteo por proceso
+ * (`Get-Process`) + inspección de la CommandLine con
+ * `wmic process where "name='msedge.exe'" get commandline`.
  *
  * Uso: npm run test:scroll  (o node scripts/check-scroll-restore.mjs)
  */

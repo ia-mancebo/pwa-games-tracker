@@ -1,6 +1,6 @@
 # Spec · Flujo del agente: worktrees dentro del repo, formato como puerta, receta Edge y ciclo de Status
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
