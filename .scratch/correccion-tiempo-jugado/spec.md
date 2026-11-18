@@ -1,6 +1,6 @@
 # Corrección del Tiempo jugado
 
-Status: ready-for-agent
+Status: resolved
 
 Cerrada el 30-09-2026 tras sesión de grilling (Q1–Q11). Usa el vocabulario de `CONTEXT.md` (con **Tiempo jugado** ya enmendado con la corrección) y respeta el ADR-0012 («Corrección manual del Tiempo jugado»), que revisa deliberadamente la regla de invarianza del ADR-0011. La spec del Contador (`.scratch/contador-tiempo/spec.md`) puso «editar a mano el Tiempo jugado ya guardado» fuera de alcance: esta spec es la funcionalidad que incorpora ese cambio.
 

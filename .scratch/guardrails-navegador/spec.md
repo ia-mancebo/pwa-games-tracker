@@ -1,6 +1,6 @@
 # Spec · Guardrails de navegador para cambios de UI, scroll y navegación
 
-Status: ready-for-agent
+Status: resolved
 
 ## Problem Statement
 
