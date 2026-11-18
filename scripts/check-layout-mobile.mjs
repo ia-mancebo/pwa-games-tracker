@@ -131,7 +131,9 @@ try {
     const headStatic = report.viewHeadPosition === 'static';
     if (!pageOk) {
       failures++;
-      console.log(`RED: el documento se ensancha (scrollWidth ${report.docW} > viewport ${report.vw})`);
+      console.log(
+        `RED: el documento se ensancha (scrollWidth ${report.docW} > viewport ${report.vw})`
+      );
     }
     if (!noOverflowers) {
       failures++;

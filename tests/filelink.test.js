@@ -29,7 +29,13 @@ const FILE_V1_TEXT = JSON.stringify({
   schema: 'game-tracker',
   version: 1,
   updatedAt: '2026-08-20T09:30:00Z',
-  games: [{ id: 'g1', title: 'Hades', plays: [{ id: 'g1-p1', status: 'playing', addedAt: '2026-08-01' }] }],
+  games: [
+    {
+      id: 'g1',
+      title: 'Hades',
+      plays: [{ id: 'g1-p1', status: 'playing', addedAt: '2026-08-01' }],
+    },
+  ],
 });
 
 const FILE_V2_TEXT = JSON.stringify({
@@ -37,7 +43,11 @@ const FILE_V2_TEXT = JSON.stringify({
   version: 1,
   updatedAt: '2026-08-23T18:30:00Z',
   games: [
-    { id: 'g9', title: 'Celeste', plays: [{ id: 'g9-p1', status: 'finished', addedAt: '2026-08-02', rating: 5 }] },
+    {
+      id: 'g9',
+      title: 'Celeste',
+      plays: [{ id: 'g9-p1', status: 'finished', addedAt: '2026-08-02', rating: 5 }],
+    },
   ],
 });
 
@@ -105,7 +115,9 @@ function makeHandle(initialText, options = {}) {
           // fake modela esa semántica: recorta el texto codificado a `size`
           // bytes y lo decodifica (un corte a mitad de carácter multibyte
           // produce U+FFFD, como en el navegador).
-          state.text = new TextDecoder().decode(new TextEncoder().encode(state.text).slice(0, size));
+          state.text = new TextDecoder().decode(
+            new TextEncoder().encode(state.text).slice(0, size)
+          );
         },
         async close() {},
       };
@@ -161,7 +173,7 @@ function grantFsa() {
 }
 
 function revokeFsa() {
-  delete /** @type {any} */ (window).showOpenFilePicker;
+  delete (/** @type {any} */ (window).showOpenFilePicker);
 }
 
 beforeEach(() => {
@@ -272,7 +284,9 @@ describe('saveNow (vuelco verificado, §5.4)', () => {
     expect(dumped.games.map((g) => g.title)).toEqual(['Hades', 'Hades II']);
     expect(dumped.updatedAt).toBe(store.get().doc?.updatedAt);
     expect(store.get().meta.dirty).toBe(false);
-    expect(store.get().meta.lastSavedFileHash).toBe(await sha256Hex(/** @type {string} */ (handle.captured)));
+    expect(store.get().meta.lastSavedFileHash).toBe(
+      await sha256Hex(/** @type {string} */ (handle.captured))
+    );
     expect(store.get().file.status).toBe('connected');
   });
 
@@ -464,7 +478,10 @@ describe('reconexión (§5.3)', () => {
   it('sin handle de sesión delega en el picker (elección deliberada)', async () => {
     grantFsa();
     const handle = makeHandle(FILE_V2_TEXT);
-    await importDoc(FILE_V1_TEXT, { hash: await sha256Hex(FILE_V1_TEXT), fileName: 'game-tracker.json' });
+    await importDoc(FILE_V1_TEXT, {
+      hash: await sha256Hex(FILE_V1_TEXT),
+      fileName: 'game-tracker.json',
+    });
     /** @type {any} */ (window).showOpenFilePicker = () => Promise.resolve([handle]);
 
     const res = await reconnect();
@@ -520,12 +537,10 @@ describe('resolveConflict (§5.5)', () => {
     urlApi.revokeObjectURL = () => {};
     const anchors = /** @type {HTMLElement[]} */ ([]);
     const originalAppend = document.body.appendChild.bind(document.body);
-    const appendSpy = vi
-      .spyOn(document.body, 'appendChild')
-      .mockImplementation((el) => {
-        if (el instanceof HTMLElement && el.tagName === 'A') anchors.push(el);
-        return originalAppend(el);
-      });
+    const appendSpy = vi.spyOn(document.body, 'appendChild').mockImplementation((el) => {
+      if (el instanceof HTMLElement && el.tagName === 'A') anchors.push(el);
+      return originalAppend(el);
+    });
 
     try {
       const res = await resolveConflict('download');
@@ -534,7 +549,9 @@ describe('resolveConflict (§5.5)', () => {
       expect(createdBlobs).toHaveLength(1);
       expect(createdBlobs[0]).toBeInstanceOf(Blob);
       expect(anchors).toHaveLength(1);
-      expect(anchors[0].getAttribute('download')).toMatch(/^game-tracker-conflicto-\d{4}-\d{2}-\d{2}\.json$/);
+      expect(anchors[0].getAttribute('download')).toMatch(
+        /^game-tracker-conflicto-\d{4}-\d{2}-\d{2}\.json$/
+      );
       // No resuelve: sigue pendiente, el estado local no cambia.
       expect(handle.writes).toBe(0);
       expect(store.get().meta.dirty).toBe(true);
@@ -595,7 +612,7 @@ describe('autoguardado (§5.4)', () => {
     try {
       document.dispatchEvent(new Event('visibilitychange'));
     } finally {
-      delete /** @type {any} */ (document).visibilityState;
+      delete (/** @type {any} */ (document).visibilityState);
     }
     await settle();
 
@@ -632,7 +649,7 @@ describe('autoguardado (§5.4)', () => {
     try {
       document.dispatchEvent(new Event('visibilitychange'));
     } finally {
-      delete /** @type {any} */ (document).visibilityState;
+      delete (/** @type {any} */ (document).visibilityState);
     }
     // Deja que el vuelco oculto llegue al getFile congelado (sha256Hex es
     // async): el saveNow queda colgado con saving=true. NO avanzamos el debounce.
@@ -644,7 +661,7 @@ describe('autoguardado (§5.4)', () => {
     try {
       document.dispatchEvent(new Event('visibilitychange'));
     } finally {
-      delete /** @type {any} */ (document).visibilityState;
+      delete (/** @type {any} */ (document).visibilityState);
     }
     window.dispatchEvent(new Event('focus'));
     await settle();
@@ -729,7 +746,7 @@ describe('autoguardado (§5.4)', () => {
     try {
       document.dispatchEvent(new Event('visibilitychange'));
     } finally {
-      delete /** @type {any} */ (document).visibilityState;
+      delete (/** @type {any} */ (document).visibilityState);
     }
     await settle();
     expect(store.get().file.saving).toBe(true);
@@ -739,7 +756,7 @@ describe('autoguardado (§5.4)', () => {
     try {
       document.dispatchEvent(new Event('visibilitychange'));
     } finally {
-      delete /** @type {any} */ (document).visibilityState;
+      delete (/** @type {any} */ (document).visibilityState);
     }
     await settle();
     expect(store.get().file.saving).toBe(true);
@@ -768,7 +785,9 @@ describe('autoguardado (§5.4)', () => {
     // debounce deja el vuelco sin ejecutar (guard de runScheduledSave).
     await addGame({ title: 'Hades II', today: TODAY });
     setHandle(null);
-    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false } });
+    store.set({
+      file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false },
+    });
     vi.advanceTimersByTime(60000);
     await settle();
 
@@ -822,7 +841,9 @@ describe('pastilla de archivo (chrome de la app)', () => {
     const handle = makeHandle(FILE_V1_TEXT);
     await connectFile(FILE_V1_TEXT, handle);
     setHandle(null);
-    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false } });
+    store.set({
+      file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false },
+    });
 
     const root = mountApp();
     const connect = qs('[data-connect]', root);
@@ -944,7 +965,9 @@ describe('pastilla de archivo (chrome de la app)', () => {
     grantFsa();
     const LONG_ERROR =
       'SecurityError: The operation is insecure. No se pudo escribir el archivo en el sistema de archivos.';
-    store.set({ file: { status: 'error', name: null, error: LONG_ERROR, conflict: null, saving: false } });
+    store.set({
+      file: { status: 'error', name: null, error: LONG_ERROR, conflict: null, saving: false },
+    });
 
     const root = mountApp();
     const pill = qs('.filebar .pill-btn', root);
@@ -978,11 +1001,9 @@ describe('diálogo de conflicto (§5.5)', () => {
     expect(sheet?.textContent).toContain('2026-08-23 18:30');
     const localStamp = (store.get().doc?.updatedAt ?? '').replace('T', ' ').slice(0, 16);
     expect(sheet?.textContent).toContain(localStamp);
-    expect(qsa('.conflict-actions button', document.body).map((b) => b.textContent?.trim())).toEqual([
-      'Usar la versión del archivo',
-      'Mantener mis cambios',
-      'Descargar copia local',
-    ]);
+    expect(
+      qsa('.conflict-actions button', document.body).map((b) => b.textContent?.trim())
+    ).toEqual(['Usar la versión del archivo', 'Mantener mis cambios', 'Descargar copia local']);
 
     btn(qs('.add-backdrop', document.body)).click();
     expect(isConflictOpen()).toBe(false);
@@ -1010,7 +1031,7 @@ describe('diálogo de conflicto (§5.5)', () => {
 
     btn(qs('[data-choice="file"]', document.body)).click();
     expect(qs('.conflict-confirm', document.body)?.textContent).toContain(
-      '¿Seguro? Se descartarán tus cambios locales.',
+      '¿Seguro? Se descartarán tus cambios locales.'
     );
 
     btn(qs('[data-confirm="no"]', document.body)).click();

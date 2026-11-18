@@ -191,7 +191,13 @@ describe('camino online activo (servicio configurado + conexión)', () => {
   it('pinta resultados con carátula, título, año y plataformas', async () => {
     stubFetch([
       SEARCH_RESULT,
-      { ...SEARCH_RESULT, igdbId: 1020, title: 'Elden Ring', releaseDate: '2022-02-25', coverUrl: null },
+      {
+        ...SEARCH_RESULT,
+        igdbId: 1020,
+        title: 'Elden Ring',
+        releaseDate: '2022-02-25',
+        coverUrl: null,
+      },
     ]);
     await newLibrary(NOW);
     seedWorkerUrl(WORKER_URL);
@@ -254,9 +260,7 @@ describe('camino online activo (servicio configurado + conexión)', () => {
     const preview = await vi.waitFor(() => need(qs('.add-preview', sheet)));
     const shots = qsa('button.d-shot[data-shot]', preview);
     expect(shots).toHaveLength(SEARCH_RESULT.screenshots.length);
-    expect(shots[0]?.querySelector('img')?.getAttribute('src')).toBe(
-      SEARCH_RESULT.screenshots[0]
-    );
+    expect(shots[0]?.querySelector('img')?.getAttribute('src')).toBe(SEARCH_RESULT.screenshots[0]);
 
     btn(shots[0]).click();
     expect(need(qs('.lightbox img', document.body)).getAttribute('src')).toBe(
@@ -308,9 +312,7 @@ describe('camino online activo (servicio configurado + conexión)', () => {
     expect(game.plays[0].status).toBe('backlog');
     expect(game.plays[0].addedAt).toBe(todayFrom(new Date()));
     expect(qs('.add-sheet')).toBeNull();
-    expect(
-      need(qs('[data-game-id]', root))?.getAttribute('data-game-id')
-    ).toBe(game.id);
+    expect(need(qs('[data-game-id]', root))?.getAttribute('data-game-id')).toBe(game.id);
   });
 
   it('tras guardar llama onSaved con el juego creado', async () => {

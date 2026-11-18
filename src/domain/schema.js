@@ -201,7 +201,8 @@ export function validateConnectionShape(connection) {
   }
   const c = /** @type {Record<string, unknown>} */ (connection);
   for (const key of Object.keys(c)) {
-    if (key !== 'workerUrl') return { ok: false, reason: `Campo desconocido en conexión: «${key}»` };
+    if (key !== 'workerUrl')
+      return { ok: false, reason: `Campo desconocido en conexión: «${key}»` };
   }
   if (c.workerUrl !== undefined && typeof c.workerUrl !== 'string') {
     return { ok: false, reason: 'URL de proxy inválida' };
@@ -219,7 +220,18 @@ export function validatePlayShape(play) {
     return { ok: false, reason: 'Jugada malformada' };
   }
   const p = /** @type {Record<string, unknown>} */ (play);
-  const known = ['id', 'status', 'rating', 'platform', 'addedAt', 'startedAt', 'finishedAt', 'notes', 'playedSeconds', 'pendingSegments'];
+  const known = [
+    'id',
+    'status',
+    'rating',
+    'platform',
+    'addedAt',
+    'startedAt',
+    'finishedAt',
+    'notes',
+    'playedSeconds',
+    'pendingSegments',
+  ];
   for (const key of Object.keys(p)) {
     if (!known.includes(key)) return { ok: false, reason: `Campo desconocido en jugada: «${key}»` };
   }
@@ -280,7 +292,10 @@ export function validatePlayShape(play) {
         return { ok: false, reason: 'Tramo pendiente sin id' };
       }
       if (!Number.isInteger(s.seconds) || /** @type {number} */ (s.seconds) < 0) {
-        return { ok: false, reason: 'Los segundos de un tramo deben ser un entero mayor o igual a 0' };
+        return {
+          ok: false,
+          reason: 'Los segundos de un tramo deben ser un entero mayor o igual a 0',
+        };
       }
     }
   }
@@ -313,7 +328,10 @@ export function validateGameShape(game) {
     if (!known.includes(key)) return { ok: false, reason: `Campo desconocido en juego: «${key}»` };
   }
   if (typeof g.id !== 'string' || g.id === '') return { ok: false, reason: 'Juego sin id' };
-  if (g.igdbId !== undefined && (!Number.isInteger(g.igdbId) || /** @type {number} */ (g.igdbId) < 1)) {
+  if (
+    g.igdbId !== undefined &&
+    (!Number.isInteger(g.igdbId) || /** @type {number} */ (g.igdbId) < 1)
+  ) {
     return { ok: false, reason: 'igdbId inválido' };
   }
   if (typeof g.title !== 'string' || g.title.trim() === '') {
@@ -345,7 +363,7 @@ export function validateGameShape(game) {
             it === null ||
             typeof (/** @type {Record<string, unknown>} */ (it).id) !== 'number' ||
             typeof (/** @type {Record<string, unknown>} */ (it).name) !== 'string' ||
-            Object.keys(/** @type {object} */ (it)).some((k) => k !== 'id' && k !== 'name'),
+            Object.keys(/** @type {object} */ (it)).some((k) => k !== 'id' && k !== 'name')
         )
       ) {
         return { ok: false, reason: `Lista inválida: ${field}` };

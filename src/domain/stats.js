@@ -32,7 +32,20 @@ import { gameStatus, gameRating, avgRatingOfGames, chipsForDoc } from './selecto
  */
 
 /** Etiquetas cortas de mes para «ago 25». @type {string[]} */
-const MONTH_LABELS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const MONTH_LABELS = [
+  'ene',
+  'feb',
+  'mar',
+  'abr',
+  'may',
+  'jun',
+  'jul',
+  'ago',
+  'sep',
+  'oct',
+  'nov',
+  'dic',
+];
 
 /**
  * Claves YYYY-MM de los 12 meses terminando en el mes de `now` (UTC), más
@@ -121,17 +134,17 @@ export function computeStats(doc, filters, now) {
     byPlatform: tally(
       games,
       (g) => g.platforms ?? [],
-      (p) => p.name,
+      (p) => p.name
     ),
     byGenre: tally(
       games,
       (g) => g.genres ?? [],
-      (g) => g.name,
+      (g) => g.name
     ),
     byTag: tally(
       games,
       (g) => g.tags ?? [],
-      (t) => t,
+      (t) => t
     ),
     finishedByMonth: window.map((key) => ({
       key,

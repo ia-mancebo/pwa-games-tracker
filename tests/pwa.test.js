@@ -88,21 +88,14 @@ describe('configuración PWA del build (vite.config)', () => {
       expect(icon.src.startsWith(`${base}icons/`)).toBe(true);
       expect(icon.type).toBe('image/png');
     }
-    expect(icons.map((icon) => icon.sizes)).toEqual([
-      '192x192',
-      '512x512',
-      '192x192',
-      '512x512',
-    ]);
+    expect(icons.map((icon) => icon.sizes)).toEqual(['192x192', '512x512', '192x192', '512x512']);
     expect(icons[2]?.src).toBe(`${base}icons/icon-maskable-192.png`);
     expect(icons[3]?.src).toBe(`${base}icons/icon-maskable-512.png`);
   });
 
   it('workbox precachea woff2 con límite 2 MiB, navigateFallback y cleanupOutdatedCaches', () => {
     const workbox = /** @type {Record<string, any>} */ (pwaOptions.workbox ?? {});
-    expect(workbox.globPatterns).toEqual([
-      '**/*.{js,css,html,svg,png,ico,webmanifest,woff2}',
-    ]);
+    expect(workbox.globPatterns).toEqual(['**/*.{js,css,html,svg,png,ico,webmanifest,woff2}']);
     expect(workbox.globPatterns.join(',')).toContain('woff2');
     expect(workbox.maximumFileSizeToCacheInBytes).toBe(2 * 1024 * 1024);
     expect(workbox.navigateFallback).toBe('index.html');
@@ -123,9 +116,9 @@ describe('configuración PWA del build (vite.config)', () => {
 
     const pattern = route.urlPattern;
     expect(pattern).toBeInstanceOf(RegExp);
-    expect(
-      pattern.test('https://images.igdb.com/igdb/image/upload/t_cover_big/abc.jpg'),
-    ).toBe(true);
+    expect(pattern.test('https://images.igdb.com/igdb/image/upload/t_cover_big/abc.jpg')).toBe(
+      true
+    );
     expect(pattern.test('https://evil.example.com/a.jpg')).toBe(false);
     expect(pattern.test('https://api.igdb.com/v4/games')).toBe(false);
   });

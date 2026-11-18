@@ -17,7 +17,12 @@ import { resetBackNav } from '../src/backnav.js';
 import { resetSheet } from '../src/ui/sheet.js';
 import { saveSnapshot } from '../src/data/snapshot.js';
 import { resetNovedadesRefresh } from '../src/data/novedades.js';
-import { resetScroll, isFixedSurface, preserveInnerScroll, restoreInnerScroll } from '../src/scroll.js';
+import {
+  resetScroll,
+  isFixedSurface,
+  preserveInnerScroll,
+  restoreInnerScroll,
+} from '../src/scroll.js';
 import { qs } from '../src/lib/dom.js';
 
 /** @type {ReturnType<typeof vi.spyOn> | null} */

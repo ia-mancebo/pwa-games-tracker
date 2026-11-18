@@ -24,7 +24,13 @@ const DOC_A_TEXT = JSON.stringify({
   schema: 'game-tracker',
   version: 1,
   updatedAt: '2026-08-20T09:30:00Z',
-  games: [{ id: 'g1', title: 'Hades', plays: [{ id: 'g1-p1', status: 'playing', addedAt: '2026-08-01' }] }],
+  games: [
+    {
+      id: 'g1',
+      title: 'Hades',
+      plays: [{ id: 'g1-p1', status: 'playing', addedAt: '2026-08-01' }],
+    },
+  ],
 });
 
 /** Cede macrotareas reales para que IDB (setImmediate) y crypto terminen. */

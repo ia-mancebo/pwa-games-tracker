@@ -131,7 +131,11 @@ describe('dashboard de estadísticas', () => {
 
   it('los avisos de distribución y Top 5 vacíos pintan como elemento, no como texto escapado', async () => {
     await seed([
-      { id: 'g1', title: 'Gris', plays: [{ id: 'g1-p1', status: 'backlog', addedAt: '2026-07-01' }] },
+      {
+        id: 'g1',
+        title: 'Gris',
+        plays: [{ id: 'g1-p1', status: 'backlog', addedAt: '2026-07-01' }],
+      },
     ]);
     const root = mount();
     openStats(root);
@@ -142,7 +146,7 @@ describe('dashboard de estadísticas', () => {
     // en el tiempo» siempre pinta su ventana de 12 meses, sin aviso; el bloque
     // «Tiempo jugado» pinta su línea de total, que no es un aviso.
     const notices = qsa('section.cardbox > p.d-meta', root).filter(
-      (p) => !p.closest('[data-time-stats]'),
+      (p) => !p.closest('[data-time-stats]')
     );
     expect(notices).toHaveLength(4);
     for (const p of notices.slice(0, 3)) expect(p.textContent?.trim()).toBe('Sin datos.');
@@ -220,7 +224,7 @@ describe('dashboard de estadísticas', () => {
     openStats(root);
 
     expect(qs('.empty', root)?.textContent).toContain(
-      'Cuando añadas juegos verás aquí tus estadísticas.',
+      'Cuando añadas juegos verás aquí tus estadísticas.'
     );
     expect(qs('[data-kpi]', root)).toBeNull();
   });
@@ -251,7 +255,7 @@ describe('dashboard de estadísticas', () => {
           ],
         },
       ],
-      2,
+      2
     );
     const root = mount();
     openStats(root);

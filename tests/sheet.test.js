@@ -24,7 +24,8 @@ function need(el) {
 }
 
 /** Contenido de prueba con dos botones enfocables. */
-const CONTENT = '<button type="button" data-a>Uno</button><button type="button" data-b>Dos</button>';
+const CONTENT =
+  '<button type="button" data-a>Uno</button><button type="button" data-b>Dos</button>';
 
 beforeEach(() => {
   document.body.innerHTML = '';

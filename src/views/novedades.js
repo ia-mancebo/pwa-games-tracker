@@ -115,8 +115,7 @@ function newsCardHtml(section, index, game) {
     data-ndetail="${section}:${index}"
     title="${game.title}"
   >
-    ${coverHtml(toCoverGame(game))}
-    ${badge ? html`<span class="badge mono">${badge}</span>` : ''}
+    ${coverHtml(toCoverGame(game))} ${badge ? html`<span class="badge mono">${badge}</span>` : ''}
     <span class="cap"><span>${game.title}</span></span>
   </button>`;
 }
@@ -161,8 +160,8 @@ function monthStripHtml(games) {
         timeZone: 'UTC',
       });
       return html`<span class="chip"
-          ><strong>${name} ${ym.slice(0, 4)}</strong>&nbsp;· ${counts.get(ym)}</span
-        >`;
+        ><strong>${name} ${ym.slice(0, 4)}</strong>&nbsp;· ${counts.get(ym)}</span
+      >`;
     })}
   </div>`;
 }
@@ -262,8 +261,9 @@ function drillDownHtml(sectionKey, genre) {
     ${
       genres.length > 0
         ? html`<div class="toolbar">
-              <div class="chip-row">
-                ${genres.map((name) =>
+            <div class="chip-row">
+              ${genres.map(
+                (name) =>
                   html`<button
                     type="button"
                     class="chip-xs chip${genre === name ? ' on' : ''}"
@@ -271,9 +271,9 @@ function drillDownHtml(sectionKey, genre) {
                   >
                     ${name}
                   </button>`
-                )}
-              </div>
-            </div>`
+              )}
+            </div>
+          </div>`
         : ''
     }
     <div class="cardbox tight n-table">
@@ -281,8 +281,9 @@ function drillDownHtml(sectionKey, genre) {
         <span></span><span>Título</span><span class="n-col-pf">Plataformas</span><span>Fecha</span>
       </div>
       ${rows.length === 0 ? raw('<p class="empty">Nada con ese género.</p>') : ''}
-      ${rows.map(({ game, i }) =>
-        html`<div class="b-row" data-ndetail="${sectionKey}:${i}">
+      ${rows.map(
+        ({ game, i }) =>
+          html`<div class="b-row" data-ndetail="${sectionKey}:${i}">
             ${coverHtml(toCoverGame(game), { mini: true })}
             <span class="b-cell">
               <span class="b-title">${game.title}</span>
@@ -310,9 +311,7 @@ function boardHtml() {
   }
   if (nv.section && snap) {
     const sectionKey = /** @type {SectionKey} */ (nv.section);
-    return html`<div class="fade" data-nov>
-      ${head}${drillDownHtml(sectionKey, nv.genre)}
-    </div>`;
+    return html`<div class="fade" data-nov>${head}${drillDownHtml(sectionKey, nv.genre)}</div>`;
   }
   let out = `<div class="fade" data-nov>${head}`;
   if (!snap) {
@@ -447,51 +446,49 @@ function paintDetail() {
   const genres = (game.genres ?? []).map((g) => g.name);
   const platforms = (game.platforms ?? []).map((p) => p.name);
   body.innerHTML = html`<div class="d-hero">
-        <div class="d-cover">${coverHtml(toCoverGame(game))}</div>
-        <div class="d-head">
-          <h3 class="d-title">${game.title}</h3>
-          ${releaseTextHtml(game)}
-        </div>
+      <div class="d-cover">${coverHtml(toCoverGame(game))}</div>
+      <div class="d-head">
+        <h3 class="d-title">${game.title}</h3>
+        ${releaseTextHtml(game)}
       </div>
+    </div>
+    ${
+      genres.length > 0
+        ? html`<div class="d-sec">
+            <h3>Géneros</h3>
+            <div class="d-status">
+              ${genres.map((name) => html`<span class="chip static chip-xs">${name}</span>`)}
+            </div>
+          </div>`
+        : ''
+    }
+    ${
+      platforms.length > 0
+        ? html`<div class="d-sec">
+            <h3>Plataformas</h3>
+            <p class="mono d-meta">${platforms.join(', ')}</p>
+          </div>`
+        : ''
+    }
+    ${
+      game.description
+        ? html`<div class="d-sec">
+            <h3>Descripción</h3>
+            <p class="d-desc">${game.description}</p>
+          </div>`
+        : ''
+    }
+    ${galleryHtml(game.screenshots ?? [])}
+    <div class="d-sec" data-detail-add>
       ${
-        genres.length > 0
-          ? html`<div class="d-sec">
-                <h3>Géneros</h3>
-                <div class="d-status">
-                  ${genres.map((name) => html`<span class="chip static chip-xs">${name}</span>`)}
-                </div>
-              </div>`
-          : ''
+        inLibrary
+          ? raw('<button type="button" class="chip static" disabled>Ya en tu biblioteca</button>')
+          : html`<button type="button" class="btn-primary" data-want-play>➕ Quiero jugarlo</button>
+              <p class="d-meta" style="margin-top:10px">
+                Se añade a tu biblioteca como «Quiero jugar», sin conexión.
+              </p>`
       }
-      ${
-        platforms.length > 0
-          ? html`<div class="d-sec">
-              <h3>Plataformas</h3>
-              <p class="mono d-meta">${platforms.join(', ')}</p>
-            </div>`
-          : ''
-      }
-      ${
-        game.description
-          ? html`<div class="d-sec">
-              <h3>Descripción</h3>
-              <p class="d-desc">${game.description}</p>
-            </div>`
-          : ''
-      }
-      ${galleryHtml(game.screenshots ?? [])}
-      <div class="d-sec" data-detail-add>
-        ${
-          inLibrary
-            ? raw('<button type="button" class="chip static" disabled>Ya en tu biblioteca</button>')
-            : html`<button type="button" class="btn-primary" data-want-play>
-                    ➕ Quiero jugarlo
-                  </button>
-                  <p class="d-meta" style="margin-top:10px">
-                    Se añade a tu biblioteca como «Quiero jugar», sin conexión.
-                  </p>`
-        }
-      </div>`;
+    </div>`;
 }
 
 /**

@@ -90,9 +90,9 @@ describe('mapSourceToAddInput', () => {
 
   it('Estado por defecto: sin status → backlog (Quiero jugar); explícito se conserva', () => {
     expect(mapSourceToAddInput(fullGame(), { today: TODAY }).status).toBe('backlog');
-    expect(
-      mapSourceToAddInput(fullGame(), { status: 'finished', today: TODAY }).status
-    ).toBe('finished');
+    expect(mapSourceToAddInput(fullGame(), { status: 'finished', today: TODAY }).status).toBe(
+      'finished'
+    );
   });
 
   it('juego sin datos compartidos → payload mínimo', () => {

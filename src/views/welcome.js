@@ -105,14 +105,7 @@ export function render(container, _store) {
       </button>
     </div>
     ${importError ? html`<p class="form-error" role="alert">${importError}</p>` : ''}
-    ${fsa
-      ? ''
-      : html`<input
-          type="file"
-          accept="${JSON_ACCEPT}"
-          hidden
-          data-import-input
-        />`}
+    ${fsa ? '' : html`<input type="file" accept="${JSON_ACCEPT}" hidden data-import-input />`}
   </div>`;
   wire(container, fsa);
 }

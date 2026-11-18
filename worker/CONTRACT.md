@@ -86,27 +86,67 @@ Instantánea completa del tablón Novedades: composición fija **12 recientes / 
 
 ```json
 {
-  "recientes": [ { "igdbId": 246938, "title": "Hollow Knight: Silksong", "releaseDate": "2025-09-04", "coverUrl": "https://images.igdb.com/igdb/image/upload/t_cover_big/co3x0b.jpg", "description": "…", "genres": [ { "id": 8, "name": "Platform" } ], "platforms": [ { "id": 130, "name": "Nintendo Switch" } ] } ],
-  "proximos": [ { "igdbId": 296504, "title": "Juego Por Anunciar", "releaseDate": "2026-11-19", "coverUrl": null, "description": "", "genres": [], "platforms": [] } ],
-  "populares": [ { "igdbId": 1020, "title": "Elden Ring", "releaseDate": "2022-02-25", "coverUrl": "https://images.igdb.com/igdb/image/upload/t_cover_big/co4jni.jpg", "description": "…", "genres": [{ "id": 12, "name": "Role-playing (RPG)" }], "platforms": [{ "id": 6, "name": "PC (Microsoft Windows)" }] } ],
-  "esperados": [ { "igdbId": 300000, "title": "Juego Esperado", "releaseDate": "2027-03-10", "coverUrl": "https://images.igdb.com/igdb/image/upload/t_cover_big/coabcd.jpg", "description": "…", "genres": [], "platforms": [] } ],
+  "recientes": [
+    {
+      "igdbId": 246938,
+      "title": "Hollow Knight: Silksong",
+      "releaseDate": "2025-09-04",
+      "coverUrl": "https://images.igdb.com/igdb/image/upload/t_cover_big/co3x0b.jpg",
+      "description": "…",
+      "genres": [{ "id": 8, "name": "Platform" }],
+      "platforms": [{ "id": 130, "name": "Nintendo Switch" }]
+    }
+  ],
+  "proximos": [
+    {
+      "igdbId": 296504,
+      "title": "Juego Por Anunciar",
+      "releaseDate": "2026-11-19",
+      "coverUrl": null,
+      "description": "",
+      "genres": [],
+      "platforms": []
+    }
+  ],
+  "populares": [
+    {
+      "igdbId": 1020,
+      "title": "Elden Ring",
+      "releaseDate": "2022-02-25",
+      "coverUrl": "https://images.igdb.com/igdb/image/upload/t_cover_big/co4jni.jpg",
+      "description": "…",
+      "genres": [{ "id": 12, "name": "Role-playing (RPG)" }],
+      "platforms": [{ "id": 6, "name": "PC (Microsoft Windows)" }]
+    }
+  ],
+  "esperados": [
+    {
+      "igdbId": 300000,
+      "title": "Juego Esperado",
+      "releaseDate": "2027-03-10",
+      "coverUrl": "https://images.igdb.com/igdb/image/upload/t_cover_big/coabcd.jpg",
+      "description": "…",
+      "genres": [],
+      "platforms": []
+    }
+  ],
   "generatedAt": "2026-08-24T09:30:00.000Z"
 }
 ```
 
-*(El ejemplo muestra un elemento por sección; las respuestas reales traen 12/12/6/6 cuando hay datos.)*
+_(El ejemplo muestra un elemento por sección; las respuestas reales traen 12/12/6/6 cuando hay datos.)_
 
 ---
 
 ## Errores
 
-| Código | Cuándo | Cuerpo |
-|---|---|---|
-| `400` | `/api/search` sin `q` (o solo espacios) | `{ "error": "Falta el parámetro de búsqueda «q»." }` |
-| `403` | Cabecera `Origin` ausente o fuera de `ALLOWED_ORIGINS`; también cuando esa secret falta o está vacía (fail-closed). Mismo cuerpo para todos los casos | `{ "error": "Origen no autorizado." }` |
-| `404` | Ruta desconocida o método distinto de GET | `{ "error": "Ruta no encontrada." }` |
-| `500` | Secretos `CLIENT_ID`/`CLIENT_SECRET` sin configurar, o fallo interno | `{ "error": "Worker not configured: faltan los secretos CLIENT_ID y CLIENT_SECRET." }` / `{ "error": "Error interno del Worker." }` |
-| `502` | Twitch o IGDB fallaron o respondieron fuera de 2xx | `{ "error": "No se pudo contactar con IGDB." }` |
+| Código | Cuándo                                                                                                                                                | Cuerpo                                                                                                                              |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `400`  | `/api/search` sin `q` (o solo espacios)                                                                                                               | `{ "error": "Falta el parámetro de búsqueda «q»." }`                                                                                |
+| `403`  | Cabecera `Origin` ausente o fuera de `ALLOWED_ORIGINS`; también cuando esa secret falta o está vacía (fail-closed). Mismo cuerpo para todos los casos | `{ "error": "Origen no autorizado." }`                                                                                              |
+| `404`  | Ruta desconocida o método distinto de GET                                                                                                             | `{ "error": "Ruta no encontrada." }`                                                                                                |
+| `500`  | Secretos `CLIENT_ID`/`CLIENT_SECRET` sin configurar, o fallo interno                                                                                  | `{ "error": "Worker not configured: faltan los secretos CLIENT_ID y CLIENT_SECRET." }` / `{ "error": "Error interno del Worker." }` |
+| `502`  | Twitch o IGDB fallaron o respondieron fuera de 2xx                                                                                                    | `{ "error": "No se pudo contactar con IGDB." }`                                                                                     |
 
 El cliente debe tratar cualquier estado ≥ 400 como «No se pudo contactar con el servicio» y servir la instantánea local (§7.3 de la spec).
 
@@ -114,12 +154,12 @@ El cliente debe tratar cualquier estado ≥ 400 como «No se pudo contactar con 
 
 ## Cachés y refresco
 
-| Qué | TTL | Notas |
-|---|---|---|
-| Respuesta completa de `/api/novedades` | **6 h** (`Cache-Control: public, max-age=21600`) | Cacheada en `caches.default` del Worker por URL; solo respuestas 200 se cachean. |
-| Respuesta degradada (sin bloque PopScore) | **30 min** (`max-age=1800`) | El tablón recupera populares/esperados en cuanto IGDB vuelva a responder. |
-| Bloque intermedio populares+esperados | **24 h** (`max-age=86400`) | Clave interna `/__internal__/popular-block`: PopScore diario aunque el tablón refresque cada 6 h. |
-| Token de Twitch (client credentials) | `expires_in` de la respuesta (~55 días), renovado con 10 min de margen | Cacheado en memoria del isolate; ante un `401` de IGDB se invalida y se pide uno nuevo (un reintento). |
+| Qué                                       | TTL                                                                    | Notas                                                                                                  |
+| ----------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Respuesta completa de `/api/novedades`    | **6 h** (`Cache-Control: public, max-age=21600`)                       | Cacheada en `caches.default` del Worker por URL; solo respuestas 200 se cachean.                       |
+| Respuesta degradada (sin bloque PopScore) | **30 min** (`max-age=1800`)                                            | El tablón recupera populares/esperados en cuanto IGDB vuelva a responder.                              |
+| Bloque intermedio populares+esperados     | **24 h** (`max-age=86400`)                                             | Clave interna `/__internal__/popular-block`: PopScore diario aunque el tablón refresque cada 6 h.      |
+| Token de Twitch (client credentials)      | `expires_in` de la respuesta (~55 días), renovado con 10 min de margen | Cacheado en memoria del isolate; ante un `401` de IGDB se invalida y se pide uno nuevo (un reintento). |
 
 Notas de rate limit:
 

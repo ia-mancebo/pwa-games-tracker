@@ -4,7 +4,7 @@ import { esc, html, raw } from './dom.js';
 describe('esc', () => {
   it('escapes HTML special characters', () => {
     expect(esc(`<img src=x onerror="alert('pwn')">&`)).toBe(
-      '&lt;img src=x onerror=&quot;alert(&#39;pwn&#39;)&quot;&gt;&amp;',
+      '&lt;img src=x onerror=&quot;alert(&#39;pwn&#39;)&quot;&gt;&amp;'
     );
   });
 
@@ -23,7 +23,9 @@ describe('html', () => {
     const out = html`<p title="${evil}">${evil}</p>`;
     expect(String(out)).not.toContain('<script');
     expect(String(out)).toContain('&lt;script&gt;');
-    expect(String(out)).toBe('<p title="&lt;script&gt;alert(1)&lt;/script&gt;">&lt;script&gt;alert(1)&lt;/script&gt;</p>');
+    expect(String(out)).toBe(
+      '<p title="&lt;script&gt;alert(1)&lt;/script&gt;">&lt;script&gt;alert(1)&lt;/script&gt;</p>'
+    );
   });
 
   it('interpolates numbers escaped', () => {
@@ -33,7 +35,13 @@ describe('html', () => {
 
   it('joins arrays of values', () => {
     const items = ['<li>a', '<li>b'];
-    expect(String(html`<ul>${items}</ul>`)).toBe('<ul>&lt;li&gt;a&lt;li&gt;b</ul>');
+    expect(
+      String(
+        html`<ul>
+          ${items}
+        </ul>`
+      )
+    ).toBe('<ul>&lt;li&gt;a&lt;li&gt;b</ul>');
   });
 
   it('renders null, undefined and booleans as empty', () => {
@@ -46,11 +54,15 @@ describe('html', () => {
 
   it('nested html composes without raw()', () => {
     const inner = html`<span class="r-sub">2018 · PC</span>`;
-    expect(String(html`<div>${inner}</div>`)).toBe('<div><span class="r-sub">2018 · PC</span></div>');
+    expect(String(html`<div>${inner}</div>`)).toBe(
+      '<div><span class="r-sub">2018 · PC</span></div>'
+    );
   });
 
   it('arrays of nested html compose without raw()', () => {
     const chips = ['a', 'b'].map((n) => html`<em class="chip">${n}</em>`);
-    expect(String(html`<p>${chips}</p>`)).toBe('<p><em class="chip">a</em><em class="chip">b</em></p>');
+    expect(String(html`<p>${chips}</p>`)).toBe(
+      '<p><em class="chip">a</em><em class="chip">b</em></p>'
+    );
   });
 });
