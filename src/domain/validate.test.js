@@ -177,16 +177,25 @@ describe('validateDoc', () => {
   });
 
   it('acepta connection con workerUrl y rechaza formas inválidas', () => {
-    const withConnection = { ...validDocInput(), connection: { workerUrl: 'https://gt.workers.dev' } };
+    const withConnection = {
+      ...validDocInput(),
+      connection: { workerUrl: 'https://gt.workers.dev' },
+    };
     expect(validateDoc(withConnection)).toMatchObject({
       ok: true,
       doc: { connection: { workerUrl: 'https://gt.workers.dev' } },
     });
     expect(validateDoc({ ...validDocInput(), connection: {} })).toMatchObject({ ok: true });
 
-    expect(validateDoc({ ...validDocInput(), connection: 'https://x' })).toMatchObject({ code: 'BAD_SHAPE' });
-    expect(validateDoc({ ...validDocInput(), connection: { workerUrl: 7 } })).toMatchObject({ code: 'BAD_SHAPE' });
-    expect(validateDoc({ ...validDocInput(), connection: { credencial: 'x' } })).toMatchObject({ code: 'BAD_SHAPE' });
+    expect(validateDoc({ ...validDocInput(), connection: 'https://x' })).toMatchObject({
+      code: 'BAD_SHAPE',
+    });
+    expect(validateDoc({ ...validDocInput(), connection: { workerUrl: 7 } })).toMatchObject({
+      code: 'BAD_SHAPE',
+    });
+    expect(validateDoc({ ...validDocInput(), connection: { credencial: 'x' } })).toMatchObject({
+      code: 'BAD_SHAPE',
+    });
   });
 
   it('no muta el input y devuelve copia', () => {
@@ -321,10 +330,22 @@ describe('doc v2', () => {
       { counter: 'x', reason: 'Ancla de contador malformada' },
       { counter: {}, reason: 'Ancla de contador malformada' },
       { counter: { gameId: 'g1', playId: 'p1' }, reason: 'Fecha de inicio del contador inválida' },
-      { counter: { gameId: 'g1', playId: 'p1', startedAt: 'ayer' }, reason: 'Fecha de inicio del contador inválida' },
-      { counter: { gameId: 'g1', playId: 'p1', startedAt: '2026-08-24' }, reason: 'Fecha de inicio del contador inválida' },
-      { counter: { gameId: '', playId: 'p1', startedAt: '2026-08-24T10:00:00Z' }, reason: 'Ancla de contador malformada' },
-      { counter: { gameId: 'g1', playId: '', startedAt: '2026-08-24T10:00:00Z' }, reason: 'Ancla de contador malformada' },
+      {
+        counter: { gameId: 'g1', playId: 'p1', startedAt: 'ayer' },
+        reason: 'Fecha de inicio del contador inválida',
+      },
+      {
+        counter: { gameId: 'g1', playId: 'p1', startedAt: '2026-08-24' },
+        reason: 'Fecha de inicio del contador inválida',
+      },
+      {
+        counter: { gameId: '', playId: 'p1', startedAt: '2026-08-24T10:00:00Z' },
+        reason: 'Ancla de contador malformada',
+      },
+      {
+        counter: { gameId: 'g1', playId: '', startedAt: '2026-08-24T10:00:00Z' },
+        reason: 'Ancla de contador malformada',
+      },
       {
         counter: { gameId: 'g1', playId: 'p1', startedAt: '2026-08-24T10:00:00Z', extra: 1 },
         reason: 'Ancla de contador malformada',

@@ -251,13 +251,17 @@ async function sample(page, vp, label, delay) {
   if (delay > 0) await new Promise((r) => setTimeout(r, delay));
   const m = await page.evaluate(overflowScanBody, vp.width);
   const ok =
-    m.scrollY === 0 && !m.pageOverflows && m.overflowers.length === 0 && (m.cardbox ? m.cardbox.scrollTop === 0 : true);
+    m.scrollY === 0 &&
+    !m.pageOverflows &&
+    m.overflowers.length === 0 &&
+    (m.cardbox ? m.cardbox.scrollTop === 0 : true);
   console.log(
     `  ${ok ? 'GREEN' : 'RED'} ${label} t=${delay}ms: scrollY=${m.scrollY} docW=${m.docW} vw=${m.vw} innerWidth=${m.innerWidth} cardbox=${JSON.stringify(m.cardbox)} active=${m.active}`
   );
   if (!ok) {
     console.log(JSON.stringify(m, null, 2));
-    if (m.pageOverflows || m.overflowers.length > 0) console.log(JSON.stringify(m.overflowers, null, 2));
+    if (m.pageOverflows || m.overflowers.length > 0)
+      console.log(JSON.stringify(m.overflowers, null, 2));
   }
   return ok;
 }
@@ -291,7 +295,13 @@ async function runViewport(browser, vp) {
 
   try {
     await page.emulate({
-      viewport: { width: vp.width, height: vp.height, isMobile: true, deviceScaleFactor: 2, hasTouch: true },
+      viewport: {
+        width: vp.width,
+        height: vp.height,
+        isMobile: true,
+        deviceScaleFactor: 2,
+        hasTouch: true,
+      },
       userAgent: UA,
     });
     await page.evaluateOnNewDocument(() => {
@@ -334,7 +344,9 @@ async function runViewport(browser, vp) {
     await page.waitForSelector('[data-nsection="recientes"]', { timeout: 10000 });
     await new Promise((r) => setTimeout(r, 300));
     await scrollToShow(page, '[data-nsection="recientes"]');
-    console.log(`  [setup] tablón scrolleado a ${await page.evaluate(() => Math.round(window.scrollY))}px`);
+    console.log(
+      `  [setup] tablón scrolleado a ${await page.evaluate(() => Math.round(window.scrollY))}px`
+    );
 
     await tapSel(page, '[data-nsection="recientes"]');
     await page.waitForSelector('.n-table', { timeout: 10000 });

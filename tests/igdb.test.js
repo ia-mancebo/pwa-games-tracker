@@ -81,7 +81,9 @@ describe('searchGames', () => {
   });
 
   it('HTTP 500 lanza IgdbError con el mensaje de servicio', async () => {
-    fetchMock = vi.fn(async () => jsonRes({ error: 'Error interno del Worker.' }, { ok: false, status: 500 }));
+    fetchMock = vi.fn(async () =>
+      jsonRes({ error: 'Error interno del Worker.' }, { ok: false, status: 500 })
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(testClient().searchGames('x')).rejects.toMatchObject({

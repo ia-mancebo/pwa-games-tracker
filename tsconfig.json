@@ -12,5 +12,11 @@
     "noUnusedLocals": false,
     "types": ["vite/client", "vite-plugin-pwa/client"]
   },
-  "include": ["src/**/*.js", "tests/**/*.js", "scripts/**/*.js", "vite.config.js", "vitest.config.js"]
+  "include": [
+    "src/**/*.js",
+    "tests/**/*.js",
+    "scripts/**/*.js",
+    "vite.config.js",
+    "vitest.config.js"
+  ]
 }

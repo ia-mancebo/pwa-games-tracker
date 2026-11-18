@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, store } from '../src/app.js';
 import { initLibrary } from '../src/data/library.js';
-import { handleImportPick, handleImportText, handleNewLibrary, resetWelcome } from '../src/views/welcome.js';
+import {
+  handleImportPick,
+  handleImportText,
+  handleNewLibrary,
+  resetWelcome,
+} from '../src/views/welcome.js';
 import { qs, qsa } from '../src/lib/dom.js';
 import { sha256Hex } from '../src/services/hash.js';
 
@@ -63,7 +68,9 @@ describe('puerta de bienvenida', () => {
     expect(qs('.welcome', root)).toBeTruthy();
     expect(qs('[data-action="import"]', root)).toBeTruthy();
     expect(qs('[data-action="new"]', root)).toBeTruthy();
-    expect(qs('.welcome', root)?.textContent).toContain('Tu biblioteca, en un archivo que es tuyo.');
+    expect(qs('.welcome', root)?.textContent).toContain(
+      'Tu biblioteca, en un archivo que es tuyo.'
+    );
     expect(qs('.nav', root)?.className).toContain('disabled');
     expect(qsa('.nav button[disabled]', root)).toHaveLength(3);
   });

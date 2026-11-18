@@ -84,7 +84,7 @@ async function seed(games) {
  */
 function shelfSection(root, label) {
   const section = qsa('.shelves .shelf', root).find(
-    (s) => qs('.plate b', s)?.textContent === label,
+    (s) => qs('.plate b', s)?.textContent === label
   );
   if (!section) throw new Error(`balda no encontrada: ${label}`);
   return section;
@@ -131,8 +131,8 @@ describe('estantería', () => {
       Array.from({ length: 8 }, (_, i) =>
         gameJson(`g${i + 1}`, `Título ${i + 1}`, [
           { status: 'backlog', addedAt: `2026-06-${String(i + 1).padStart(2, '0')}` },
-        ]),
-      ),
+        ])
+      )
     );
     const root = mount();
     createApp(root);
@@ -143,7 +143,7 @@ describe('estantería', () => {
     // Las demás baldas están vacías: sin «+N más» en toda la estantería.
     expect(qsa('.card.more', root)).toHaveLength(1);
     expect(qs('.row-empty', shelfSection(root, 'Jugando'))?.textContent).toContain(
-      'Sin juegos todavía',
+      'Sin juegos todavía'
     );
   });
 
@@ -158,7 +158,7 @@ describe('estantería', () => {
 
     const playing = shelfSection(root, 'Jugando');
     const idsInShelf = qsa('.card[data-game-id]', playing).map((el) =>
-      el.getAttribute('data-game-id'),
+      el.getAttribute('data-game-id')
     );
     expect(idsInShelf).toEqual(['gb', 'gc', 'ga']);
 
@@ -197,8 +197,8 @@ describe('panel', () => {
       Array.from({ length: 8 }, (_, i) =>
         gameJson(`g${i + 1}`, `Título ${i + 1}`, [
           { status: 'backlog', addedAt: `2026-06-${String(i + 1).padStart(2, '0')}` },
-        ]),
-      ),
+        ])
+      )
     );
     const root = mount();
     createApp(root);
@@ -239,7 +239,7 @@ describe('panel', () => {
       Array.from({ length: 150 }, (_, i) => {
         const n = String(i + 1).padStart(3, '0');
         return gameJson(`g${n}`, `Juego ${n}`, [{ status: 'finished', addedAt: '2026-04-15' }]);
-      }),
+      })
     );
     const root = mount();
     createApp(root);
@@ -341,7 +341,7 @@ describe('búsqueda y filtros (ticket 15)', () => {
    */
   function chip(root, dim, text) {
     const el = qsa(`.chip-row[data-dim="${dim}"] .chip`, root).find(
-      (c) => c.textContent?.trim() === text,
+      (c) => c.textContent?.trim() === text
     );
     return btn(el ?? null);
   }
@@ -540,9 +540,12 @@ describe('búsqueda y filtros (ticket 15)', () => {
     expect(qsa('.chip-row', root)).toHaveLength(0); // sin géneros ni plataformas tampoco
 
     await seed([
-      { id: 'g3', title: 'Bastion', tags: ['rol'], plays: [
-        { id: 'g3-p1', status: 'playing', addedAt: '2026-07-02' },
-      ] },
+      {
+        id: 'g3',
+        title: 'Bastion',
+        tags: ['rol'],
+        plays: [{ id: 'g3-p1', status: 'playing', addedAt: '2026-07-02' }],
+      },
     ]);
     const tagRow = need(qs('.chip-row[data-dim="tag"]', root));
     expect(tagRow.textContent).toContain('rol');
@@ -553,7 +556,7 @@ describe('búsqueda y filtros (ticket 15)', () => {
       Array.from({ length: 120 }, (_, i) => {
         const n = String(i + 1).padStart(3, '0');
         return gameJson(`g${n}`, `Juego ${n}`, [{ status: 'finished', addedAt: '2026-04-15' }]);
-      }),
+      })
     );
     const root = mount();
     createApp(root);
@@ -581,13 +584,17 @@ describe('búsqueda y filtros (ticket 15)', () => {
 
 describe('coverHtml', () => {
   it('con coverUrl pinta una imagen lazy; sin ella, placeholder con iniciales estables', () => {
-    const withCover = String(coverHtml({
-      id: 'x1',
-      title: 'Hades',
-      coverUrl: 'https://images.example/t_cover_big/abc.jpg',
-      plays: [],
-    }));
-    expect(withCover).toContain('<img loading="lazy" src="https://images.example/t_cover_big/abc.jpg"');
+    const withCover = String(
+      coverHtml({
+        id: 'x1',
+        title: 'Hades',
+        coverUrl: 'https://images.example/t_cover_big/abc.jpg',
+        plays: [],
+      })
+    );
+    expect(withCover).toContain(
+      '<img loading="lazy" src="https://images.example/t_cover_big/abc.jpg"'
+    );
 
     const a = String(coverHtml({ id: 'x1', title: 'Final Fantasy Tactics', plays: [] }));
     const b = String(coverHtml({ id: 'x1', title: 'Final Fantasy Tactics', plays: [] }));

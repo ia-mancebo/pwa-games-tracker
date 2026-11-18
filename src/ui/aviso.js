@@ -12,7 +12,11 @@
  */
 import { html, qs } from '../lib/dom.js';
 import { formatClock } from '../lib/format.js';
-import { counterElapsedSeconds, firstPendingGame, pendingSegmentCount } from '../domain/selectors.js';
+import {
+  counterElapsedSeconds,
+  firstPendingGame,
+  pendingSegmentCount,
+} from '../domain/selectors.js';
 import { pauseCounter } from '../data/ficha.js';
 import { store } from '../app.js';
 import * as nav from '../navigation.js';
@@ -89,9 +93,9 @@ function structuralKey(state) {
 function avisoHtml(state) {
   const clock =
     state.counting && state.counter
-      ? html`<span class="mono aviso-live" data-aviso-live>${formatClock(
-          elapsedSeconds(state.counter, Date.now())
-        )}</span>`
+      ? html`<span class="mono aviso-live" data-aviso-live
+          >${formatClock(elapsedSeconds(state.counter, Date.now()))}</span
+        >`
       : '';
   const pending =
     state.pending > 0

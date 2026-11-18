@@ -30,15 +30,20 @@ const DIMENSIONS = [
  */
 function hbarHtml(rows) {
   const max = Math.max(1, ...rows.map((r) => r.count));
-  return html`<div class="hbar">${rows.map((r) =>
-    html`<div class="hb">
-        <span title="${r.name}">${r.name}</span>
-        <span class="bar"
-          ><i style="width:${r.count === 0 ? 0 : Math.max(4, Math.round((r.count / max) * 100))}%"></i
-        ></span>
-        <span class="n">${r.count}</span>
-      </div>`,
-  )}</div>`;
+  return html`<div class="hbar">
+    ${rows.map(
+      (r) =>
+        html`<div class="hb">
+          <span title="${r.name}">${r.name}</span>
+          <span class="bar"
+            ><i
+              style="width:${r.count === 0 ? 0 : Math.max(4, Math.round((r.count / max) * 100))}%"
+            ></i
+          ></span>
+          <span class="n">${r.count}</span>
+        </div>`
+    )}
+  </div>`;
 }
 
 /**
@@ -75,15 +80,18 @@ function topSectionHtml(top) {
     ${
       top.length === 0
         ? html`<p class="d-meta">Sin valoraciones todavía.</p>`
-        : html`<ol class="top-list">${top.map((t) =>
-              html`<li>
-                <button type="button" class="top-row" data-game-id="${t.game.id}">
-                  ${coverHtml(t.game, { mini: true })}
-                  <span class="t-title">${t.game.title}</span>
-                  ${starsHtml(t.rating)}
-                </button>
-              </li>`,
-            )}</ol>`
+        : html`<ol class="top-list">
+            ${top.map(
+              (t) =>
+                html`<li>
+                  <button type="button" class="top-row" data-game-id="${t.game.id}">
+                    ${coverHtml(t.game, { mini: true })}
+                    <span class="t-title">${t.game.title}</span>
+                    ${starsHtml(t.rating)}
+                  </button>
+                </li>`
+            )}
+          </ol>`
     }
   </section>`;
 }
@@ -103,7 +111,7 @@ function timeSectionHtml(timeStats) {
         (status) =>
           html`<span class="chip static st-${status}"
             >${STATUS_LABELS[status]}: ${formatRoundedHours(timeStats.byStatus[status])}</span
-          >`,
+          >`
       )}
     </div>
   </section>`;
@@ -140,16 +148,23 @@ function bodyHtml(doc, stats, timeStats) {
       ]}
     </div>
     <div class="stats-grid">
-      <section class="cardbox"><h3>Por plataforma</h3>${distBodyHtml(stats.byPlatform)}</section>
-      <section class="cardbox"><h3>Por género</h3>${distBodyHtml(stats.byGenre)}</section>
-      <section class="cardbox"
-        ><h3>Etiquetas propias</h3>${distBodyHtml(stats.byTag)}</section
-      >
-      <section class="cardbox"
-        ><h3>Terminados en el tiempo</h3>${distBodyHtml(months)}</section
-      >
-      ${timeSectionHtml(timeStats)}
-      ${topSectionHtml(stats.top5)}
+      <section class="cardbox">
+        <h3>Por plataforma</h3>
+        ${distBodyHtml(stats.byPlatform)}
+      </section>
+      <section class="cardbox">
+        <h3>Por género</h3>
+        ${distBodyHtml(stats.byGenre)}
+      </section>
+      <section class="cardbox">
+        <h3>Etiquetas propias</h3>
+        ${distBodyHtml(stats.byTag)}
+      </section>
+      <section class="cardbox">
+        <h3>Terminados en el tiempo</h3>
+        ${distBodyHtml(months)}
+      </section>
+      ${timeSectionHtml(timeStats)} ${topSectionHtml(stats.top5)}
     </div>`;
 }
 
@@ -184,12 +199,11 @@ function wire(container, store) {
     }
     const chip = clicked.closest('[data-f-platform],[data-f-genre],[data-f-tag]');
     if (chip instanceof HTMLElement) {
-      const dim =
-        chip.hasAttribute('data-f-platform')
-          ? 'platform'
-          : chip.hasAttribute('data-f-genre')
-            ? 'genre'
-            : 'tag';
+      const dim = chip.hasAttribute('data-f-platform')
+        ? 'platform'
+        : chip.hasAttribute('data-f-genre')
+          ? 'genre'
+          : 'tag';
       const value = chip.getAttribute(`data-f-${dim}`);
       setStatsFilter(store, dim, value === '' || value == null ? null : value);
       return;
@@ -228,17 +242,17 @@ export function render(container, store) {
       <div class="filters">
         ${DIMENSIONS.map((dim) =>
           chipRowHtml({
-              dim: dim.key,
-              label: dim.label,
-              values:
-                dim.key === 'platform'
-                  ? options.platforms
-                  : dim.key === 'genre'
-                    ? options.genres
-                    : options.tags,
-              active: filters[dim.key],
-              allLabel: 'Todas',
-            }),
+            dim: dim.key,
+            label: dim.label,
+            values:
+              dim.key === 'platform'
+                ? options.platforms
+                : dim.key === 'genre'
+                  ? options.genres
+                  : options.tags,
+            active: filters[dim.key],
+            allLabel: 'Todas',
+          })
         )}
       </div>
     </div>

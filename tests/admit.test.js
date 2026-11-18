@@ -34,7 +34,9 @@ describe('admit', () => {
 
   it('normaliza espacios y barra final en ambos lados y no distingue mayúsculas', () => {
     expect(admit(req(searchUrl, { origin: `${OTHER}/` }), ENV)).toBeNull();
-    expect(admit(req(searchUrl, { origin: APP }), { ALLOWED_ORIGINS: ` ${APP.toUpperCase()} ` })).toBeNull();
+    expect(
+      admit(req(searchUrl, { origin: APP }), { ALLOWED_ORIGINS: ` ${APP.toUpperCase()} ` })
+    ).toBeNull();
   });
 
   it('rechaza sin cabecera Origin (curl, scripts, barra del navegador)', async () => {
@@ -54,9 +56,17 @@ describe('admit', () => {
   it('no confunde prefijos, subdominios ni puertos', () => {
     /** @type {(origin: string) => { ALLOWED_ORIGINS?: string }} */
     const singles = (origin) => ({ ALLOWED_ORIGINS: origin });
-    expect(admit(req('https://x.io/', { origin: 'https://app.io.evil.com' }), singles('https://app.io'))?.status).toBe(403);
-    expect(admit(req('https://x.io/', { origin: 'https://app.io.evil.com' }), singles('app.io'))?.status).toBe(403);
-    expect(admit(req('https://x.io/', { origin: 'https://app.io:8443' }), singles('https://app.io'))?.status).toBe(403);
+    expect(
+      admit(req('https://x.io/', { origin: 'https://app.io.evil.com' }), singles('https://app.io'))
+        ?.status
+    ).toBe(403);
+    expect(
+      admit(req('https://x.io/', { origin: 'https://app.io.evil.com' }), singles('app.io'))?.status
+    ).toBe(403);
+    expect(
+      admit(req('https://x.io/', { origin: 'https://app.io:8443' }), singles('https://app.io'))
+        ?.status
+    ).toBe(403);
   });
 
   it('falla cerrado si la secret falta o queda vacía', () => {

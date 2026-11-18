@@ -5,3 +5,5 @@ coverage/
 public/fonts/
 public/icons/
 package-lock.json
+.worktrees/
+.scratch/

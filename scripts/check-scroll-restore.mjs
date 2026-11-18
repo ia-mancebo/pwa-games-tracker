@@ -206,7 +206,9 @@ async function main() {
       return window.scrollY;
     }, scrollTarget);
     if (started !== scrollTarget) {
-      throw new Error(`RED: la Estantería no scrollea (scrollY=${started}, objetivo ${scrollTarget})`);
+      throw new Error(
+        `RED: la Estantería no scrollea (scrollY=${started}, objetivo ${scrollTarget})`
+      );
     }
 
     // El contrato: el atrás repone el scroll que la Estantería tenía EN EL

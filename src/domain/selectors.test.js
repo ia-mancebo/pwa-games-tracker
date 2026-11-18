@@ -92,7 +92,14 @@ describe('sortGamesByRecency', () => {
 
 describe('ratings', () => {
   it('gameRating promedia jugadas valoradas; null si ninguna', () => {
-    expect(gameRating(game('A', [{ rating: 4, addedAt: TODAY }, { rating: 5, addedAt: TODAY }]))).toBe(4.5);
+    expect(
+      gameRating(
+        game('A', [
+          { rating: 4, addedAt: TODAY },
+          { rating: 5, addedAt: TODAY },
+        ])
+      )
+    ).toBe(4.5);
     expect(gameRating(game('B', [{ addedAt: TODAY }]))).toBeNull();
     expect(gameRating(game('C', [{ rating: 3, addedAt: TODAY }, { addedAt: TODAY }]))).toBe(3);
   });
@@ -105,7 +112,10 @@ describe('ratings', () => {
   it('avgRatingOfGames sobre todas las jugadas valoradas', () => {
     const games = [
       game('A', [{ rating: 5, addedAt: TODAY }]),
-      game('B', [{ rating: 2, addedAt: TODAY }, { rating: 4, addedAt: TODAY }]),
+      game('B', [
+        { rating: 2, addedAt: TODAY },
+        { rating: 4, addedAt: TODAY },
+      ]),
     ];
     expect(avgRatingOfGames(games)).toBe(3.7);
     expect(avgRatingOfGames([game('C', [{ addedAt: TODAY }])])).toBeNull();
@@ -120,7 +130,10 @@ describe('shelfData', () => {
       updatedAt: '2026-08-24T00:00:00Z',
       games: [
         game('Terminado1', [{ status: 'finished', addedAt: '2026-01-01', rating: 4 }]),
-        game('Jugando1', [{ status: 'finished', addedAt: '2026-01-01' }, { status: 'playing', addedAt: '2026-05-01', rating: 5 }]),
+        game('Jugando1', [
+          { status: 'finished', addedAt: '2026-01-01' },
+          { status: 'playing', addedAt: '2026-05-01', rating: 5 },
+        ]),
         game('Quiero1', [{ status: 'backlog', addedAt: '2026-02-01' }]),
         game('Abandonado1', [{ status: 'abandoned', addedAt: '2026-03-01', rating: 2 }]),
       ],
@@ -248,11 +261,29 @@ describe('contador y tramos', () => {
   it('pendingSegmentCount cuenta los tramos pendientes de toda la biblioteca', () => {
     const a = {
       ...game('A', [{ addedAt: TODAY }]),
-      plays: [{ id: 'a-p0', status: 'playing', addedAt: TODAY, playedSeconds: 60, pendingSegments: [{ id: 's1', seconds: 10 }, { id: 's2', seconds: 20 }] }],
+      plays: [
+        {
+          id: 'a-p0',
+          status: 'playing',
+          addedAt: TODAY,
+          playedSeconds: 60,
+          pendingSegments: [
+            { id: 's1', seconds: 10 },
+            { id: 's2', seconds: 20 },
+          ],
+        },
+      ],
     };
     const b = {
       ...game('B', [{ addedAt: TODAY }]),
-      plays: [{ id: 'b-p0', status: 'finished', addedAt: TODAY, pendingSegments: [{ id: 's3', seconds: 5 }] }],
+      plays: [
+        {
+          id: 'b-p0',
+          status: 'finished',
+          addedAt: TODAY,
+          pendingSegments: [{ id: 's3', seconds: 5 }],
+        },
+      ],
     };
     const clean = game('C', [{ addedAt: TODAY }]);
     expect(pendingSegmentCount(doc({ games: [a, b, clean] }))).toBe(3);

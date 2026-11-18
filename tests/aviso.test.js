@@ -214,7 +214,9 @@ describe('aviso de contador (ticket 08)', () => {
     expect(store.get().library.gameId).toBeNull();
     expect(qs('[data-aviso-live]', root)).toBeNull();
     expect(qs('[data-aviso-pause]', root)).toBeNull();
-    expect(need(qs('[data-aviso-pendientes]', root)).getAttribute('data-aviso-pendientes')).toBe('1');
+    expect(need(qs('[data-aviso-pendientes]', root)).getAttribute('data-aviso-pendientes')).toBe(
+      '1'
+    );
   });
 
   it('señala los Tramos pendientes con el Contador en marcha', async () => {

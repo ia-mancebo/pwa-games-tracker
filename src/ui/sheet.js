@@ -163,8 +163,7 @@ export function openSheet({
   closeClass = 'chip',
 }) {
   if (current) tearDown(current);
-  const focusTarget =
-    document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const focusTarget = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const layer = document.createElement('div');
   layer.className = `add-layer fade${layerClass ? ` ${layerClass}` : ''}`;
   const head = title

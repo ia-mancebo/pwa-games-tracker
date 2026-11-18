@@ -7,10 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import './support/storage.js';
 import { store } from '../src/app.js';
 import { importDoc, initLibrary, newLibrary } from '../src/data/library.js';
-import {
-  openReconnectModal,
-  resetReconnectModal,
-} from '../src/ui/reconnectModal.js';
+import { openReconnectModal, resetReconnectModal } from '../src/ui/reconnectModal.js';
 import { qs } from '../src/lib/dom.js';
 
 /** @param {Element | null} el @returns {HTMLElement} */
@@ -68,7 +65,15 @@ describe('modal de reconexión', () => {
     await newLibrary(new Date());
     openReconnectModal();
     expect(qs('.reconnect-layer', document.body)).toBeTruthy();
-    store.set({ file: { status: 'connected', name: 'game-tracker.json', error: null, conflict: null, saving: false } });
+    store.set({
+      file: {
+        status: 'connected',
+        name: 'game-tracker.json',
+        error: null,
+        conflict: null,
+        saving: false,
+      },
+    });
     expect(qs('.reconnect-layer', document.body)).toBeNull();
   });
 
@@ -79,8 +84,16 @@ describe('modal de reconexión', () => {
       version: 1,
       updatedAt: '2026-08-23T10:00:00Z',
       games: [
-        { id: 'g1', title: 'Hades', plays: [{ id: 'g1-p1', status: 'playing', addedAt: '2026-07-01' }] },
-        { id: 'g2', title: 'Coco', plays: [{ id: 'g2-p1', status: 'finished', addedAt: '2026-06-01' }] },
+        {
+          id: 'g1',
+          title: 'Hades',
+          plays: [{ id: 'g1-p1', status: 'playing', addedAt: '2026-07-01' }],
+        },
+        {
+          id: 'g2',
+          title: 'Coco',
+          plays: [{ id: 'g2-p1', status: 'finished', addedAt: '2026-06-01' }],
+        },
       ],
     });
     openReconnectModal();

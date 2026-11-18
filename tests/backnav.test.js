@@ -9,12 +9,7 @@ import './support/storage.js';
 import { createApp, store, freshNovedadesUi } from '../src/app.js';
 import { importDoc, initLibrary } from '../src/data/library.js';
 import { resetNovedadesRefresh } from '../src/data/novedades.js';
-import {
-  installBackNav,
-  navigate,
-  registerSheetCloser,
-  resetBackNav,
-} from '../src/backnav.js';
+import { installBackNav, navigate, registerSheetCloser, resetBackNav } from '../src/backnav.js';
 import { saveSnapshot } from '../src/data/snapshot.js';
 import { qs } from '../src/lib/dom.js';
 // El cierre de hoja real (ticket 2): resetBackNav lo anula y estos tests

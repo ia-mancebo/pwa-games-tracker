@@ -160,10 +160,18 @@ const ESPERADOS = [
 ];
 
 const NOVEDADES_FIXTURE = {
-  recientes: RECIENTES.map((t, i) => fixtureGame(100 + i, t, '2026-08-01', ['Nintendo Switch', 'PC (Steam Deck)'], i)),
-  proximos: PROXIMOS.map((t, i) => fixtureGame(200 + i, t, '2026-09-15', ['Mi emulador de sobremesa portátil'], i + 3)),
-  populares: POPULARES.map((t, i) => fixtureGame(300 + i, t, '2026-07-20', ['PC (Steam Deck)', 'PlayStation 5'], i + 7)),
-  esperados: ESPERADOS.map((t, i) => fixtureGame(400 + i, t, '2026-10-01', ['Nintendo Switch'], i + 11)),
+  recientes: RECIENTES.map((t, i) =>
+    fixtureGame(100 + i, t, '2026-08-01', ['Nintendo Switch', 'PC (Steam Deck)'], i)
+  ),
+  proximos: PROXIMOS.map((t, i) =>
+    fixtureGame(200 + i, t, '2026-09-15', ['Mi emulador de sobremesa portátil'], i + 3)
+  ),
+  populares: POPULARES.map((t, i) =>
+    fixtureGame(300 + i, t, '2026-07-20', ['PC (Steam Deck)', 'PlayStation 5'], i + 7)
+  ),
+  esperados: ESPERADOS.map((t, i) =>
+    fixtureGame(400 + i, t, '2026-10-01', ['Nintendo Switch'], i + 11)
+  ),
   generatedAt: new Date().toISOString(),
 };
 
@@ -250,7 +258,14 @@ async function startServer() {
   console.error('[harness] dev server falló 2 veces → vite build + preview');
   const build = spawnVite(['build']);
   await new Promise((resolve) => build.child.on('exit', resolve));
-  const preview = spawnVite(['preview', '--port', String(PORT), '--strictPort', '--host', '127.0.0.1']);
+  const preview = spawnVite([
+    'preview',
+    '--port',
+    String(PORT),
+    '--strictPort',
+    '--host',
+    '127.0.0.1',
+  ]);
   const ready = await waitForServer(APP_URL, 20000);
   if (!ready) {
     preview.child.kill();
@@ -371,9 +386,13 @@ async function clickSel(page, selector) {
 async function editField(page, field, value) {
   await clickSel(page, `[data-edit-field="${field}"]`);
   await page.waitForSelector(`[data-field-form="${field}"]`, { timeout: 5000 });
-  await page.$eval(`[data-field-form="${field}"] [data-field-input]`, (el, v) => {
-    el.value = v;
-  }, value);
+  await page.$eval(
+    `[data-field-form="${field}"] [data-field-input]`,
+    (el, v) => {
+      el.value = v;
+    },
+    value
+  );
   await clickSel(page, `[data-field-form="${field}"] [data-field-save]`);
   // El guardado es asíncrono (IDB): el formulario se cierra al instante pero el
   // re-render con el valor persistido llega después. Esperar a que el DOM lo
@@ -400,7 +419,9 @@ async function runViewport(browser, vp) {
   const measure = async (label) => {
     const r = await measurePage(page, vp.width);
     const ok = !r.pageOverflows && r.overflowers.length === 0;
-    console.log(`  ${ok ? 'GREEN' : 'RED'} ${label}: docW=${r.docW} vw=${r.vw} innerWidth=${r.innerWidth} overflowers=${r.overflowers.length}`);
+    console.log(
+      `  ${ok ? 'GREEN' : 'RED'} ${label}: docW=${r.docW} vw=${r.vw} innerWidth=${r.innerWidth} overflowers=${r.overflowers.length}`
+    );
     if (!ok) {
       failures.push(label);
       console.log(JSON.stringify(r, null, 2));
@@ -412,7 +433,13 @@ async function runViewport(browser, vp) {
 
   try {
     await page.emulate({
-      viewport: { width: vp.width, height: vp.height, isMobile: true, deviceScaleFactor: 2, hasTouch: true },
+      viewport: {
+        width: vp.width,
+        height: vp.height,
+        isMobile: true,
+        deviceScaleFactor: 2,
+        hasTouch: true,
+      },
       userAgent: UA,
     });
     await page.setRequestInterception(true);
@@ -466,13 +493,21 @@ async function runViewport(browser, vp) {
     for (const game of GAMES) {
       await clickSel(page, '[data-add-game]');
       await page.waitForSelector('[data-manual-pane]', { timeout: 5000 });
-      await page.$eval('input[name="title"]', (el, v) => {
-        el.value = v;
-      }, game.title);
+      await page.$eval(
+        'input[name="title"]',
+        (el, v) => {
+          el.value = v;
+        },
+        game.title
+      );
       await clickSel(page, `.status-chip[data-status="${game.status}"]`);
-      await page.$eval('input[name="tags"]', (el, v) => {
-        el.value = v;
-      }, game.tags);
+      await page.$eval(
+        'input[name="tags"]',
+        (el, v) => {
+          el.value = v;
+        },
+        game.tags
+      );
       await clickSel(page, '[data-save-add]');
       await page.waitForFunction(() => !document.querySelector('.add-layer'), { timeout: 5000 });
     }
@@ -504,9 +539,13 @@ async function runViewport(browser, vp) {
     // Conexión al proxy (fixtures) vía diálogo Datos.
     await clickSel(page, '.bar-datos');
     await page.waitForSelector('[data-worker-url]', { timeout: 5000 });
-    await page.$eval('[data-worker-url]', (el, v) => {
-      el.value = v;
-    }, WORKER_URL);
+    await page.$eval(
+      '[data-worker-url]',
+      (el, v) => {
+        el.value = v;
+      },
+      WORKER_URL
+    );
     await clickSel(page, '[data-save-worker]');
     await page.waitForFunction(
       () => document.querySelector('[data-sheet-body]')?.textContent.includes('Conexión guardada'),
@@ -519,10 +558,14 @@ async function runViewport(browser, vp) {
     // (regresión: la galería de la previsualización desbordaba la tarjeta).
     await clickSel(page, '[data-add-game]');
     await page.waitForSelector('input[name="online-query"]', { timeout: 5000 });
-    await page.$eval('input[name="online-query"]', (el, v) => {
-      el.value = v;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-    }, 'zelda');
+    await page.$eval(
+      'input[name="online-query"]',
+      (el, v) => {
+        el.value = v;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      },
+      'zelda'
+    );
     await page.waitForSelector('.add-result', { timeout: 8000 });
     await measure('Alta búsqueda online (resultados)');
     await clickSel(page, '.add-result');
@@ -552,7 +595,9 @@ async function runViewport(browser, vp) {
 
     // Novedades: refresco con fixtures → tablón real.
     await clickSel(page, '[data-tab="novedades"]');
-    await page.waitForSelector('[data-nov] .shelf, [data-retry], [data-refresh]', { timeout: 15000 });
+    await page.waitForSelector('[data-nov] .shelf, [data-retry], [data-refresh]', {
+      timeout: 15000,
+    });
     const hasShelf = await page.$('[data-nov] .shelf');
     if (!hasShelf) {
       const retry = await page.$('[data-retry]');
@@ -651,7 +696,9 @@ try {
     console.log(`\n=== ${vp.label} ===`);
     const failures = await runViewport(browser, vp);
     totalFailures += failures.length;
-    console.log(`  → ${vp.label}: ${SURFACE_COUNT - failures.length}/${SURFACE_COUNT} superficies GREEN`);
+    console.log(
+      `  → ${vp.label}: ${SURFACE_COUNT - failures.length}/${SURFACE_COUNT} superficies GREEN`
+    );
   }
 } finally {
   clearTimeout(watchdog);

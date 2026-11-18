@@ -41,8 +41,16 @@ describe('computeStats · recuentos por Estado del juego', () => {
           { id: 'p2', status: 'playing', addedAt: '2026-07-01' },
         ],
       }),
-      game({ id: 'b', title: 'Celeste', plays: [{ id: 'p3', status: 'backlog', addedAt: '2026-03-01' }] }),
-      game({ id: 'c', title: 'Gris', plays: [{ id: 'p4', status: 'abandoned', addedAt: '2026-04-01' }] }),
+      game({
+        id: 'b',
+        title: 'Celeste',
+        plays: [{ id: 'p3', status: 'backlog', addedAt: '2026-03-01' }],
+      }),
+      game({
+        id: 'c',
+        title: 'Gris',
+        plays: [{ id: 'p4', status: 'abandoned', addedAt: '2026-04-01' }],
+      }),
     ]);
     expect(computeStats(d, NONE, NOW).counts).toEqual({
       backlog: 1,
@@ -61,7 +69,11 @@ describe('computeStats · recuentos por Estado del juego', () => {
           { id: 'p2', status: 'playing', addedAt: '2026-07-01', rating: 3 },
         ],
       }),
-      game({ id: 'b', title: 'Celeste', plays: [{ id: 'p3', status: 'backlog', addedAt: '2026-03-01' }] }),
+      game({
+        id: 'b',
+        title: 'Celeste',
+        plays: [{ id: 'p3', status: 'backlog', addedAt: '2026-03-01' }],
+      }),
     ]);
     const s = computeStats(d, NONE, NOW);
     expect(s.total).toBe(2);
@@ -85,7 +97,12 @@ describe('computeStats · distribuciones', () => {
         ],
         plays: [
           { id: 'p1', status: 'playing', addedAt: '2026-01-01' },
-          { id: 'p2', status: 'backlog', addedAt: '2026-02-01', platform: { id: null, name: 'Emulador' } },
+          {
+            id: 'p2',
+            status: 'backlog',
+            addedAt: '2026-02-01',
+            platform: { id: null, name: 'Emulador' },
+          },
         ],
       }),
       game({
@@ -193,9 +210,21 @@ describe('computeStats · terminados en el tiempo', () => {
 describe('computeStats · top 5', () => {
   it('orden por media desc con desempate alfabético', () => {
     const d = doc([
-      game({ id: 'a', title: 'Zelda', plays: [{ id: 'p1', status: 'finished', addedAt: '2026-01-01', rating: 4 }] }),
-      game({ id: 'b', title: 'Braid', plays: [{ id: 'p1', status: 'finished', addedAt: '2026-01-01', rating: 5 }] }),
-      game({ id: 'c', title: 'Apex', plays: [{ id: 'p1', status: 'finished', addedAt: '2026-01-01', rating: 5 }] }),
+      game({
+        id: 'a',
+        title: 'Zelda',
+        plays: [{ id: 'p1', status: 'finished', addedAt: '2026-01-01', rating: 4 }],
+      }),
+      game({
+        id: 'b',
+        title: 'Braid',
+        plays: [{ id: 'p1', status: 'finished', addedAt: '2026-01-01', rating: 5 }],
+      }),
+      game({
+        id: 'c',
+        title: 'Apex',
+        plays: [{ id: 'p1', status: 'finished', addedAt: '2026-01-01', rating: 5 }],
+      }),
     ]);
     const top = computeStats(d, NONE, NOW).top5;
     expect(top.map((t) => t.game.title)).toEqual(['Apex', 'Braid', 'Zelda']);
@@ -207,10 +236,14 @@ describe('computeStats · top 5', () => {
       game({
         id: `r${i}`,
         title: `Rated ${i}`,
-        plays: [{ id: 'p1', status: 'finished', addedAt: '2026-01-01', rating: ((i % 5) + 1) }],
-      }),
+        plays: [{ id: 'p1', status: 'finished', addedAt: '2026-01-01', rating: (i % 5) + 1 }],
+      })
     );
-    const unrated = game({ id: 'x', title: 'Sin nota', plays: [{ id: 'p1', status: 'backlog', addedAt: '2026-01-01' }] });
+    const unrated = game({
+      id: 'x',
+      title: 'Sin nota',
+      plays: [{ id: 'p1', status: 'backlog', addedAt: '2026-01-01' }],
+    });
     const top = computeStats(doc([...rated, unrated]), NONE, NOW).top5;
     expect(top).toHaveLength(5);
     expect(top.map((t) => t.rating)).toEqual([5, 4, 3, 2, 2]);
@@ -254,7 +287,9 @@ describe('computeStats · filtros', () => {
     expect(computeStats(d, { platform: 'Switch', genre: null, tag: null }, NOW).total).toBe(1);
     expect(computeStats(d, { platform: 'Switch', genre: 'RPG', tag: null }, NOW).total).toBe(1);
     expect(computeStats(d, { platform: null, genre: null, tag: 'indie' }, NOW).total).toBe(2);
-    expect(computeStats(d, { platform: 'Switch', genre: 'Plataformas', tag: null }, NOW).total).toBe(0);
+    expect(
+      computeStats(d, { platform: 'Switch', genre: 'Plataformas', tag: null }, NOW).total
+    ).toBe(0);
   });
 
   it('un valor desconocido deja todo a cero y vacío', () => {
@@ -323,7 +358,12 @@ describe('computeTimeStats', () => {
         plays: [
           { id: 'p1', status: 'playing', addedAt: '2026-01-01', playedSeconds: 90 },
           { id: 'p2', status: 'finished', addedAt: '2026-02-01' },
-          { id: 'p3', status: 'backlog', addedAt: '2026-03-01', pendingSegments: [{ id: 's1', seconds: 60 }] },
+          {
+            id: 'p3',
+            status: 'backlog',
+            addedAt: '2026-03-01',
+            pendingSegments: [{ id: 's1', seconds: 60 }],
+          },
         ],
       }),
     ]);
@@ -358,10 +398,13 @@ describe('computeTimeStats', () => {
 
   it('now no afecta al cálculo: solo consolidado, sin reloj', () => {
     const d = doc([
-      game({ id: 'a', plays: [{ id: 'p1', status: 'playing', addedAt: '2026-01-01', playedSeconds: 60 }] }),
+      game({
+        id: 'a',
+        plays: [{ id: 'p1', status: 'playing', addedAt: '2026-01-01', playedSeconds: 60 }],
+      }),
     ]);
     expect(computeTimeStats(d, new Date('2027-01-01T00:00:00Z'))).toEqual(
-      computeTimeStats(d, new Date('1999-01-01T00:00:00Z')),
+      computeTimeStats(d, new Date('1999-01-01T00:00:00Z'))
     );
   });
 });

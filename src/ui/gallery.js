@@ -42,9 +42,7 @@ export function wireGallery(container) {
     const shot = e.target.closest('[data-shot]');
     if (!shot) return;
     const shots = [...container.querySelectorAll('[data-shot]')];
-    const urls = shots
-      .map((s) => s.getAttribute('data-shot'))
-      .filter((u) => u !== null);
+    const urls = shots.map((s) => s.getAttribute('data-shot')).filter((u) => u !== null);
     if (urls.length === 0) return;
     openLightbox(urls, Math.max(0, shots.indexOf(shot)));
   });
