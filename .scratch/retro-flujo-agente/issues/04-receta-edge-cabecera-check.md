@@ -4,9 +4,13 @@
 
 **Blocked by:** 01 (el barrido reformatea el archivo que este ticket comenta; el comentario nace sobre la base barrida).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Comentario solo: cero cambio de comportamiento en el script.
-- [ ] La receta incluye el porqué (acceso denegado de la vía directa) y qué es huérfano frente a sesión del usuario.
-- [ ] Corrida del check EXIT=0 con delta Edge 0 antes/después, citada en el ticket.
-- [ ] Puertas en verde tras el cambio: typecheck, lint, test, format:check.
+- [x] Comentario solo: cero cambio de comportamiento en el script.
+- [x] La receta incluye el porqué (acceso denegado de la vía directa) y qué es huérfano frente a sesión del usuario.
+- [x] Corrida del check EXIT=0 con delta Edge 0 antes/después, citada en el ticket.
+- [x] Puertas en verde tras el cambio: typecheck, lint, test, format:check.
+
+## Comentarios
+
+- 2026-11-18: Receta de huérfanos Edge añadida a la cabecera de `scripts/check-scroll-restore.mjs`, co-localizada con la cabecera de siembra (comentario solo: 12 inserciones / 0 borrados, cero cambio de comportamiento). La receta cubre los tres puntos: (1) contar los procesos msedge antes/después de la corrida (`Get-Process msedge`) y exigir delta 0; (2) distinguir huérfano de la sesión normal del usuario por el perfil — el huérfano apunta al perfil temporal que lanza el script, no a `--user-data-dir=...\Microsoft\Edge\User Data`; (3) el porqué: la vía de línea de comandos directa por WMI (`Get-CimInstance`) da acceso denegado en esta máquina, y la receta que funciona es conteo por proceso + inspección con las herramientas alternativas (`Get-Process` para el conteo, `wmic process where "name='msedge.exe'" get commandline` para la CommandLine). Evidencia de mi corrida (UNA corrida de `npm run test:scroll`): EXIT=0, veredicto GREEN («Ficha y drill-down arriba; Estantería, tablón y Panel restaurados tras el volver»); procesos msedge antes = 9, después = 9 (delta 0, sin huérfanos); la inspección por `wmic` muestra los 9 con `--user-data-dir=...\Microsoft\Edge\User Data` (sesión normal del usuario), ninguno apuntando al perfil temporal — cifras que coinciden con la corrida previa del ticket de verificación de guardrails-navegador (9/9, delta 0, tomada como referencia; la mía manda). Puertas en verde: `npm run typecheck`, `npm run lint`, `npm test` (47 archivos, 698 tests), `npm run format:check`. Nota de entorno: en un checkout recién creado con `core.autocrlf=true` los archivos salen con CRLF y `format:check` marca los 146 archivos del barrido (prettier `endOfLine: lf` por defecto); `npm run format` los materializa a LF sin diff en git y la puerta queda verde (mismo estado en que el barrido dejó su worktree). Commit: `740052e`.
