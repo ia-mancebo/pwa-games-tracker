@@ -19,9 +19,9 @@ IGDB exige un token de OAuth de Twitch, y Twitch exige una aplicación registrad
 
 1. Activa el 2FA si no lo tienes: <https://www.twitch.tv/settings/security>.
 2. Entra en <https://dev.twitch.tv/console> → **Register Your Application**:
-   - *Name*: `game-tracker-proxy` (o el que prefieras).
-   - *OAuth Redirect URLs*: `http://localhost` (obligatorio rellenar algo; este flujo nunca hace redirect).
-   - *Category*: `Application Integration`.
+   - _Name_: `game-tracker-proxy` (o el que prefieras).
+   - _OAuth Redirect URLs_: `http://localhost` (obligatorio rellenar algo; este flujo nunca hace redirect).
+   - _Category_: `Application Integration`.
 3. Copia el **Client ID** y genera un **Client Secret** (solo se muestra una vez).
 
 > Nunca pegues estos valores en el código ni en el repo: solo en los secrets del Worker (paso 2).
@@ -36,7 +36,8 @@ IGDB exige un token de OAuth de Twitch, y Twitch exige una aplicación registrad
    - `CLIENT_SECRET` → el Client Secret de Twitch.
    - `ALLOWED_ORIGINS` → tu origen de GitHub Pages: `https://<tu-usuario>.github.io` — sin ruta ni barra final (varios: separados por comas).
 
-    Detalles y errores típicos: [`worker/README.md`, paso 3](./worker/README.md#3--configurar-los-secretos-5-min).
+   Detalles y errores típicos: [`worker/README.md`, paso 3](./worker/README.md#3--configurar-los-secretos-5-min).
+
 5. Apunta tu URL: `https://<nombre-worker>.<subdominio>.workers.dev`.
 
 Verifica desde un terminal (`curl.exe` viene con Windows):
@@ -61,7 +62,7 @@ Abre tu app desplegada (paso 4) y pulsa **Datos** → sección **Conexión**: pe
 
 1. Crea un repositorio llamado **`game-tracker`** y sube este código a la rama `main`. El nombre importa: la app se construye con base `/game-tracker/`, que debe coincidir con el repo (si renombras el repo, cambia `base` en `vite.config.js`).
 2. En el repo: **Settings** → **Pages** → **Source**: **GitHub Actions** (así Jekyll no interviene).
-3. Haz push a `main` (o ejecuta **Actions** → *Deploy a GitHub Pages* → **Run workflow**): el workflow [`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml) construye la app y la publica.
+3. Haz push a `main` (o ejecuta **Actions** → _Deploy a GitHub Pages_ → **Run workflow**): el workflow [`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml) construye la app y la publica.
 4. Tu app quedará en `https://<tu-usuario>.github.io/game-tracker/`.
 
 Para actualizar la app basta con nuevos pushes a `main`: el workflow redespliega solo.
@@ -78,14 +79,14 @@ En **Android 11 con Chrome actualizado**:
 2. Menú ⋮ → **Añadir a pantalla de inicio** → **Instalar** (o el banner automático). El icono aparece en el launcher con su variante maskable.
 3. Activa el modo avión y abre la app instalada: debe funcionar la navegación entre pestañas, la biblioteca completa y sus carátulas. **Novedades** entra en modo degradado («Sin conexión — mostrando la última instantánea») si ya descargaste el calendado alguna vez.
 
-En **escritorio (Chrome)**: icono de instalación en la barra de direcciones (o ⋮ → *Instalar Game Tracker*); la ventana standalone funciona igual offline.
+En **escritorio (Chrome)**: icono de instalación en la barra de direcciones (o ⋮ → _Instalar Game Tracker_); la ventana standalone funciona igual offline.
 
 Las actualizaciones de la app se detectan solas al abrirla con conexión: aparecerá «Nueva versión disponible» con botón **Recargar**.
 
 ## Paso 6 · Primer uso
 
 1. La pantalla de bienvenida ofrece dos caminos: **Importar mi game-tracker.json** (si vienes de otra instalación) o **Empezar biblioteca nueva**.
-2. Opcionalmente **conecta un archivo** real del disco (botón **Datos** → *Conectar o importar .json…*): la app escribirá ahí cada vuelco verificado, y ese archivo lo sincronizas entre dispositivos como quieras (Drive, Syncthing, USB…). Sin conectar, la biblioteca vive solo en ese navegador.
+2. Opcionalmente **conecta un archivo** real del disco (botón **Datos** → _Conectar o importar .json…_): la app escribirá ahí cada vuelco verificado, y ese archivo lo sincronizas entre dispositivos como quieras (Drive, Syncthing, USB…). Sin conectar, la biblioteca vive solo en ese navegador.
 3. En **Datos** tienes además exportación manual, nombre sugerido de copia y las **copias de seguridad automáticas** (los últimos 3 vuelcos exitosos, guardados en el almacenamiento privado del navegador) con botón **Restaurar**.
 
 ## Estructura del repo

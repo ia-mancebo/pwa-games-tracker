@@ -63,7 +63,9 @@ function showToast(kind, message, opts = {}) {
  * @param {() => void} onReload
  */
 export function showUpdateToast(onReload) {
-  showToast('update', 'Nueva versión disponible', { action: { label: 'Recargar', onClick: onReload } });
+  showToast('update', 'Nueva versión disponible', {
+    action: { label: 'Recargar', onClick: onReload },
+  });
 }
 
 /** Aviso discreto de app lista para offline; se autodescarta a los ~4 s. */

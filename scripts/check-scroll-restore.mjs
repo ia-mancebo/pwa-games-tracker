@@ -15,6 +15,17 @@
  * (Ficha / sección) y vuelve con `goBack()` o con «← Volver» midiendo el
  * scroll en varios instantes.
  *
+ * Receta de huérfanos Edge (la corrida no debe dejar procesos msedge vivos):
+ * contar los procesos msedge antes y después de la corrida (p. ej.
+ * `Get-Process msedge`) y exigir delta 0. Para distinguir un huérfano de la
+ * sesión normal del usuario basta el perfil: el huérfano apunta al perfil
+ * temporal que lanza este script, no al perfil del navegador del usuario
+ * (`--user-data-dir=...\Microsoft\Edge\User Data`). Nota: la vía de
+ * PowerShell por CIM/WMI da acceso denegado en esta máquina (p. ej.
+ * `Get-CimInstance`); la receta que funciona es conteo por proceso
+ * (`Get-Process`) + inspección de la CommandLine con
+ * `wmic process where "name='msedge.exe'" get commandline`.
+ *
  * Uso: npm run test:scroll  (o node scripts/check-scroll-restore.mjs)
  */
 import { spawn } from 'node:child_process';
@@ -206,7 +217,9 @@ async function main() {
       return window.scrollY;
     }, scrollTarget);
     if (started !== scrollTarget) {
-      throw new Error(`RED: la Estantería no scrollea (scrollY=${started}, objetivo ${scrollTarget})`);
+      throw new Error(
+        `RED: la Estantería no scrollea (scrollY=${started}, objetivo ${scrollTarget})`
+      );
     }
 
     // El contrato: el atrás repone el scroll que la Estantería tenía EN EL

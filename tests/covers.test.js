@@ -73,7 +73,10 @@ beforeEach(() => {
   });
   // Red por defecto correcta: el suscriptor dispara en background y ningún
   // test debe depender del fetch real.
-  vi.stubGlobal('fetch', vi.fn(async () => okRes()));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => okRes())
+  );
 });
 
 afterEach(() => {
@@ -105,7 +108,9 @@ async function metaUrls() {
  */
 async function insertAged(url, ageMs) {
   await (await rawCache(COVERS_CACHE)).put(url, okRes());
-  await (await rawCache(COVERS_META_CACHE)).put(url, new globalThis.Response(String(Date.now() - ageMs)));
+  await (
+    await rawCache(COVERS_META_CACHE)
+  ).put(url, new globalThis.Response(String(Date.now() - ageMs)));
 }
 
 /**
@@ -144,14 +149,20 @@ describe('seedCover', () => {
   });
 
   it('acepta respuestas opacas (status 0)', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => opaqueRes()));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => opaqueRes())
+    );
 
     await expect(seedCover(A)).resolves.toBe(true);
     expect(await coverUrls()).toEqual([A]);
   });
 
   it('una respuesta fallida (404) no se persiste', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 404 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false, status: 404 }))
+    );
 
     await expect(seedCover(A)).resolves.toBe(false);
     expect(await coverUrls()).toEqual([]);
@@ -184,7 +195,9 @@ describe('seedCover', () => {
 
 describe('seedCovers', () => {
   it('cuenta solo los éxitos y descarta duplicados', async () => {
-    const fetchMock = vi.fn(async (url) => (String(url) === B ? { ok: false, status: 404 } : okRes()));
+    const fetchMock = vi.fn(async (url) =>
+      String(url) === B ? { ok: false, status: 404 } : okRes()
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(seedCovers([A, A, B, C])).resolves.toBe(2);
@@ -194,7 +207,10 @@ describe('seedCovers', () => {
 
 describe('pruneOrphanCovers', () => {
   it('borra las URLs que ningún juego posee y conserva las vivas', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => okRes()));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => okRes())
+    );
     await Promise.all([seedCover(A), seedCover(B), seedCover(C)]);
 
     const doc = /** @type {import('../src/domain/schema.js').Doc} */ ({
@@ -258,7 +274,10 @@ describe('integración con la biblioteca (initCoverSeeding)', () => {
   });
 
   it('importar un doc distinto poda las huérfanas', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => okRes()));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => okRes())
+    );
 
     await importGames([gameJson('g1', 'Uno', A)]);
     await vi.waitFor(async () => expect(await coverUrls()).toContain(A), { timeout: 2000 });
@@ -268,10 +287,9 @@ describe('integración con la biblioteca (initCoverSeeding)', () => {
 
     await importGames([gameJson('g2', 'Dos', C)]);
 
-    await vi.waitFor(
-      async () => expect(new Set(await coverUrls())).toEqual(new Set([C])),
-      { timeout: 2000 },
-    );
+    await vi.waitFor(async () => expect(new Set(await coverUrls())).toEqual(new Set([C])), {
+      timeout: 2000,
+    });
   });
 
   it('no re-siembra URLs ya intentadas', async () => {

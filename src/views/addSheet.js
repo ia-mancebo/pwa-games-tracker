@@ -163,9 +163,9 @@ function resultItemHtml(result, index) {
     <button type="button" class="add-result" data-result="${index}">
       ${coverHtml(toCoverGame(result))}
       <span class="r-meta"
-        ><span class="r-title">${result.title}</span>${sub
-          ? html`<span class="r-sub">${sub}</span>`
-          : ''}</span
+        ><span class="r-title">${result.title}</span>${
+          sub ? html`<span class="r-sub">${sub}</span>` : ''
+        }</span
       >
     </button>
   </li>`;
@@ -181,9 +181,7 @@ function previewHtml(result) {
   const year = result.releaseDate ? result.releaseDate.slice(0, 4) : '';
   const platforms = (result.platforms ?? []).map((p) => p.name).join(', ');
   const sub = [year, platforms].filter(Boolean).join(' · ');
-  const genres = (result.genres ?? []).map((g) =>
-    html`<span class="chip static">${g.name}</span>`
-  );
+  const genres = (result.genres ?? []).map((g) => html`<span class="chip static">${g.name}</span>`);
   return html`<div class="add-preview">
     ${coverHtml(toCoverGame(result))}
     <div class="add-preview-info">
@@ -261,14 +259,13 @@ export function duplicateWarningHtml(duplicates) {
   return html`<div class="dup-warning" role="alert" data-dup-warning>
     <b>Ya tienes ${duplicates.length === 1 ? 'un juego equivalente' : 'juegos equivalentes'}:</b>
     <ul>
-      ${duplicates
-        .slice(0, MAX_DUP_LIST)
-        .map((game) =>
+      ${duplicates.slice(0, MAX_DUP_LIST).map(
+        (game) =>
           html`<li>
-              <span class="dup-title">${game.title}</span>
-              ${statusPillHtml(gameStatus(game))}
-            </li>`
-        )}
+            <span class="dup-title">${game.title}</span>
+            ${statusPillHtml(gameStatus(game))}
+          </li>`
+      )}
     </ul>
     <div class="dup-actions">
       <button type="button" class="chip" data-dup-open>Abrir ficha existente</button>
@@ -332,25 +329,28 @@ function bodyHtml(state, { onlineReady, configured }) {
         </div>`
     : html`<div data-online-block>${disabledOnlineHtml(configured)}</div>`;
   return html`${onlineBlock}
-      <form class="add-form" data-manual-pane${!onlineReady || state.path === 'manual' ? '' : ' hidden'}>
-        <label class="field">
-          <span class="lbl">Título</span>
-          <input type="text" name="title" placeholder="Escribe el título del juego…" />
-        </label>
-        <fieldset class="field">
-          <legend class="lbl">Estado inicial</legend>
-          <div class="status-chips">${STATUSES.map((st) => statusChipHtml(st))}</div>
-        </fieldset>
-        <label class="field">
-          <span class="lbl">Etiquetas propias <small>(separadas por comas)</small></span>
-          <input type="text" name="tags" placeholder="rol, difícil, prestado…" />
-        </label>
-        <div class="add-feedback" data-add-feedback>${feedbackHtml(state)}</div>
-        <footer class="add-foot">
-          <button type="button" class="chip" data-close-add>Cancelar</button>
-          <button type="submit" class="btn-primary" data-save-add>Añadir a la biblioteca</button>
-        </footer>
-      </form>`;
+    <form
+      class="add-form"
+      data-manual-pane${!onlineReady || state.path === 'manual' ? '' : ' hidden'}
+    >
+      <label class="field">
+        <span class="lbl">Título</span>
+        <input type="text" name="title" placeholder="Escribe el título del juego…" />
+      </label>
+      <fieldset class="field">
+        <legend class="lbl">Estado inicial</legend>
+        <div class="status-chips">${STATUSES.map((st) => statusChipHtml(st))}</div>
+      </fieldset>
+      <label class="field">
+        <span class="lbl">Etiquetas propias <small>(separadas por comas)</small></span>
+        <input type="text" name="tags" placeholder="rol, difícil, prestado…" />
+      </label>
+      <div class="add-feedback" data-add-feedback>${feedbackHtml(state)}</div>
+      <footer class="add-foot">
+        <button type="button" class="chip" data-close-add>Cancelar</button>
+        <button type="submit" class="btn-primary" data-save-add>Añadir a la biblioteca</button>
+      </footer>
+    </form>`;
 }
 
 /**
@@ -442,7 +442,11 @@ export function openAddSheet(opts = {}) {
     const pending = state.pending;
     if (!pending) {
       const titleInput = layerNow ? qs('input[name="title"]', layerNow) : null;
-      return { title: titleInput instanceof HTMLInputElement ? titleInput.value : '', status, tagsRaw };
+      return {
+        title: titleInput instanceof HTMLInputElement ? titleInput.value : '',
+        status,
+        tagsRaw,
+      };
     }
     return {
       title: pending.title,

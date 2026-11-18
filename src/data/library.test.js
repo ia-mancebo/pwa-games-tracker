@@ -115,13 +115,16 @@ describe('importDoc', () => {
 describe('mutate (atomicidad)', () => {
   it('reemplaza el doc y marca dirty', async () => {
     await newLibrary(NOW);
-    const doc = await mutate((d) => {
-      d.games.push({
-        id: 'x1',
-        title: 'Tunic',
-        plays: [{ id: 'xp', status: 'playing', addedAt: TODAY }],
-      });
-    }, { now: NOW });
+    const doc = await mutate(
+      (d) => {
+        d.games.push({
+          id: 'x1',
+          title: 'Tunic',
+          plays: [{ id: 'xp', status: 'playing', addedAt: TODAY }],
+        });
+      },
+      { now: NOW }
+    );
     expect(doc.games).toHaveLength(1);
     expect(store.get().meta.dirty).toBe(true);
   });
@@ -131,9 +134,12 @@ describe('mutate (atomicidad)', () => {
     await addGame({ title: 'Bien', today: TODAY });
     const before = await getState();
     await expect(
-      mutate((d) => {
-        d.games[0].title = '';
-      }, { now: NOW }),
+      mutate(
+        (d) => {
+          d.games[0].title = '';
+        },
+        { now: NOW }
+      )
     ).rejects.toThrow();
     expect(await getState()).toEqual(before);
     expect(store.get().doc?.games[0].title).toBe('Bien');
@@ -216,15 +222,21 @@ describe('mutaciones de dominio', () => {
     await newLibrary(NOW);
     const doc = await addGame({ title: 'Cuphead', today: TODAY });
     const gameId = doc.games[0].id;
-    const after = await mutate((d) => {
-      const g = d.games.find((x) => x.id === gameId);
-      if (g) g.plays.push({ id: 'extra', status: 'playing', addedAt: TODAY });
-    }, { now: NOW });
+    const after = await mutate(
+      (d) => {
+        const g = d.games.find((x) => x.id === gameId);
+        if (g) g.plays.push({ id: 'extra', status: 'playing', addedAt: TODAY });
+      },
+      { now: NOW }
+    );
     expect(after.games[0].plays).toHaveLength(2);
-    const deleted = await mutate((d) => {
-      const idx = d.games.findIndex((x) => x.id === gameId);
-      if (idx !== -1) d.games.splice(idx, 1);
-    }, { now: NOW });
+    const deleted = await mutate(
+      (d) => {
+        const idx = d.games.findIndex((x) => x.id === gameId);
+        if (idx !== -1) d.games.splice(idx, 1);
+      },
+      { now: NOW }
+    );
     expect(deleted.games).toHaveLength(0);
     expect(store.get().doc?.games).toHaveLength(0);
   });
@@ -233,10 +245,13 @@ describe('mutaciones de dominio', () => {
     await newLibrary(NOW);
     const doc = await addGame({ title: 'Mal', today: TODAY });
     const { id } = doc.games[0];
-    const updated = await mutate((d) => {
-      const g = d.games.find((x) => x.id === id);
-      if (g) g.title = 'Bien';
-    }, { now: NOW });
+    const updated = await mutate(
+      (d) => {
+        const g = d.games.find((x) => x.id === id);
+        if (g) g.title = 'Bien';
+      },
+      { now: NOW }
+    );
     expect(updated.games[0].title).toBe('Bien');
   });
 

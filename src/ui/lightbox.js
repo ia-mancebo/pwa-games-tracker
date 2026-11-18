@@ -128,10 +128,20 @@ export function openLightbox(urls, index = 0) {
   lightboxLayer.setAttribute('aria-modal', 'true');
   lightboxLayer.setAttribute('aria-label', 'Captura ampliada');
   lightboxLayer.innerHTML = html`<img src="${lightboxUrls[lightboxIndex]}" alt="Captura ampliada" />
-    <button type="button" class="chip lightbox-nav lightbox-prev" data-lightbox-nav="prev" aria-label="Anterior">
+    <button
+      type="button"
+      class="chip lightbox-nav lightbox-prev"
+      data-lightbox-nav="prev"
+      aria-label="Anterior"
+    >
       ‹
     </button>
-    <button type="button" class="chip lightbox-nav lightbox-next" data-lightbox-nav="next" aria-label="Siguiente">
+    <button
+      type="button"
+      class="chip lightbox-nav lightbox-next"
+      data-lightbox-nav="next"
+      aria-label="Siguiente"
+    >
       ›
     </button>
     <button type="button" class="chip lightbox-close" data-close-lightbox aria-label="Cerrar">

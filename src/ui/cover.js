@@ -58,5 +58,7 @@ export function coverHtml(game, { mini = false } = {}) {
  */
 export function starsHtml(rating) {
   if (rating == null) return html`<span class="stars muted">—</span>`;
-  return html`<span class="stars">${'★'.repeat(rating)}<span class="off">${'☆'.repeat(5 - rating)}</span></span>`;
+  return html`<span class="stars"
+    >${'★'.repeat(rating)}<span class="off">${'☆'.repeat(5 - rating)}</span></span
+  >`;
 }

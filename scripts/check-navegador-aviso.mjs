@@ -180,13 +180,17 @@ async function main() {
     await page.waitForSelector('.shelves [data-game-id]', { timeout: 20000 });
     await page.waitForSelector('[data-aviso-pendientes]', { timeout: 15000 });
     if (await page.$('[data-aviso-live]')) {
-      throw new Error('RED: tras la recarga el reloj sigue vivo en vez de quedar como Tramo pendiente');
+      throw new Error(
+        'RED: tras la recarga el reloj sigue vivo en vez de quedar como Tramo pendiente'
+      );
     }
     const pending = await page.$eval('[data-aviso-pendientes]', (el) =>
       el.getAttribute('data-aviso-pendientes')
     );
     if (pending !== '1') {
-      throw new Error(`RED: tras la recarga el aviso no señala exactamente 1 Tramo pendiente ("${pending}")`);
+      throw new Error(
+        `RED: tras la recarga el aviso no señala exactamente 1 Tramo pendiente ("${pending}")`
+      );
     }
     console.log('  Recarga real: tiempo de pared como 1 Tramo pendiente, sin reloj vivo');
 

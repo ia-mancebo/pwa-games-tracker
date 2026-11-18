@@ -148,8 +148,8 @@ describe('filterGames', () => {
 
     expect(
       filterGames(list, { query: 'zelda', genre: 'RPG', platform: 'PC', tag: null }).map(
-        (g) => g.id,
-      ),
+        (g) => g.id
+      )
     ).toEqual(['zelda']);
   });
 
@@ -183,7 +183,11 @@ describe('chipsForDoc', () => {
         platforms: [{ id: 130, name: 'Switch' }],
         tags: ['difícil', 'coop'],
       }),
-      game({ id: 'c', title: 'C', plays: [{ id: 'c-p1', status: 'backlog', addedAt: '2026-01-03' }] }),
+      game({
+        id: 'c',
+        title: 'C',
+        plays: [{ id: 'c-p1', status: 'backlog', addedAt: '2026-01-03' }],
+      }),
     ]);
     expect(chipsForDoc(d)).toEqual({
       genres: ['Acción', 'RPG'],

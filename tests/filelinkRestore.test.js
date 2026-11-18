@@ -50,13 +50,25 @@ const FILE_V1_TEXT = JSON.stringify({
   schema: 'game-tracker',
   version: 1,
   updatedAt: '2026-08-20T09:30:00Z',
-  games: [{ id: 'g1', title: 'Hades', plays: [{ id: 'g1-p1', status: 'playing', addedAt: '2026-08-01' }] }],
+  games: [
+    {
+      id: 'g1',
+      title: 'Hades',
+      plays: [{ id: 'g1-p1', status: 'playing', addedAt: '2026-08-01' }],
+    },
+  ],
 });
 const FILE_V2_TEXT = JSON.stringify({
   schema: 'game-tracker',
   version: 1,
   updatedAt: '2026-08-23T18:30:00Z',
-  games: [{ id: 'g9', title: 'Celeste', plays: [{ id: 'g9-p1', status: 'finished', addedAt: '2026-08-02' }] }],
+  games: [
+    {
+      id: 'g9',
+      title: 'Celeste',
+      plays: [{ id: 'g9-p1', status: 'finished', addedAt: '2026-08-02' }],
+    },
+  ],
 });
 
 /**
@@ -183,7 +195,9 @@ describe('restoreSavedLink', () => {
       async clear() {},
     });
     setHandle(null);
-    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false } });
+    store.set({
+      file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false },
+    });
     expect(await restoreSavedLink()).toBe('none');
     expect(store.get().file.status).toBe('disconnected');
   });
@@ -192,7 +206,9 @@ describe('restoreSavedLink', () => {
     const handle = makeHandle(FILE_V1_TEXT);
     await connectFile(FILE_V1_TEXT, handle);
     setHandle(null);
-    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false } });
+    store.set({
+      file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false },
+    });
 
     expect(await restoreSavedLink()).toBe('connected');
     expect(store.get().file.status).toBe('connected');
@@ -205,7 +221,9 @@ describe('restoreSavedLink', () => {
     const handle = makeHandle(FILE_V1_TEXT);
     await connectFile(FILE_V1_TEXT, handle);
     setHandle(null); // nueva sesión sin handle en memoria
-    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false } });
+    store.set({
+      file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false },
+    });
     await addGame({ title: 'Extra', today: TODAY });
     expect(store.get().meta.dirty).toBe(true);
 
@@ -229,7 +247,9 @@ describe('restoreSavedLink', () => {
     await connectFile(FILE_V1_TEXT, handle);
     handle.setText(FILE_V2_TEXT); // cambió fuera mientras no mirábamos
     setHandle(null);
-    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false } });
+    store.set({
+      file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false },
+    });
     await addGame({ title: 'Extra', today: TODAY });
 
     expect(await restoreSavedLink()).toBe('connected');
@@ -243,7 +263,9 @@ describe('restoreSavedLink', () => {
     await connectFile(FILE_V1_TEXT, handle);
     handle.setText(FILE_V2_TEXT);
     setHandle(null);
-    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false } });
+    store.set({
+      file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false },
+    });
 
     expect(await restoreSavedLink()).toBe('connected');
     expect(store.get().doc?.games[0]?.title).toBe('Celeste');
@@ -254,7 +276,9 @@ describe('restoreSavedLink', () => {
     const handle = makeHandle(FILE_V1_TEXT, 'prompt');
     await connectFile(FILE_V1_TEXT, handle);
     setHandle(null);
-    store.set({ file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false } });
+    store.set({
+      file: { status: 'disconnected', name: null, error: null, conflict: null, saving: false },
+    });
 
     expect(await restoreSavedLink()).toBe('needs-gesture');
     expect(store.get().file.status).toBe('disconnected');

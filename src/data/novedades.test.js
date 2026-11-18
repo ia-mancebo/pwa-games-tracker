@@ -6,11 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { store } from '../app.js';
 import { initLibrary, newLibrary } from './library.js';
-import {
-  ensureNovedadesContent,
-  refreshNovedades,
-  resetNovedadesRefresh,
-} from './novedades.js';
+import { ensureNovedadesContent, refreshNovedades, resetNovedadesRefresh } from './novedades.js';
 import { clearSnapshot, saveSnapshot } from './snapshot.js';
 import { seedWorkerUrl } from '../../tests/support/connection.js';
 

@@ -307,16 +307,17 @@ function railHtml() {
   return html`<aside class="rail">
     <div class="logo" aria-hidden="true">GT</div>
     <nav class="nav${gated ? ' disabled' : ''}" aria-label="Secciones">
-      ${TABS.map((t) =>
+      ${TABS.map(
+        (t) =>
           html`<button
-              type="button"
-              data-tab="${t.id}"
-              ${gated ? 'disabled' : ''}
-              aria-current="${t.id === current ? 'true' : 'false'}"
-            >
-              ${t.label}
-            </button>`
-        )}
+            type="button"
+            data-tab="${t.id}"
+            ${gated ? 'disabled' : ''}
+            aria-current="${t.id === current ? 'true' : 'false'}"
+          >
+            ${t.label}
+          </button>`
+      )}
     </nav>
     ${railWidgetsHtml()}
     <button type="button" class="chip rail-datos" data-open-data ${gated ? 'disabled' : ''}>

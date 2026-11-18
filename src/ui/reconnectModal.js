@@ -48,23 +48,19 @@ export function openReconnectModal() {
     sheetClass: 'reconnect-sheet',
     onClose: closeReconnectModal,
     content: html`<p class="reconnect-lead">
-        La biblioteca del espejo local se abrió bien, pero <b>no está conectada al
-        archivo «${name}»</b>: mientras siga así, tus cambios <b>se guardan solo en este
-        navegador</b> y el autoguardado no puede volcarlos.
+        La biblioteca del espejo local se abrió bien, pero
+        <b>no está conectada al archivo «${name}»</b>: mientras siga así, tus cambios
+        <b>se guardan solo en este navegador</b> y el autoguardado no puede volcarlos.
       </p>
       <div class="reconnect-actions">
-        <button type="button" class="btn-primary" data-reconnect-now>
-          Reconectar mi archivo
-        </button>
+        <button type="button" class="btn-primary" data-reconnect-now>Reconectar mi archivo</button>
         <button type="button" class="chip" data-connect-other>Conectar otro .json…</button>
-        <button type="button" class="chip danger" data-new-library>
-          Empezar biblioteca nueva
-        </button>
+        <button type="button" class="chip danger" data-new-library>Empezar biblioteca nueva</button>
       </div>
       <p class="datos-hint">
-        «Empezar biblioteca nueva» descarta la biblioteca actual del navegador y nace vacía;
-        úsalo solo si quieres empezar de cero. Para conservar lo que hay sin reconectar,
-        exporta una copia completa desde <b>Datos</b>.
+        «Empezar biblioteca nueva» descarta la biblioteca actual del navegador y nace vacía; úsalo
+        solo si quieres empezar de cero. Para conservar lo que hay sin reconectar, exporta una copia
+        completa desde <b>Datos</b>.
       </p>
       <footer class="add-foot">
         <button type="button" class="chip" data-dismiss-reconnect>Seguir por ahora</button>
@@ -94,10 +90,7 @@ function wire(layerEl) {
   });
   // «Seguir por ahora» del pie; el ✕ de cabecera y el fondo los cierra el
   // módulo (data-dismiss-reconnect del ✕ es solo compatibilidad con tests).
-  qs('.add-foot [data-dismiss-reconnect]', layerEl)?.addEventListener(
-    'click',
-    closeReconnectModal
-  );
+  qs('.add-foot [data-dismiss-reconnect]', layerEl)?.addEventListener('click', closeReconnectModal);
 }
 
 /** Limpieza total para pruebas. */

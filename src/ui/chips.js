@@ -16,15 +16,18 @@ import { html } from '../lib/dom.js';
  */
 export function chipRowHtml({ dim, label, values, active, allLabel }) {
   return html`<div class="chip-row" role="group" aria-label="${label}" data-dim="${dim}">
-    ${allLabel != null
-      ? html`<button type="button" class="chip${active == null ? ' on' : ''}" data-f-${dim}="">
+    ${
+      allLabel != null
+        ? html`<button type="button" class="chip${active == null ? ' on' : ''}" data-f-${dim}="">
             ${allLabel}
           </button>`
-      : ''}
-    ${values.map((v) =>
-      html`<button type="button" class="chip${active === v ? ' on' : ''}" data-f-${dim}="${v}">
+        : ''
+    }
+    ${values.map(
+      (v) =>
+        html`<button type="button" class="chip${active === v ? ' on' : ''}" data-f-${dim}="${v}">
           ${v}
-        </button>`,
+        </button>`
     )}
   </div>`;
 }

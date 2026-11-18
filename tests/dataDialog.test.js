@@ -5,7 +5,12 @@ import { markConnected, resetFilelink, saveNow } from '../src/data/filelink.js';
 import { setHandle, getHandle } from '../src/services/fsa.js';
 import { sha256Hex } from '../src/services/hash.js';
 import { validateDoc } from '../src/domain/validate.js';
-import { acquireTabLock, assertWritable, onLockReleased, resetTablock } from '../src/data/tablock.js';
+import {
+  acquireTabLock,
+  assertWritable,
+  onLockReleased,
+  resetTablock,
+} from '../src/data/tablock.js';
 import { listBackups, readBackup, snapshotBackup } from '../src/data/opfs.js';
 import { getMeta } from '../src/data/db.js';
 import { closeDataDialog, isDataOpen, openDataDialog } from '../src/views/dataDialog.js';
@@ -40,14 +45,22 @@ async function until(cond, ms = 3000) {
 /** Títulos del doc actual sin pelearte con la nulidad del store. @returns {string[]} */
 function currentTitles() {
   const doc = /** @type {any} */ (store.get().doc);
-  return Array.isArray(doc?.games) ? doc.games.map((/** @type {{ title: string }} */ g) => g.title) : [];
+  return Array.isArray(doc?.games)
+    ? doc.games.map((/** @type {{ title: string }} */ g) => g.title)
+    : [];
 }
 
 const DOC_A_TEXT = JSON.stringify({
   schema: 'game-tracker',
   version: 1,
   updatedAt: '2026-08-20T09:30:00Z',
-  games: [{ id: 'g1', title: 'Hades', plays: [{ id: 'g1-p1', status: 'playing', addedAt: '2026-08-01' }] }],
+  games: [
+    {
+      id: 'g1',
+      title: 'Hades',
+      plays: [{ id: 'g1-p1', status: 'playing', addedAt: '2026-08-01' }],
+    },
+  ],
 });
 
 const DOC_B_TEXT = JSON.stringify({
@@ -55,7 +68,11 @@ const DOC_B_TEXT = JSON.stringify({
   version: 1,
   updatedAt: '2026-08-23T18:30:00Z',
   games: [
-    { id: 'g9', title: 'Celeste', plays: [{ id: 'g9-p1', status: 'finished', addedAt: '2026-08-02', rating: 5 }] },
+    {
+      id: 'g9',
+      title: 'Celeste',
+      plays: [{ id: 'g9-p1', status: 'finished', addedAt: '2026-08-02', rating: 5 }],
+    },
   ],
 });
 
@@ -130,8 +147,8 @@ function grantFsa() {
 }
 
 function revokeFsa() {
-  delete /** @type {any} */ (window).showOpenFilePicker;
-  delete /** @type {any} */ (window).showSaveFilePicker;
+  delete (/** @type {any} */ (window).showOpenFilePicker);
+  delete (/** @type {any} */ (window).showSaveFilePicker);
 }
 
 /** @param {string} prop @param {unknown} value */
@@ -142,7 +159,7 @@ function defineNav(prop, value) {
 /** @param {string} prop */
 function clearNav(prop) {
   try {
-    delete /** @type {any} */ (window.navigator)[prop];
+    delete (/** @type {any} */ (window.navigator)[prop]);
   } catch {
     // La propiedad podría no existir o no ser configurable.
   }
@@ -219,7 +236,9 @@ function makeQueueLocks() {
    */
   const impl = (_name, optsOrCb, maybeCb) => {
     const opts =
-      typeof optsOrCb === 'object' && optsOrCb !== null ? /** @type {{ifAvailable?: boolean}} */ (optsOrCb) : {};
+      typeof optsOrCb === 'object' && optsOrCb !== null
+        ? /** @type {{ifAvailable?: boolean}} */ (optsOrCb)
+        : {};
     const cb = typeof optsOrCb === 'function' ? optsOrCb : maybeCb;
     if (busy) {
       if (opts.ifAvailable) return Promise.resolve(cb?.(null));
@@ -320,7 +339,10 @@ describe('snapshot desde el vuelco (saveNow)', () => {
     const [name] = [...files.keys()];
     const parsed = JSON.parse(/** @type {string} */ (/** @type {unknown} */ (files.get(name))));
     expect(parsed.savedAt).toBeTruthy();
-    expect(parsed.doc.games.map((/** @type {{ title: string }} */ g) => g.title)).toEqual(['Hades', 'Hades II']);
+    expect(parsed.doc.games.map((/** @type {{ title: string }} */ g) => g.title)).toEqual([
+      'Hades',
+      'Hades II',
+    ]);
   });
 
   it('un fallo de escritura NO crea copia', async () => {
@@ -371,7 +393,7 @@ describe('bloqueo de segunda pestaña (Web Locks)', () => {
       request: async (
         /** @type {unknown} */ _n,
         /** @type {unknown} */ _o,
-        /** @type {(lock: unknown) => void} */ cb,
+        /** @type {(lock: unknown) => void} */ cb
       ) => {
         await cb({});
       },
@@ -384,7 +406,7 @@ describe('bloqueo de segunda pestaña (Web Locks)', () => {
       request: async (
         /** @type {unknown} */ _n,
         /** @type {unknown} */ _o,
-        /** @type {(lock: unknown) => void} */ cb,
+        /** @type {(lock: unknown) => void} */ cb
       ) => {
         await cb(null);
       },
@@ -542,7 +564,7 @@ describe('diálogo «Datos»', () => {
             capture.done = true;
           },
         }),
-      }),
+      })
     );
     /** @type {any} */ (window).showSaveFilePicker = picker;
     return picker;
@@ -552,7 +574,10 @@ describe('diálogo «Datos»', () => {
     await importDoc(DOC_A_TEXT, { hash: await sha256Hex(DOC_A_TEXT), fileName: 'origen.json' });
     await addGame({ title: 'Hades II', today: TODAY });
     await saveExportName('mi-copia.json');
-    const capture = /** @type {{ text: string | null, done: boolean }} */ ({ text: null, done: false });
+    const capture = /** @type {{ text: string | null, done: boolean }} */ ({
+      text: null,
+      done: false,
+    });
     const picker = grantSavePicker(capture);
     openDataDialog();
 
@@ -614,7 +639,9 @@ describe('diálogo «Datos»', () => {
     defineNav('share', shareSpy);
     // hasSavePicker() da true pero el picker lanza (contexto no seguro, PWA
     // de Android): el catch no debe caer en una descarga muda por <a download>.
-    /** @type {any} */ (window).showSaveFilePicker = vi.fn(() => Promise.reject(new Error('NotSupportedError')));
+    /** @type {any} */ (window).showSaveFilePicker = vi.fn(() =>
+      Promise.reject(new Error('NotSupportedError'))
+    );
     const anchors = /** @type {HTMLElement[]} */ ([]);
     const originalAppend = document.body.appendChild.bind(document.body);
     const appendSpy = vi.spyOn(document.body, 'appendChild').mockImplementation((el) => {
@@ -705,9 +732,15 @@ describe('diálogo «Datos»', () => {
 
   it('Restaurar una copia sustituye el estado actual por su contenido y cierra', async () => {
     makeOpfs();
-    const docA = await importDoc(DOC_A_TEXT, { hash: await sha256Hex(DOC_A_TEXT), fileName: 'a.json' });
+    const docA = await importDoc(DOC_A_TEXT, {
+      hash: await sha256Hex(DOC_A_TEXT),
+      fileName: 'a.json',
+    });
     await snapshotBackup(docA);
-    const docB = await importDoc(DOC_B_TEXT, { hash: await sha256Hex(DOC_B_TEXT), fileName: 'b.json' });
+    const docB = await importDoc(DOC_B_TEXT, {
+      hash: await sha256Hex(DOC_B_TEXT),
+      fileName: 'b.json',
+    });
     await snapshotBackup(docB);
 
     openDataDialog();
@@ -725,13 +758,17 @@ describe('diálogo «Datos»', () => {
 
   it('sin copias muestra el estado vacío', async () => {
     openDataDialog();
-    await until(() => Boolean(qs('.datos-empty', document.body)?.textContent?.includes('no hay copias')));
+    await until(() =>
+      Boolean(qs('.datos-empty', document.body)?.textContent?.includes('no hay copias'))
+    );
   });
 
   it('muestra el estado del almacenamiento persistente vía persisted()', async () => {
     defineNav('storage', { persisted: async () => true });
     openDataDialog();
-    await until(() => Boolean(qs('[data-persist-status]', document.body)?.textContent?.includes('persistente')));
+    await until(() =>
+      Boolean(qs('[data-persist-status]', document.body)?.textContent?.includes('persistente'))
+    );
   });
 
   it('los botones «Datos» del raíl y del filebar abren el diálogo', async () => {

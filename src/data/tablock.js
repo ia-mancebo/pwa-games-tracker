@@ -49,7 +49,7 @@ export function acquireTabLock() {
       })
       .then(
         () => {},
-        () => settleOnce(false),
+        () => settleOnce(false)
       );
   });
 }

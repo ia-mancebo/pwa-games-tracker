@@ -44,7 +44,11 @@ async function scan(d) {
     try {
       const fh = await d.getFileHandle(name);
       const parsed = JSON.parse(await (await fh.getFile()).text());
-      if (parsed && typeof parsed.savedAt === 'string' && !Number.isNaN(Date.parse(parsed.savedAt))) {
+      if (
+        parsed &&
+        typeof parsed.savedAt === 'string' &&
+        !Number.isNaN(Date.parse(parsed.savedAt))
+      ) {
         savedAt = parsed.savedAt;
       }
     } catch {
@@ -112,8 +116,16 @@ export async function readBackup(name) {
   if (!available() || !NAME_RE.test(name)) return null;
   const fh = await (await dir()).getFileHandle(name);
   const parsed = JSON.parse(await (await fh.getFile()).text());
-  if (!parsed || typeof parsed.savedAt !== 'string' || typeof parsed.doc !== 'object' || parsed.doc === null) {
+  if (
+    !parsed ||
+    typeof parsed.savedAt !== 'string' ||
+    typeof parsed.doc !== 'object' ||
+    parsed.doc === null
+  ) {
     throw new Error('La copia de seguridad está dañada.');
   }
-  return { savedAt: parsed.savedAt, doc: /** @type {import('../domain/schema.js').Doc} */ (parsed.doc) };
+  return {
+    savedAt: parsed.savedAt,
+    doc: /** @type {import('../domain/schema.js').Doc} */ (parsed.doc),
+  };
 }

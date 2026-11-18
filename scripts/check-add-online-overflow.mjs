@@ -210,7 +210,12 @@ const VIEWPORTS = [
 
 const SCENARIOS = [
   { key: 'result', label: 'resultados', html: resultsHtml, checks: ['list', 'result', 'rMeta'] },
-  { key: 'preview', label: 'previsualización', html: previewHtml, checks: ['preview', 'previewInfo'] },
+  {
+    key: 'preview',
+    label: 'previsualización',
+    html: previewHtml,
+    checks: ['preview', 'previewInfo'],
+  },
 ];
 
 const browser = await puppeteer.launch({

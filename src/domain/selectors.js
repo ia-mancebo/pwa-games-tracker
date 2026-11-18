@@ -224,8 +224,7 @@ export function counterElapsedSeconds(counter, now) {
 export function livePlaySeconds(play, counter, now) {
   const base = play.playedSeconds ?? 0;
   if (!counter) return base;
-  const elapsed =
-    counter.playId === play.id ? counterElapsedSeconds(counter, now) : 0;
+  const elapsed = counter.playId === play.id ? counterElapsedSeconds(counter, now) : 0;
   return base + elapsed;
 }
 

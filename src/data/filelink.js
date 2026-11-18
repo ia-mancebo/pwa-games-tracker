@@ -27,11 +27,7 @@ import { sha256Hex } from '../services/hash.js';
 import { snapshotBackup } from './opfs.js';
 import { requestPersistOnce } from './persist.js';
 import { assertWritable } from './tablock.js';
-import {
-  clearHandleRecord,
-  getHandleRecord,
-  putHandleRecord,
-} from './db.js';
+import { clearHandleRecord, getHandleRecord, putHandleRecord } from './db.js';
 
 /**
  * Registro del enlace persistido: {name, handle}.
@@ -420,7 +416,7 @@ function pickViaInput() {
           }
         })();
       },
-      { once: true },
+      { once: true }
     );
     document.body.appendChild(input);
     input.click();
@@ -629,7 +625,7 @@ export async function resolveConflict(choice) {
     if (doc) {
       downloadTextBlob(
         JSON.stringify(doc),
-        `game-tracker-conflicto-${new Date().toISOString().slice(0, 10)}.json`,
+        `game-tracker-conflicto-${new Date().toISOString().slice(0, 10)}.json`
       );
     }
     return { status: 'downloaded' };

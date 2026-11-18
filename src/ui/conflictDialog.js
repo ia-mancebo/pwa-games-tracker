@@ -75,15 +75,17 @@ function paint(conflict, { armed = false, note = '', error = '' } = {}) {
         <button type="button" class="chip" data-confirm="no">No, volver</button>
       </div>`
     : html`<div class="conflict-actions">
-        <button type="button" class="chip danger" data-choice="file">Usar la versión del archivo</button>
+        <button type="button" class="chip danger" data-choice="file">
+          Usar la versión del archivo
+        </button>
         <button type="button" class="btn-primary" data-choice="local">Mantener mis cambios</button>
         <button type="button" class="chip" data-choice="download">Descargar copia local</button>
       </div>`;
   const body = qs(SHEET_BODY_SELECTOR, layerEl);
   if (body) {
     body.innerHTML = html`<p class="conflict-intro">
-        El archivo cambió fuera de la app y además hay cambios sin volcar. Elige qué
-        versión conservar; no se pierde nada sin tu confirmación.
+        El archivo cambió fuera de la app y además hay cambios sin volcar. Elige qué versión
+        conservar; no se pierde nada sin tu confirmación.
       </p>
       <div class="conflict-versions">
         <div class="cardbox tight">
@@ -95,8 +97,7 @@ function paint(conflict, { armed = false, note = '', error = '' } = {}) {
           <b class="mono">${stamp(conflict.fileDoc.updatedAt)}</b>
         </div>
       </div>
-      ${actions}
-      ${note ? html`<p class="conflict-note">${note}</p>` : ''}
+      ${actions} ${note ? html`<p class="conflict-note">${note}</p>` : ''}
       ${error ? html`<p class="form-error" role="alert">${error}</p>` : ''}`;
   }
   wire(layerEl, conflict);
@@ -121,8 +122,13 @@ async function finish(choice, conflict) {
  * @param {import('../app.js').ConflictInfo} conflict
  */
 function wire(layerEl, conflict) {
-  qs('[data-choice="file"]', layerEl)?.addEventListener('click', () => paint(conflict, { armed: true }));
-  qs('[data-choice="local"]', layerEl)?.addEventListener('click', () => void finish('local', conflict));
+  qs('[data-choice="file"]', layerEl)?.addEventListener('click', () =>
+    paint(conflict, { armed: true })
+  );
+  qs('[data-choice="local"]', layerEl)?.addEventListener(
+    'click',
+    () => void finish('local', conflict)
+  );
   qs('[data-choice="download"]', layerEl)?.addEventListener('click', () => {
     void resolveConflict('download').then((res) => {
       if (res.status === 'error') {
@@ -133,7 +139,10 @@ function wire(layerEl, conflict) {
       paint(conflict, { note: 'Copia local descargada. Compárala y vuelve a elegir.' });
     });
   });
-  qs('[data-confirm="yes"]', layerEl)?.addEventListener('click', () => void finish('file', conflict));
+  qs('[data-confirm="yes"]', layerEl)?.addEventListener(
+    'click',
+    () => void finish('file', conflict)
+  );
   qs('[data-confirm="no"]', layerEl)?.addEventListener('click', () => paint(conflict));
 }
 

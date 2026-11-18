@@ -156,7 +156,9 @@ async function doExport() {
   let written = false;
   if (hasSavePicker()) {
     try {
-      const picker = /** @type {(opts?: unknown) => Promise<any>} */ (/** @type {any} */ (self).showSaveFilePicker);
+      const picker = /** @type {(opts?: unknown) => Promise<any>} */ (
+        /** @type {any} */ (self).showSaveFilePicker
+      );
       const handle = await picker.call(self, {
         suggestedName: name,
         types: [{ description: 'Game Tracker', accept: { 'application/json': ['.json'] } }],
@@ -250,7 +252,10 @@ async function doSaveName(input) {
 async function doSaveWorkerUrl(input) {
   const value = input instanceof HTMLInputElement ? input.value : '';
   if (!assertWritable()) {
-    paint({ note: '', error: 'Pestaña en solo lectura: la conexión solo puede editarse en la pestaña activa.' });
+    paint({
+      note: '',
+      error: 'Pestaña en solo lectura: la conexión solo puede editarse en la pestaña activa.',
+    });
     return;
   }
   try {
@@ -289,85 +294,96 @@ function backupsSectionHtml() {
     body = raw('<p class="datos-hint">Buscando copias de seguridad…</p>');
   } else if (view.backups === null || view.backups.length === 0) {
     body = raw(
-      '<p class="datos-empty datos-hint">Todavía no hay copias de seguridad: se crean solas tras cada vuelco exitoso.</p>',
+      '<p class="datos-empty datos-hint">Todavía no hay copias de seguridad: se crean solas tras cada vuelco exitoso.</p>'
     );
   } else {
     const items = view.backups
-      .map((b) =>
-        html`<li>
-          <span class="mono">${fmt.format(new Date(b.savedAt))}</span>
-          <button type="button" class="chip chip-xs" data-restore="${b.name}">Restaurar</button>
-        </li>`,
+      .map(
+        (b) =>
+          html`<li>
+            <span class="mono">${fmt.format(new Date(b.savedAt))}</span>
+            <button type="button" class="chip chip-xs" data-restore="${b.name}">Restaurar</button>
+          </li>`
       )
       .join('');
     body = raw(`<ul class="datos-backups">${items}</ul>`);
   }
   return html`<section class="datos-sec">
     <h3>Restaurar copia</h3>
-    <p class="datos-hint">Últimos 3 vuelcos exitosos guardados por la propia app en este dispositivo.</p>
+    <p class="datos-hint">
+      Últimos 3 vuelcos exitosos guardados por la propia app en este dispositivo.
+    </p>
     ${body}
   </section>`;
 }
 
 function bodyHtml() {
   const nameInput = /** @type {string} */ (store.get().meta.exportFileName || DEFAULT_EXPORT_NAME);
-  const shareBtn = canShareFiles() ? raw('<button type="button" class="chip" data-share>Compartir copia</button>') : '';
+  const shareBtn = canShareFiles()
+    ? raw('<button type="button" class="chip" data-share>Compartir copia</button>')
+    : '';
   return html`<section class="datos-sec">
-        <h3>Conectar / Importar</h3>
-        <p class="datos-hint">
-          Elegir un .json es una decisión deliberada: tras validar, su contenido SUSTITUYE la biblioteca local. Sin
-          lógica de conflicto.
-        </p>
-        <p class="datos-status mono">${connectionStatusHtml()}</p>
-        <button type="button" class="btn-primary" data-conectar>Conectar o importar .json…</button>
-      </section>
+      <h3>Conectar / Importar</h3>
+      <p class="datos-hint">
+        Elegir un .json es una decisión deliberada: tras validar, su contenido SUSTITUYE la
+        biblioteca local. Sin lógica de conflicto.
+      </p>
+      <p class="datos-status mono">${connectionStatusHtml()}</p>
+      <button type="button" class="btn-primary" data-conectar>Conectar o importar .json…</button>
+    </section>
 
-      <section class="datos-sec">
-        <h3>Exportar</h3>
-        <p class="datos-hint">
-          Vuelca el documento completo validado. Un export manual cuenta como vuelco verificado y limpia los cambios
-          pendientes.
-        </p>
-        <div class="datos-actions">
-          <button type="button" class="btn-primary" data-export>Exportar copia completa</button>
-          ${shareBtn}
-        </div>
-      </section>
+    <section class="datos-sec">
+      <h3>Exportar</h3>
+      <p class="datos-hint">
+        Vuelca el documento completo validado. Un export manual cuenta como vuelco verificado y
+        limpia los cambios pendientes.
+      </p>
+      <div class="datos-actions">
+        <button type="button" class="btn-primary" data-export>Exportar copia completa</button>
+        ${shareBtn}
+      </div>
+    </section>
 
-      <section class="datos-sec">
-        <h3>Nombre sugerido</h3>
-        <label class="lbl" for="datos-name-input">Nombre para guardar o compartir copias</label>
-        <input id="datos-name-input" class="datos-name mono" type="text" value="${nameInput}" data-export-name />
-        <button type="button" class="chip" data-save-name>Guardar nombre</button>
-      </section>
+    <section class="datos-sec">
+      <h3>Nombre sugerido</h3>
+      <label class="lbl" for="datos-name-input">Nombre para guardar o compartir copias</label>
+      <input
+        id="datos-name-input"
+        class="datos-name mono"
+        type="text"
+        value="${nameInput}"
+        data-export-name
+      />
+      <button type="button" class="chip" data-save-name>Guardar nombre</button>
+    </section>
 
-      <section class="datos-sec">
-        <h3>Conexión</h3>
-        <p class="datos-hint">
-          URL del proxy IGDB (Cloudflare Worker) que alimenta «Buscar online» y Novedades. Se guarda dentro de tu
-          .json y viaja con la biblioteca; las credenciales viven solo en el Worker.
-        </p>
-        <label class="lbl" for="datos-worker-input">URL del proxy IGDB</label>
-        <input
-          id="datos-worker-input"
-          class="datos-name mono"
-          type="text"
-          value="${igdb.workerUrl()}"
-          placeholder="https://tu-worker.workers.dev"
-          data-worker-url
-        />
-        <button type="button" class="chip" data-save-worker>Guardar conexión</button>
-      </section>
+    <section class="datos-sec">
+      <h3>Conexión</h3>
+      <p class="datos-hint">
+        URL del proxy IGDB (Cloudflare Worker) que alimenta «Buscar online» y Novedades. Se guarda
+        dentro de tu .json y viaja con la biblioteca; las credenciales viven solo en el Worker.
+      </p>
+      <label class="lbl" for="datos-worker-input">URL del proxy IGDB</label>
+      <input
+        id="datos-worker-input"
+        class="datos-name mono"
+        type="text"
+        value="${igdb.workerUrl()}"
+        placeholder="https://tu-worker.workers.dev"
+        data-worker-url
+      />
+      <button type="button" class="chip" data-save-worker>Guardar conexión</button>
+    </section>
 
-      ${backupsSectionHtml()}
+    ${backupsSectionHtml()}
 
-      <section class="datos-sec">
-        <h3>Almacenamiento</h3>
-        <p class="datos-hint" data-persist-status>${view.persist ?? ''}</p>
-      </section>
+    <section class="datos-sec">
+      <h3>Almacenamiento</h3>
+      <p class="datos-hint" data-persist-status>${view.persist ?? ''}</p>
+    </section>
 
-      ${view.note ? html`<p class="datos-note">${view.note}</p>` : ''}
-      ${view.error ? html`<p class="form-error" role="alert">${view.error}</p>` : ''}`;
+    ${view.note ? html`<p class="datos-note">${view.note}</p>` : ''}
+    ${view.error ? html`<p class="form-error" role="alert">${view.error}</p>` : ''}`;
 }
 
 function paint(/** @type {DataView} */ patch = {}) {

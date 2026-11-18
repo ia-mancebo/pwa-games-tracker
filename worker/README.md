@@ -13,9 +13,9 @@ Guía para desplegar el proxy de una sola vez (~30–60 min). Al terminar tendr�
 1. Activa el 2FA si no lo tienes: <https://www.twitch.tv/settings/security>.
 2. Entra en <https://dev.twitch.tv/console> e inicia sesión.
 3. Pulsa **Register Your Application**:
-   - *Name*: `game-tracker-proxy` (o el que prefieras).
-   - *OAuth Redirect URLs*: `http://localhost` (es obligatorio rellenar algo; este proxy usa client credentials y nunca hace redirect).
-   - *Category*: `Application Integration` (o `Other`).
+   - _Name_: `game-tracker-proxy` (o el que prefieras).
+   - _OAuth Redirect URLs_: `http://localhost` (es obligatorio rellenar algo; este proxy usa client credentials y nunca hace redirect).
+   - _Category_: `Application Integration` (o `Other`).
 4. Tras crearla, entra en **Manage** → copia el **Client ID**.
 5. Pulsa **New Secret**, copia el **Client Secret inmediatamente** (solo se muestra una vez; podrás generarlo otra vez si lo pierdes).
 
@@ -75,13 +75,13 @@ Pega la URL base (`https://<nombre-worker>.<subdominio>.workers.dev`) en la app:
 
 ## Solución de problemas
 
-| Síntoma | Causa probable | Qué hacer |
-|---|---|---|
-| Twitch devuelve `{"status":400,"message":"invalid_client"}` | Client ID o Secret mal copiados, o la app quedó sin guardar | Revisa ambos valores; genera un Secret nuevo en dev.twitch.tv y actualiza el secreto del Worker |
-| No puedes crear la app en dev.twitch.tv | 2FA de la cuenta de Twitch desactivado | Actívalo en twitch.tv/settings/security y reintenta |
-| `500` con «Worker not configured» | Secretos ausentes o guardados tras una petición fallida antigua | Verifica nombres exactos (`CLIENT_ID`, `CLIENT_SECRET`, tipo *Secret*) y vuelve a probar |
-| `502` «No se pudo contactar con IGDB» | Caída puntual de IGDB/Twitch o token rechazado | Espera un minuto y reintenta; si persiste, comprueba que el Client ID sigue activo en dev.twitch.tv |
-| `403` «Origen no autorizado» en la app | La secret `ALLOWED_ORIGINS` no existe, está mal escrita o su valor no coincide con el origen real de la app (barra final, ruta `/game-tracker/`, `http` en vez de `https`) | Revisa el paso 3: nombre exacto `ALLOWED_ORIGINS` y valor SOLO con el origen; guarda/**Deploy** para aplicar |
-| Datos repetidos aunque debería refrescar | Caché del Worker por datacenter | `/api/novedades` caduca a las 6 h y populares/esperados a las 24 h; para forzar, espera el TTL o prueba con un parámetro inocuo (`?t=1`) |
+| Síntoma                                                     | Causa probable                                                                                                                                                             | Qué hacer                                                                                                                                |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Twitch devuelve `{"status":400,"message":"invalid_client"}` | Client ID o Secret mal copiados, o la app quedó sin guardar                                                                                                                | Revisa ambos valores; genera un Secret nuevo en dev.twitch.tv y actualiza el secreto del Worker                                          |
+| No puedes crear la app en dev.twitch.tv                     | 2FA de la cuenta de Twitch desactivado                                                                                                                                     | Actívalo en twitch.tv/settings/security y reintenta                                                                                      |
+| `500` con «Worker not configured»                           | Secretos ausentes o guardados tras una petición fallida antigua                                                                                                            | Verifica nombres exactos (`CLIENT_ID`, `CLIENT_SECRET`, tipo _Secret_) y vuelve a probar                                                 |
+| `502` «No se pudo contactar con IGDB»                       | Caída puntual de IGDB/Twitch o token rechazado                                                                                                                             | Espera un minuto y reintenta; si persiste, comprueba que el Client ID sigue activo en dev.twitch.tv                                      |
+| `403` «Origen no autorizado» en la app                      | La secret `ALLOWED_ORIGINS` no existe, está mal escrita o su valor no coincide con el origen real de la app (barra final, ruta `/game-tracker/`, `http` en vez de `https`) | Revisa el paso 3: nombre exacto `ALLOWED_ORIGINS` y valor SOLO con el origen; guarda/**Deploy** para aplicar                             |
+| Datos repetidos aunque debería refrescar                    | Caché del Worker por datacenter                                                                                                                                            | `/api/novedades` caduca a las 6 h y populares/esperados a las 24 h; para forzar, espera el TTL o prueba con un parámetro inocuo (`?t=1`) |
 
-Para purgar la caché manualmente desde el dashboard: panel del Worker → pestaña **Logs**/**Deployments** → *Quick edit* + redeploy reinicia el isolate; la caché de borda caduca sola según los TTL anteriores.
+Para purgar la caché manualmente desde el dashboard: panel del Worker → pestaña **Logs**/**Deployments** → _Quick edit_ + redeploy reinicia el isolate; la caché de borda caduca sola según los TTL anteriores.

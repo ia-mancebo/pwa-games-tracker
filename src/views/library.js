@@ -177,18 +177,29 @@ function searchBoxHtml(query) {
  */
 function filtersHtml(chips, f) {
   return html`<div class="filters">
-    ${chips.genres.length > 0
-      ? chipRowHtml({ dim: 'genre', label: DIM_LABELS.genre, values: chips.genres, active: f.genre })
-      : ''}${chips.platforms.length > 0
-      ? chipRowHtml({
+    ${
+      chips.genres.length > 0
+        ? chipRowHtml({
+            dim: 'genre',
+            label: DIM_LABELS.genre,
+            values: chips.genres,
+            active: f.genre,
+          })
+        : ''
+    }${
+      chips.platforms.length > 0
+        ? chipRowHtml({
             dim: 'platform',
             label: DIM_LABELS.platform,
             values: chips.platforms,
             active: f.platform,
           })
-      : ''}${chips.tags.length > 0
-      ? chipRowHtml({ dim: 'tag', label: DIM_LABELS.tag, values: chips.tags, active: f.tag })
-      : ''}
+        : ''
+    }${
+      chips.tags.length > 0
+        ? chipRowHtml({ dim: 'tag', label: DIM_LABELS.tag, values: chips.tags, active: f.tag })
+        : ''
+    }
   </div>`;
 }
 
@@ -297,8 +308,8 @@ function panelHtml(doc, lib) {
       ${
         remaining > 0
           ? html`<div class="panel-more">
-                <button type="button" class="chip" data-load-more>Cargar más</button>
-              </div>`
+              <button type="button" class="chip" data-load-more>Cargar más</button>
+            </div>`
           : ''
       }
     </div>
@@ -323,9 +334,7 @@ function shelvesHtml(doc, lib) {
       <h1>Biblioteca</h1>
       <p class="sub">Tu estantería: una balda por Estado del juego.</p>
     </header>
-    <div class="toolbar">
-      ${searchBoxHtml(f.query)} ${filtersHtml(chipsForDoc(doc), f)}
-    </div>
+    <div class="toolbar">${searchBoxHtml(f.query)} ${filtersHtml(chipsForDoc(doc), f)}</div>
     ${
       shelves.length > 0
         ? html`<div class="shelves">${shelves.map((s) => shelfHtml(s))}</div>`

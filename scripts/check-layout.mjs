@@ -25,7 +25,10 @@ const css = (
 ).join('\n');
 
 const chips = (count, cls = 'chip') =>
-  Array.from({ length: count }, (_, i) => `<button type="button" class="${cls}">Género ${i + 1}</button>`).join('');
+  Array.from(
+    { length: count },
+    (_, i) => `<button type="button" class="${cls}">Género ${i + 1}</button>`
+  ).join('');
 
 const html = `<!doctype html>
 <html lang="es">
@@ -76,7 +79,9 @@ try {
     document.querySelectorAll('*').forEach((el) => {
       const rect = el.getBoundingClientRect();
       if (rect.right > vw + 1 || rect.left < -1) {
-        overflowers.push(`${el.tagName}.${String(el.className).split(' ')[0] ?? ''} right=${Math.round(rect.right)}`);
+        overflowers.push(
+          `${el.tagName}.${String(el.className).split(' ')[0] ?? ''} right=${Math.round(rect.right)}`
+        );
       }
     });
     return { docW, vw, rows, overflowers };
@@ -89,7 +94,9 @@ try {
   } else if (scrollEngaged === 0) {
     throw new Error('RED: ningún chip-row necesita scroll (sospechoso)');
   } else {
-    console.log(`GREEN: página ${report.docW}px, ${scrollEngaged}/${report.rows.length} filas scrollean`);
+    console.log(
+      `GREEN: página ${report.docW}px, ${scrollEngaged}/${report.rows.length} filas scrollean`
+    );
   }
 } finally {
   await browser.close();

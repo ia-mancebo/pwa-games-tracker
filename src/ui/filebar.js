@@ -22,13 +22,16 @@ function readOnly() {
   return store.get().tabRole === 'secondary';
 }
 
-const DATOS_BTN = '<button type="button" class="chip chip-xs bar-datos" data-open-data>Datos</button>';
+const DATOS_BTN =
+  '<button type="button" class="chip chip-xs bar-datos" data-open-data>Datos</button>';
 
 const RO_PILL = '<span class="pill st-backlog">Solo lectura</span>';
 
 function bannerHtml() {
   return html`<div class="ro-banner" role="status">
-    <span class="ro-banner-text">Otra pestaña tiene la biblioteca abierta. Estás en solo lectura.</span>
+    <span class="ro-banner-text"
+      >Otra pestaña tiene la biblioteca abierta. Estás en solo lectura.</span
+    >
     <button type="button" class="chip chip-xs" data-become-primary>Hacerme activa</button>
   </div>`;
 }
@@ -63,9 +66,10 @@ function filebarHtml() {
     // Sin File System Access no hay .json enlazado, pero el espejo IndexedDB
     // guarda cada cambio al momento (library.mutate): la pastilla informa,
     // no alerta. Exportar en Datos sigue como copia manual.
-    return html`${banner}<div class="filebar">
-      <span class="pill st-playing">Guardado automático en este navegador</span>${raw(DATOS_BTN)}
-    </div>`;
+    return html`${banner}
+      <div class="filebar">
+        <span class="pill st-playing">Guardado automático en este navegador</span>${raw(DATOS_BTN)}
+      </div>`;
   }
   if (file.status === 'connected') {
     // Mientras corre el vuelco la pastilla informa del estado en vivo; al
@@ -75,24 +79,27 @@ function filebarHtml() {
         ? '<span class="file-dirty mono">● volcando…</span>'
         : '<span class="file-dirty mono">● cambios sin volcar</span>'
       : '';
-    return html`${banner}<div class="filebar">
-      <span class="file-name">Archivo: ${file.name ?? meta.connectedFileName ?? '—'}</span>
-      ${raw(dirtyPill)}
-      ${ro ? raw(RO_PILL) : raw('<button type="button" class="chip chip-xs" data-save-now>Guardar ahora</button>')}
-      ${raw(DATOS_BTN)}
-    </div>`;
+    return html`${banner}
+      <div class="filebar">
+        <span class="file-name">Archivo: ${file.name ?? meta.connectedFileName ?? '—'}</span>
+        ${raw(dirtyPill)}
+        ${ro ? raw(RO_PILL) : raw('<button type="button" class="chip chip-xs" data-save-now>Guardar ahora</button>')}
+        ${raw(DATOS_BTN)}
+      </div>`;
   }
   if (file.status === 'error') {
-    return html`${banner}<div class="filebar">
-      <span class="pill-btn">${file.error ?? 'No se pudo escribir el archivo.'}</span>
-      ${ro ? raw(RO_PILL) : raw('<button type="button" class="chip chip-xs" data-retry>Reintentar</button>')}
+    return html`${banner}
+      <div class="filebar">
+        <span class="pill-btn">${file.error ?? 'No se pudo escribir el archivo.'}</span>
+        ${ro ? raw(RO_PILL) : raw('<button type="button" class="chip chip-xs" data-retry>Reintentar</button>')}
+        ${raw(DATOS_BTN)}
+      </div>`;
+  }
+  return html`${banner}
+    <div class="filebar">
+      ${ro ? raw(RO_PILL) : raw('<button type="button" class="pill-btn" data-connect>Archivo no conectado — Reconectar</button>')}
       ${raw(DATOS_BTN)}
     </div>`;
-  }
-  return html`${banner}<div class="filebar">
-    ${ro ? raw(RO_PILL) : raw('<button type="button" class="pill-btn" data-connect>Archivo no conectado — Reconectar</button>')}
-    ${raw(DATOS_BTN)}
-  </div>`;
 }
 
 /**
