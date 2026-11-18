@@ -15,6 +15,18 @@
  * (Ficha / sección) y vuelve con `goBack()` o con «← Volver» midiendo el
  * scroll en varios instantes.
  *
+ * Receta de huérfanos Edge (la corrida no debe dejar procesos msedge vivos):
+ * contar los procesos msedge antes y después de la corrida (p. ej.
+ * `Get-Process msedge`) y exigir delta 0. Para distinguir un huérfano de la
+ * sesión normal del usuario basta el perfil: el huérfano apunta al perfil
+ * temporal que lanza este script, no al perfil del navegador del usuario
+ * (`--user-data-dir=...\Microsoft\Edge\User Data`). Nota: la vía de línea de
+ * comandos directa por WMI da acceso denegado en esta máquina (p. ej.
+ * `Get-CimInstance`); la receta que funciona es conteo por proceso +
+ * inspección con las herramientas alternativas (`Get-Process` para contar,
+ * `wmic process where "name='msedge.exe'" get commandline` para la
+ * CommandLine).
+ *
  * Uso: npm run test:scroll  (o node scripts/check-scroll-restore.mjs)
  */
 import { spawn } from 'node:child_process';
