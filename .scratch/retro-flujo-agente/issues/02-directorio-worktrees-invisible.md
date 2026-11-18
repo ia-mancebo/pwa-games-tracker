@@ -4,8 +4,12 @@
 
 **Blocked by:** 01 (nace sobre la base ya barrida; sin conflictos en los archivos de ignore).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] El directorio de worktrees (un subdirectorio por ticket) está en .gitignore y en los ignores del linter.
-- [ ] Worktree de prueba creado dentro ⇒ `git status` del repo principal limpio; lint y format:check no lo cuentan.
-- [ ] El worktree de prueba queda eliminado; sin restos ni en disco ni en el status.
+- [x] El directorio de worktrees (un subdirectorio por ticket) está en .gitignore y en los ignores del linter.
+- [x] Worktree de prueba creado dentro ⇒ `git status` del repo principal limpio; lint y format:check no lo cuentan.
+- [x] El worktree de prueba queda eliminado; sin restos ni en disco ni en el status.
+
+## Comentarios
+
+- 2026-11-18: `.gitignore` gana `.worktrees/` y los ignores globales de `eslint.config.js` ganan `.worktrees/**`; el ignore de prettier ya lo traía el ticket 01 (`.prettierignore` verificado, sin duplicar). Commit: `d821cbc`. Demo autocontenida RED→GREEN desde el worktree del ticket, con archivo veneno dentro del worktree de prueba (`demo-lint-error.js`: 2 errores de lint reales, sin formato de prettier) para que «no lo cuenta» sea verificable y no vacío. RED (antes del cambio): `git status --porcelain` ⇒ `?? .worktrees/`; `npm run lint` ⇒ EXIT=1 contando el veneno (2 errores: `no-unused-vars`, `no-undef`); `npm run format:check` no lo contaba ya (ignore de prettier). GREEN (tras el cambio): `git status --porcelain` ⇒ 0 líneas; `npm run lint` ⇒ EXIT=0; `npm run format:check` ⇒ EXIT=0. Limpieza: borrado el veneno, `git worktree remove .worktrees/prueba-t02` y `git branch -D prueba-t02` ⇒ cero restos (directorio inexistente, sin entrada en `git worktree list`, sin rama `prueba*`, `git status --porcelain` 0 líneas; retirado también el `.worktrees/` vacío). Puertas finales en verde: `npm run typecheck` EXIT=0, `npm run lint` EXIT=0, `npm test` 47 archivos/698 tests, `npm run format:check` EXIT=0. Desviación documentada: en esta máquina `core.autocrlf=true` materializa CRLF en todo checkout nuevo y prettier (`endOfLine` lf) deja `format:check` en rojo por finales de línea aunque el contenido ya esté barrido — el barrido del ticket 01 dejó LF en el ODB y su verde solo era durable en su propio worktree; para las puertas se normalizó el disco del worktree con `prettier --write .` + `git add --renormalize .` (cero cambios de contenido, `git diff --cached` vacío). El arreglo durable (p. ej. `.gitattributes` con `* text=auto eol=lf` o `endOfLine` en prettier) queda fuera de alcance y necesita ticket propio. La demo contra el repo principal (worktree de prueba creado desde el checkout de integración ya fusionado) la ejecutará el merger tras el merge, y su evidencia se añadirá como comentario posterior del ticket; para ella conviene la misma técnica del archivo veneno comparando la salida de lint y format:check, porque `format:check` puede estar en rojo por el efecto CRLF descrito (la prueba es que el worktree de prueba no aparezca en la salida, no el EXIT aislado).
