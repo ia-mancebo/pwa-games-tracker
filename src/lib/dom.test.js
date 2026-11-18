@@ -35,13 +35,8 @@ describe('html', () => {
 
   it('joins arrays of values', () => {
     const items = ['<li>a', '<li>b'];
-    expect(
-      String(
-        html`<ul>
-          ${items}
-        </ul>`
-      )
-    ).toBe('<ul>&lt;li&gt;a&lt;li&gt;b</ul>');
+    // prettier-ignore
+    expect(String(html`<ul>${items}</ul>`)).toBe('<ul>&lt;li&gt;a&lt;li&gt;b</ul>');
   });
 
   it('renders null, undefined and booleans as empty', () => {
