@@ -4,8 +4,12 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] El doc del tracker define el ciclo de `Status:` de specs en prosa puntero (una línea o dos).
-- [ ] Solo se marcan specs cuyo conjunto completo de tickets está `resolved` (verificar al ejecutar, no de memoria); hoy son dos.
-- [ ] Ningún otro spec ni ticket histórico tocado.
+- [x] El doc del tracker define el ciclo de `Status:` de specs en prosa puntero (una línea o dos).
+- [x] Solo se marcan specs cuyo conjunto completo de tickets está `resolved` (verificar al ejecutar, no de memoria); hoy son dos.
+- [x] Ningún otro spec ni ticket histórico tocado.
+
+## Comentarios
+
+- 2026-11-18: Añadida UNA línea-puntero en `docs/agents/issue-tracker.md` (Conventions): los `spec.md` llevan la misma línea `Status:` con el vocabulario de triage, y un spec pasa a `resolved` cuando TODOS sus tickets están `resolved`. Barrido ejecutado con verificación en vivo del estado de los tickets (grep de `**Status:**`/`Status:` sobre `.scratch/`): marcados `Status: resolved` (formato plano, línea 3) los dos specs cuyo conjunto completo de tickets está `resolved` — `correccion-tiempo-jugado` (3/3) y `guardrails-navegador` (2/2). No tocados: `contador-tiempo` (10 tickets abiertos), `architecture-deepening` (7 tickets abiertos, `**Status:**` antiguo), `architecture-deepening-2` (forma antigua `**Status:**`, out of scope por decisión del orquestador), `conexion-json` y `game-tracker-pwa` (sin línea `Status:` de generación actual). Verificado en verde: `npm run typecheck`, `npm run lint`, `npm test` (47 archivos, 698 tests). Commit: `b397729`.
