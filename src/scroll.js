@@ -11,9 +11,18 @@
  * y el drill-down de Novedades llegan siempre arriba. Los cambios dentro de
  * la misma superficie (búsqueda, filtros, «Cargar más», Ficha externa del
  * tablón, vuelco de archivo) no tocan el scroll; en las superficies fijas, el
- * scroll interno de la tabla se captura y repone entre renders
- * (preserveInnerScroll/restoreInnerScroll). Estadísticas no se gobierna:
- * conserva su comportamiento actual.
+ * scroll interno de la tabla se conserva entre renders de la misma superficie
+ * (preserveInnerScroll/restoreInnerScroll, desde la vista) y a través de la
+ * Ficha lo gobierna settleScroll. Estadísticas no se gobierna: conserva su
+ * comportamiento actual.
+ *
+ * Regla del scroll interno a través de superficies: el Panel captura el
+ * scroll de su tabla al salir hacia la Ficha y lo repone al volver de ella —
+ * «al volver de la Ficha, el Panel conserva el scroll que tenía»; al llegar
+ * desde otra superficie (la Estantería abre el Panel) es pantalla nueva y la
+ * tabla empieza arriba. El drill-down de Novedades comparte el mecanismo de
+ * captura pero no tiene superficie de detalle (su Ficha externa es una hoja,
+ * no una pantalla): siempre llega arriba.
  */
 
 /** Última posición guardada de la Estantería. @type {number} */
@@ -21,6 +30,20 @@ let shelvesScroll = 0;
 
 /** Última posición guardada del tablón de Novedades. @type {number} */
 let boardScroll = 0;
+
+/** Último scroll interno capturado de cada superficie fija. @type {Map<string, number>} */
+const fixedInner = new Map();
+
+/** Superficies que scrollean dentro de su tabla (isFixedSurface). @type {Set<string>} */
+const FIXED_SURFACES = new Set(['panel', 'novedades:section']);
+
+/**
+ * Superficie de detalle desde la que una superficie fija repone su scroll
+ * interno al volver. El Panel vuelve de la Ficha; el drill-down de Novedades
+ * no tiene superficie de detalle y nunca repone por esta vía.
+ * @type {Record<string, string>}
+ */
+const DETAIL_SURFACE = { panel: 'ficha' };
 
 /**
  * Superficie actual: la pantalla que define el scroll del documento. Dentro
@@ -44,32 +67,59 @@ function surfaceKey(state) {
 }
 
 /**
- * Reposiciona el scroll al cambiar de superficie. Devolver el destino ANTES
- * de re-renderizar: la lectura de `window.scrollY` debe ver todavía el DOM de
- * la superficie saliente. `null` = no tocar nada.
+ * Destino de scroll que settleScroll aplica tras el render. `doc` es el
+ * destino del documento (null = no tocarlo); `inner`, el del cardbox de una
+ * superficie fija (null = sin tabla que reposicionar).
+ * @typedef {{ doc: number|null, inner: number|null }} ScrollTarget
+ */
+
+/**
+ * Reposiciona el scroll al cambiar de superficie. Llamar ANTES de
+ * re-renderizar: las capturas (scrollY del documento saliente, scrollTop del
+ * cardbox saliente) deben ver todavía el DOM de la superficie saliente; el
+ * destino se aplica DESPUÉS, sobre el DOM nuevo (doc → window.scrollTo,
+ * inner → restoreInnerScroll). Devolver null = misma superficie: no tocar
+ * nada (las vistas conservan su scroll interno entre renders).
  * @param {import('./app.js').AppState|null} prev Estado del render anterior.
  * @param {import('./app.js').AppState} next Estado recién pintado.
- * @returns {number|null} Destino del scroll del documento, o null sin cambio.
+ * @param {Element} container El `<main>` que pinta las superficies.
+ * @returns {ScrollTarget|null} Destinos del documento y del cardbox, o null sin cambio.
  */
-export function settleScroll(prev, next) {
+export function settleScroll(prev, next, container) {
   const from = prev == null ? null : surfaceKey(prev);
   const to = surfaceKey(next);
   if (from === to) return null;
+  // Salida: capturar el scroll de la superficie saliente.
   if (from === 'shelves') {
     shelvesScroll = window.scrollY ?? 0;
   } else if (from === 'novedades:board') {
     boardScroll = window.scrollY ?? 0;
+  } else if (from != null && FIXED_SURFACES.has(from)) {
+    fixedInner.set(from, preserveInnerScroll(container));
   }
-  if (to === 'shelves') return shelvesScroll;
-  if (to === 'novedades:board') return boardScroll;
-  if (to === 'panel' || to === 'ficha' || to === 'novedades:section') return 0;
-  return null;
+  // Llegada: destino del documento.
+  let doc = null;
+  if (to === 'shelves') {
+    doc = shelvesScroll;
+  } else if (to === 'novedades:board') {
+    doc = boardScroll;
+  } else if (to === 'panel' || to === 'ficha' || to === 'novedades:section') {
+    doc = 0;
+  }
+  // Llegada: destino del cardbox de una superficie fija. Solo repone si se
+  // vuelve de su superficie de detalle; llegar desde otra es pantalla nueva.
+  let inner = null;
+  if (FIXED_SURFACES.has(to)) {
+    inner = from != null && DETAIL_SURFACE[to] === from ? (fixedInner.get(to) ?? 0) : 0;
+  }
+  return { doc, inner };
 }
 
 /** Reinicia las posiciones guardadas (aislación entre pruebas). */
 export function resetScroll() {
   shelvesScroll = 0;
   boardScroll = 0;
+  fixedInner.clear();
 }
 
 /**

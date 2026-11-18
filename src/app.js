@@ -8,7 +8,7 @@ import { renderAviso } from './ui/aviso.js';
 import { openDataDialog } from './views/dataDialog.js';
 import { installBackNav } from './backnav.js';
 import { switchTab } from './navigation.js';
-import { isFixedSurface, settleScroll } from './scroll.js';
+import { isFixedSurface, restoreInnerScroll, settleScroll } from './scroll.js';
 
 /**
  * Meta del espejo IndexedDB (spec §5.1). `exportFileName` y `persistAsked` son
@@ -425,11 +425,15 @@ export function createApp(root) {
     const view = views[tab];
     if (!view) return;
     // Reposicionar el scroll por superficie (src/scroll.js): el destino se
-    // decide ANTES de re-renderizar para leer el scrollY de la superficie
-    // saliente, y se aplica DESPUÉS, sobre el DOM nuevo.
-    const scrollTarget = settleScroll(prev, state);
+    // decide ANTES de re-renderizar para leer el scroll de la superficie
+    // saliente (documento y cardbox de las superficies fijas), y se aplica
+    // DESPUÉS, sobre el DOM nuevo (documento y cardbox entrante).
+    const scrollTarget = settleScroll(prev, state, main);
     view.render(main, store);
-    if (scrollTarget != null) window.scrollTo(0, scrollTarget);
+    if (scrollTarget) {
+      if (scrollTarget.doc != null) window.scrollTo(0, scrollTarget.doc);
+      if (scrollTarget.inner != null) restoreInnerScroll(main, scrollTarget.inner);
+    }
   };
 
   const unsubscribe = store.subscribe(renderCurrent);

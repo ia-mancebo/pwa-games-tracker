@@ -4,8 +4,9 @@
  * navegar entre ellas, el scroll de la superficie saliente no debe heredarse
  * en la entrante. Regla: la Estantería conserva su scroll al salir y lo repone
  * al volver (volver atrás a la Biblioteca); el Panel y la Ficha llegan siempre
- * arriba. Los cambios dentro de la misma superficie (búsqueda, filtros) no
- * tocan el scroll. jsdom no scrollea de verdad: `window.scrollY` se simula y
+ * arriba por el documento, y el Panel conserva además su scroll interno (la
+ * tabla) al volver de la Ficha. Los cambios dentro de la misma superficie
+ * (búsqueda, filtros) no tocan el scroll. jsdom no scrollea de verdad: `window.scrollY` se simula y
  * `window.scrollTo` se espía para verificar la regla.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -216,6 +217,47 @@ describe('vuelta a la Estantería: conserva su scroll', () => {
     btn(qs('[data-tab="biblioteca"]', root)).click();
 
     expect(scrollToSpy).toHaveBeenLastCalledWith(0, 900);
+  });
+});
+
+describe('el Panel conserva su scroll interno a través de la Ficha', () => {
+  it('volver de la Ficha repone el scroll interno de la tabla del Panel', () => {
+    const root = mount();
+    unsubscribe = createApp(root);
+    btn(qs('[data-open-panel="playing"]', root)).click();
+    btn(qs('.cardbox.tight', root)).scrollTop = 400;
+
+    btn(qs('[data-game-id="g1"]', root)).click();
+    btn(qs('[data-back-ficha]', root)).click();
+
+    expect(qs('.cardbox.tight', root)?.scrollTop).toBe(400);
+  });
+
+  it('el atrás del sistema repone también el scroll interno del Panel', async () => {
+    const root = mount();
+    unsubscribe = createApp(root);
+    btn(qs('[data-open-panel="playing"]', root)).click();
+    btn(qs('.cardbox.tight', root)).scrollTop = 400;
+
+    btn(qs('[data-game-id="g1"]', root)).click();
+    history.back();
+    await vi.waitFor(() => expect(store.get().library.gameId).toBeNull());
+
+    expect(qs('.cardbox.tight', root)?.scrollTop).toBe(400);
+  });
+
+  it('reabrir el Panel desde la Estantería es pantalla nueva: la tabla empieza arriba', () => {
+    const root = mount();
+    unsubscribe = createApp(root);
+    btn(qs('[data-open-panel="playing"]', root)).click();
+    btn(qs('.cardbox.tight', root)).scrollTop = 400;
+    btn(qs('[data-game-id="g1"]', root)).click();
+    btn(qs('[data-back-ficha]', root)).click();
+    btn(qs('[data-back-shelves]', root)).click();
+
+    btn(qs('[data-open-panel="playing"]', root)).click();
+
+    expect(qs('.cardbox.tight', root)?.scrollTop).toBe(0);
   });
 });
 
@@ -433,6 +475,20 @@ describe('Novedades: el tablón conserva su scroll, la sección llega arriba', (
     btn(qs('[data-ndetail="recientes:0"]', root)).click();
 
     expect(scrollToSpy).not.toHaveBeenCalled();
+  });
+
+  it('el scroll interno del drill-down sobrevive a la Ficha externa (hoja, misma superficie)', async () => {
+    await saveSnapshot(snapBody());
+    const root = mount();
+    unsubscribe = createApp(root);
+    await goToBoard(root);
+    btn(qs('[data-nsection="recientes"]', root)).click();
+    btn(qs('.cardbox.tight', root)).scrollTop = 250;
+
+    btn(qs('[data-ndetail="recientes:0"]', root)).click();
+    btn(qs('[data-sheet-close]', document.body)).click();
+
+    expect(qs('.cardbox.tight', root)?.scrollTop).toBe(250);
   });
 
   it('el drill-down de sección pone surface-fixed y el tablón la quita', async () => {

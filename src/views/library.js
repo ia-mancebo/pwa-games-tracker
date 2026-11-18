@@ -412,8 +412,9 @@ export function render(container, store) {
   const caret = hadFocus ? (prevSearch.selectionStart ?? prevSearch.value.length) : 0;
 
   // El scroll interno de la tabla del Panel se conserva entre renders de la
-  // misma superficie («Cargar más», búsqueda, filtros); al llegar desde otra
-  // superficie no hay cardbox previo y empieza arriba (src/scroll.js).
+  // misma superficie («Cargar más», búsqueda, filtros); el scroll a través de
+  // superficies (Panel ⇄ Ficha) lo captura y repone src/scroll.js alrededor
+  // de este render (src/app.js).
   const innerScroll = preserveInnerScroll(container);
 
   container.innerHTML =

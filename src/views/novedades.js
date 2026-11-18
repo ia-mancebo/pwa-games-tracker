@@ -572,8 +572,9 @@ function paintSync(container) {
 export function render(container, _store) {
   if (!container.isConnected) return;
   // El scroll interno de la tabla del drill-down se conserva entre renders de
-  // la misma superficie (género, refresco); al llegar desde el tablón no hay
-  // cardbox previo y empieza arriba (src/scroll.js).
+  // la misma superficie (género, refresco, Ficha externa); las transiciones
+  // entre superficies las captura y repone src/scroll.js alrededor de este
+  // render (src/app.js).
   const innerScroll = preserveInnerScroll(container);
   void ensureNovedadesContent().catch(() => {});
   paintSync(container);
