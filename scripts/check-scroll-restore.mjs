@@ -28,6 +28,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const PORT = 5199;
 const URL = `http://localhost:${PORT}/`;
+/** Superficie fija del Panel: su tabla scrollea DENTRO del cardbox, no el documento. */
+const CARD_BOX = '.cardbox.tight';
 
 /** @type {import('node:child_process').ChildProcess | null} */
 let server = null;
@@ -95,27 +97,75 @@ async function tapPos(page, selector) {
 }
 
 /**
- * Mide el scroll tras `goBack()` en varios instantes y comprueba que el
- * navegador no pisó la restauración de la app.
+ * Muestrea la posición de una superficie en varios instantes para que un
+ * pisado tardío del navegador no pase desapercibido.
  * @param {import('puppeteer-core').Page} page
- * @param {string} waitSel
- * @param {number} expected
- * @param {string} label
+ * @param {string | null} [sel] selector del cardbox; sin él, el documento
+ * @returns {Promise<number[]>}
  */
-async function assertBackRestores(page, waitSel, expected, label) {
-  await page.goBack();
-  await page.waitForSelector(waitSel, { timeout: 10000 });
+async function sampleScroll(page, sel = null) {
   const samples = [];
   for (const delay of [0, 100, 300, 600]) {
     if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
-    samples.push(await page.evaluate(() => window.scrollY));
-  }
-  if (samples.some((y) => y !== expected)) {
-    throw new Error(
-      `RED: el botón atrás no conserva el scroll de ${label} (muestras ${samples.join(', ')}; esperado ${expected})`
+    samples.push(
+      await page.evaluate(
+        (s) => (s ? Math.round(document.querySelector(s).scrollTop) : window.scrollY),
+        sel
+      )
     );
   }
-  console.log(`  ${label} restaurada a ${expected}px tras el atrás (${samples.join(', ')})`);
+  return samples;
+}
+
+/**
+ * Vuelve del hijo (`goBack()` o un botón), espera la superficie base y
+ * comprueba que su scroll no se movió en ninguna muestra.
+ * @param {import('puppeteer-core').Page} page
+ * @param {{
+ *   back: () => Promise<unknown>,
+ *   waitSel: string,
+ *   expected: number,
+ *   label: string,
+ *   sel?: string | null,
+ *   via?: string,
+ * }} opts
+ */
+async function assertBackRestores(
+  page,
+  { back, waitSel, expected, label, sel = null, via = 'tras el atrás' }
+) {
+  await back();
+  await page.waitForSelector(waitSel, { timeout: 10000 });
+  const samples = await sampleScroll(page, sel);
+  if (samples.some((y) => y !== expected)) {
+    throw new Error(
+      `RED: ${label} no conserva su scroll ${via} (muestras ${samples.join(', ')}; esperado ${expected})`
+    );
+  }
+  console.log(`  ${label} restaurada a ${expected}px ${via} (${samples.join(', ')})`);
+}
+
+/**
+ * Siembra el scroll interno del cardbox y abre una Ficha; devuelve el
+ * scrollTop real sembrado.
+ * @param {import('puppeteer-core').Page} page
+ * @param {number} top
+ * @returns {Promise<number>}
+ */
+async function seedPanelAndOpenFicha(page, top) {
+  return page.evaluate(
+    ({ sel, y }) => {
+      const box = /** @type {HTMLElement} */ (document.querySelector(sel));
+      box.scrollTop = y;
+      const at = box.scrollTop;
+      // Fila presente en el panel abierto (los ids de la fixture reparten
+      // Estados por módulo; no todos los gNNN están en este Estado).
+      const row = document.querySelectorAll(`${sel} .b-row`)[10];
+      row.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      return at;
+    },
+    { sel: CARD_BOX, y: top }
+  );
 }
 
 async function main() {
@@ -170,7 +220,12 @@ async function main() {
     }
     console.log(`  Ficha arriba (0) al abrirse (estantería en ${tapPosShelves})`);
 
-    await assertBackRestores(page, '.shelves [data-game-id]', tapPosShelves, 'la Estantería');
+    await assertBackRestores(page, {
+      back: () => page.goBack(),
+      waitSel: '.shelves [data-game-id]',
+      expected: tapPosShelves,
+      label: 'la Estantería',
+    });
 
     // Panel de un Estado («Quiero jugar» = backlog): superficie fija, la tabla
     // scrollea DENTRO del cardbox. Debe conservar su scroll interno al irse a
@@ -179,49 +234,53 @@ async function main() {
     // puntero auto-scrollea el cardbox (scrollIntoViewIfNeeded) y arruinaría
     // la medición.
     await page.click('[data-open-panel="backlog"]');
-    await page.waitForSelector('.cardbox.tight .b-row', { timeout: 10000 });
+    await page.waitForSelector(`${CARD_BOX} .b-row`, { timeout: 10000 });
 
-    const panelTop = await page.evaluate(() => {
-      const box = document.querySelector('.cardbox.tight');
-      box.scrollTop = 300;
-      const at = box.scrollTop;
-      // Fila presente en el panel abierto (los ids de la fixture reparten
-      // Estados por módulo; no todos los gNNN están en este Estado).
-      const row = document.querySelectorAll('.cardbox.tight .b-row')[10];
-      row.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      return at;
-    });
-    if (panelTop !== 300) {
-      throw new Error(`RED: la tabla del Panel no scrollea (scrollTop=${panelTop}, objetivo 300)`);
+    const panelTarget = 300;
+    const panelTop = await seedPanelAndOpenFicha(page, panelTarget);
+    if (panelTop !== panelTarget) {
+      throw new Error(
+        `RED: la tabla del Panel no scrollea (scrollTop=${panelTop}, objetivo ${panelTarget})`
+      );
     }
     await page.waitForSelector('[data-back-ficha]', { timeout: 10000 });
-    await page.click('[data-back-ficha]');
-    await page.waitForSelector('.cardbox.tight .b-row', { timeout: 10000 });
-    const panelSamples = [];
-    for (const delay of [0, 100, 300, 600]) {
-      if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
-      panelSamples.push(
-        await page.evaluate(() => Math.round(document.querySelector('.cardbox.tight').scrollTop))
-      );
-    }
-    if (panelSamples.some((y) => y !== panelTop)) {
+    await assertBackRestores(page, {
+      back: () => page.click('[data-back-ficha]'),
+      waitSel: `${CARD_BOX} .b-row`,
+      sel: CARD_BOX,
+      expected: panelTop,
+      label: 'la tabla del Panel',
+      via: 'al volver de la Ficha',
+    });
+
+    // Story 5 también pide la vuelta a la Ficha por el atrás del sistema:
+    // segunda ida-y-vuelta por historial, sembrando otra posición para no
+    // heredar la medición anterior.
+    const backTarget = 340;
+    const backTop = await seedPanelAndOpenFicha(page, backTarget);
+    if (backTop !== backTarget) {
       throw new Error(
-        `RED: al volver de la Ficha, la tabla del Panel no conserva su scroll (muestras ${panelSamples.join(', ')}; esperado ${panelTop})`
+        `RED: la tabla del Panel no scrollea (scrollTop=${backTop}, objetivo ${backTarget})`
       );
     }
-    console.log(
-      `  la tabla del Panel restaurada a ${panelTop}px al volver de la Ficha (${panelSamples.join(', ')})`
-    );
+    await page.waitForSelector('[data-back-ficha]', { timeout: 10000 });
+    await assertBackRestores(page, {
+      back: () => page.goBack(),
+      waitSel: `${CARD_BOX} .b-row`,
+      sel: CARD_BOX,
+      expected: backTop,
+      label: 'la tabla del Panel',
+    });
 
     await page.click('[data-back-shelves]');
     await page.waitForSelector('.shelves [data-game-id]', { timeout: 10000 });
     await page.click('[data-open-panel="backlog"]');
-    await page.waitForSelector('.cardbox.tight .b-row', { timeout: 10000 });
-    const freshTop = await page.evaluate(() =>
-      Math.round(document.querySelector('.cardbox.tight').scrollTop)
-    );
-    if (freshTop !== 0) {
-      throw new Error(`RED: reabrir el Panel no es pantalla nueva (scrollTop=${freshTop}, esperado 0)`);
+    await page.waitForSelector(`${CARD_BOX} .b-row`, { timeout: 10000 });
+    const freshSamples = await sampleScroll(page, CARD_BOX);
+    if (freshSamples.some((y) => y !== 0)) {
+      throw new Error(
+        `RED: reabrir el Panel no es pantalla nueva (muestras ${freshSamples.join(', ')}; esperado 0)`
+      );
     }
     console.log('  reabrir el Panel desde la Estantería: arriba (0)');
 
@@ -263,11 +322,19 @@ async function main() {
     }
     console.log(`  Sección arriba (0) al abrirse (tablón en ${tapPosBoard})`);
 
-    await assertBackRestores(page, '[data-nsection="recientes"]', tapPosBoard, 'el tablón');
+    await assertBackRestores(page, {
+      back: () => page.goBack(),
+      waitSel: '[data-nsection="recientes"]',
+      expected: tapPosBoard,
+      label: 'el tablón',
+    });
 
     console.log(
       `GREEN: Ficha y drill-down arriba; Estantería, tablón y Panel restaurados tras el volver`
     );
+    // Fija el veredicto ANTES de la limpieza: si `rm` o el kill del server se
+    // cuelgan, el watchdog debe salir con 0 (GREEN), no con el código de error.
+    process.exitCode = 0;
   } finally {
     // browser.close() puede colgar tras la navegación por historial (Edge
     // headless + service worker): se acota a 5s — el veredicto ya está impreso.
